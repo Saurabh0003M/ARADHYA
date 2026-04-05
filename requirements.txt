@@ -1,0 +1,26 @@
+# Core dependencies
+requests>=2.31.0
+python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# Logging
+loguru>=0.7.0
+colorama>=0.4.6  # For colored terminal output on Windows
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Audio (if needed for your audio/ folder)
+# pyaudio>=0.2.13
+# pydub>=0.25.1
+# speech-recognition>=3.10.0
+
+# AI/ML (if needed for models/)
+# openai>=1.0.0
+# anthropic>=0.7.0
+# transformers>=4.30.0
+# torch>=2.0.0
+
+# Database (uncomment as needed)
+# sqlalchemy>=2.0.0

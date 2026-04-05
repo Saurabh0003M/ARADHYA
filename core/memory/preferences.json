@@ -1,0 +1,38 @@
+{
+  "directory_index_path": "project_tree.txt",
+  "confirmation_phrases": [
+    "yes proceed",
+    "proceed",
+    "confirm",
+    "go ahead"
+  ],
+  "security_blog_urls": [
+    "https://krebsonsecurity.com/",
+    "https://thehackernews.com/",
+    "https://www.bleepingcomputer.com/"
+  ],
+  "project_markers": [
+    "pyproject.toml",
+    "package.json",
+    "requirements.txt",
+    "Cargo.toml",
+    ".git"
+  ],
+  "game_library_roots": [],
+  "allow_live_execution": false,
+  "directory_index_policy": {
+    "refresh_on_wake": true,
+    "refresh_on_local_query": true,
+    "ignored_names": [
+      ".git",
+      "__pycache__",
+      "appdata",
+      "cache",
+      "node_modules",
+      "temp",
+      "tmp",
+      "venv"
+    ],
+    "max_nodes": 25000
+  }
+}

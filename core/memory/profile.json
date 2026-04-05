@@ -1,0 +1,28 @@
+{
+  "model": {
+    "provider": "ollama",
+    "model_name": "gemma4:e4b",
+    "base_url": "http://127.0.0.1:11434",
+    "request_timeout_seconds": 120,
+    "system_prompt": "You are Aradhya, a local system assistant focused on safe planning, clear reasoning, and practical Windows workflow help.",
+    "ollama_home": "C:/Users/saura/.ollama",
+    "ollama_models_path": "C:/Users/saura/.ollama/models"
+  },
+  "voice": {
+    "provider": "manual_transcript",
+    "audio_inbox_dir": "audio/inbox",
+    "processed_audio_dir": "audio/processed",
+    "transcripts_dir": "audio/transcripts",
+    "manual_transcripts_dir": "audio/manual_transcripts",
+    "supported_extensions": [
+      ".aac",
+      ".flac",
+      ".m4a",
+      ".mp3",
+      ".ogg",
+      ".wav"
+    ],
+    "whisper_command_template": null,
+    "poll_on_wake": true
+  }
+}
