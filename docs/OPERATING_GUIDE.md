@@ -1,15 +1,18 @@
 # Aradhya Operating Guide
 
-This guide is written for the current repo state on Windows so you can open the project, run Aradhya, inspect what changed, and understand which files are responsible for each behavior.
+This guide is written for the current repo state on Windows so you can clone the project anywhere, run Aradhya, inspect what changed, and understand which files are responsible for each behavior.
 
-## 1. Open The Project
+## 1. Clone And Open The Project
 
-1. Open VS Code.
-2. Click `File > Open Folder...`
-3. Open `F:\ARADHYA`
-4. In VS Code, open the integrated terminal with `` Ctrl + ` ``
+Run this in PowerShell:
 
-Useful files to pin in the editor:
+```powershell
+git clone <your-github-url> aradhya
+cd aradhya
+code .
+```
+
+Useful files to pin in VS Code:
 
 - `src/aradhya/main.py`
 - `src/aradhya/assistant_core.py`
@@ -18,25 +21,39 @@ Useful files to pin in the editor:
 - `src/aradhya/voice_pipeline.py`
 - `core/memory/preferences.json`
 - `core/memory/profile.json`
-- `project_tree.txt`
 
-## 2. Start Aradhya
+## 2. Create The Environment
 
-Run these commands in the VS Code terminal:
+In the VS Code terminal:
 
 ```powershell
-cd F:\ARADHYA
-venv\Scripts\activate
-python -m core.agent.aradhya
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+Why this is portable:
+
+- the repo does not assume a fixed drive letter
+- the runtime discovers the repo root from the current code location
+- the default Ollama home is derived from the current user's home directory
+
+## 3. Start Aradhya
+
+Run:
+
+```powershell
+venv\Scripts\python.exe -m core.agent.aradhya
 ```
 
 Why this works:
 
-- `core/agent/aradhya.py` is the compatibility launcher.
-- It forwards to `src/aradhya/main.py`.
-- `main.py` creates the assistant, loads config, prepares the voice folders, and starts the CLI loop.
+- `core/agent/aradhya.py` is the compatibility launcher
+- it forwards to `src/aradhya/main.py`
+- `main.py` creates the assistant, loads config, prepares the voice folders, and starts the CLI loop
 
-## 3. First Commands To Try
+## 4. First Commands To Try
 
 Once Aradhya starts, type these exactly:
 
@@ -46,26 +63,29 @@ voice status
 wake
 open aradhya
 yes proceed
+find the folder with the highest concentration of .txt files
+yes proceed
 sleep
 exit
 ```
 
 What each command does:
 
-- `model ping`: checks Ollama and confirms whether the configured model is reachable.
-- `voice status`: shows the current audio folders and pending voice files.
-- `wake`: wakes Aradhya and refreshes `project_tree.txt`.
-- `open aradhya`: creates a plan to open the best-matching path.
-- `yes proceed`: executes the pending plan.
-- `sleep`: clears pending work and puts Aradhya idle.
-- `exit`: closes the CLI.
+- `model ping`: checks Ollama and confirms whether the configured model is reachable
+- `voice status`: shows the current audio folders and pending voice files
+- `wake`: wakes Aradhya and refreshes `project_tree.txt`
+- `open aradhya`: creates a plan to open the best-matching path
+- `yes proceed`: executes the pending plan
+- `.txt` query: triggers a local-data search and refreshes the tree again
+- `sleep`: clears pending work and puts Aradhya idle
+- `exit`: closes the CLI
 
-## 4. How To Confirm The Tree File Is Updating
+## 5. How To Confirm The Tree File Is Updating
 
 Before running `wake`, check the file timestamp:
 
 ```powershell
-Get-Item F:\ARADHYA\project_tree.txt | Select-Object LastWriteTime, Length
+Get-Item .\project_tree.txt | Select-Object LastWriteTime, Length
 ```
 
 Then run Aradhya and type:
@@ -78,8 +98,15 @@ exit
 Check the timestamp again:
 
 ```powershell
-Get-Item F:\ARADHYA\project_tree.txt | Select-Object LastWriteTime, Length
+Get-Item .\project_tree.txt | Select-Object LastWriteTime, Length
+Get-Content .\project_tree.txt -TotalCount 5
 ```
+
+What you should see:
+
+- `LastWriteTime` changes
+- top lines include `generated_at=...`
+- top lines include `reason=wake` or `reason=local_query`
 
 Where the refresh happens in code:
 
@@ -90,46 +117,35 @@ Where the refresh happens in code:
 - `src/aradhya/assistant_indexer.py`
   `output_path.write_text(...)` is the line that actually rewrites `project_tree.txt`
 
-What to inspect inside `project_tree.txt`:
-
-- top lines include `generated_at=...`
-- top lines include `reason=wake` or `reason=local_query`
-- the listed roots show what was scanned
-
-## 5. What Aradhya Can Actually Do Right Now
+## 6. What Aradhya Can Actually Do Right Now
 
 These features are real in the current code:
 
-- Wake and go idle
-- Echo transcripts
-- Build a plan before acting
-- Require explicit confirmation before execution
-- Refresh the local tree index
-- Dry-run or execute path opens, depending on config
-- Find the strongest `.txt`-heavy folder
-- Reopen yesterday's active project using project markers
-- Open preferred security blogs
-- Toggle Debate AI mode
-- Check the configured Ollama model
-- Send direct prompts to the configured Ollama model with `model ask ...`
-- Process dropped voice files through the current folder-based voice workflow
+- wake and go idle
+- echo transcripts
+- build a plan before acting
+- require explicit confirmation before execution
+- refresh the local tree index
+- dry-run or execute path opens, depending on config
+- find the strongest `.txt`-heavy folder
+- reopen yesterday's active project using project markers
+- open preferred security blogs
+- toggle Debate AI mode
+- check the configured Ollama model
+- send direct prompts to the configured Ollama model with `model ask ...`
+- process dropped voice files through the current folder-based voice workflow
 
 These features are only partially present or still planned:
 
-- True microphone capture
-- Automatic Whisper transcription
-- Screen reading and UI control
+- true microphone capture
+- automatic Whisper transcription
+- screen reading and UI control
 - Google Meet button interaction
-- Full Debate AI multi-model reasoning loop
-- Automatic heavy-document handoff to external tools
-- Full autonomous laptop control
+- full Debate AI multi-model reasoning loop
+- automatic heavy-document handoff to external tools
+- full autonomous laptop control
 
-So the answer is:
-
-- Aradhya can do the core features that are implemented in the current CLI and planner.
-- Aradhya cannot yet do all long-term product-vision features.
-
-## 6. How Voice Works Right Now
+## 7. How Voice Works Right Now
 
 Current folders:
 
@@ -171,7 +187,7 @@ Responsible file:
 
 - `src/aradhya/voice_pipeline.py`
 
-## 7. How To Change The Model Later
+## 8. How To Change The Model Later
 
 Open:
 
@@ -205,46 +221,31 @@ Why this is swappable:
 - `src/aradhya/model_provider.py` builds the provider from config
 - Aradhya code does not hard-code Gemma inside the planner or CLI
 
-## 8. How To Change Behavior
+## 9. How To Change Behavior
 
 Open:
 
 - `core/memory/preferences.json`
-
-Useful fields:
-
-- `allow_live_execution`
-  if `false`, Aradhya only dry-runs actions
-  if `true`, it will really open paths and URLs
-- `directory_index_path`
-  where the tree file is written
-- `confirmation_phrases`
-  phrases that allow execution
-- `security_blog_urls`
-  browser targets for the security blogs feature
-- `game_library_roots`
-  folders Aradhya scans to find recent games
-- `directory_index_policy.refresh_on_wake`
-  controls wake-triggered tree refresh
-- `directory_index_policy.refresh_on_local_query`
-  controls query-triggered tree refresh
-
-Open:
-
 - `core/memory/profile.json`
 
-Useful fields:
+Useful fields in `preferences.json`:
+
+- `allow_live_execution`
+- `directory_index_path`
+- `confirmation_phrases`
+- `security_blog_urls`
+- `game_library_roots`
+- `directory_index_policy.refresh_on_wake`
+- `directory_index_policy.refresh_on_local_query`
+
+Useful fields in `profile.json`:
 
 - `model.model_name`
-  which Ollama model Aradhya uses
 - `voice.provider`
-  `manual_transcript` now, `whisper_command` later
 - `voice.whisper_command_template`
-  command template for your future Whisper wiring
 - `voice.audio_inbox_dir`
-  where you drop audio files
 
-## 9. Most Important Code Files
+## 10. Most Important Code Files
 
 - `src/aradhya/main.py`
   CLI entry point and top-level commands
@@ -262,28 +263,3 @@ Useful fields:
   swappable model and voice config loader
 - `src/aradhya/voice_pipeline.py`
   audio inbox and transcript handling
-
-## 10. Current Recommended Demo
-
-To see the main pieces working in a controlled way:
-
-1. Start Aradhya
-2. Type `model ping`
-3. Type `voice status`
-4. Type `wake`
-5. Open `project_tree.txt` and confirm the top metadata changed
-6. Type `find the folder with the highest concentration of .txt files`
-7. Type `yes proceed`
-8. Type `open aradhya`
-9. Type `yes proceed`
-10. Type `sleep`
-
-This demo shows:
-
-- model configuration
-- voice folder awareness
-- wake handling
-- tree-file updates
-- planning
-- confirmation gating
-- execution behavior

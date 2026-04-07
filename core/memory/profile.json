@@ -4,9 +4,7 @@
     "model_name": "gemma4:e4b",
     "base_url": "http://127.0.0.1:11434",
     "request_timeout_seconds": 120,
-    "system_prompt": "You are Aradhya, a local system assistant focused on safe planning, clear reasoning, and practical Windows workflow help.",
-    "ollama_home": "C:/Users/saura/.ollama",
-    "ollama_models_path": "C:/Users/saura/.ollama/models"
+    "system_prompt": "You are Aradhya, a local system assistant focused on safe planning, clear reasoning, and practical Windows workflow help."
   },
   "voice": {
     "provider": "manual_transcript",
