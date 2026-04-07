@@ -12,6 +12,8 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
 - A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts.
 
+If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
+
 ## Project Structure
 
 ```text

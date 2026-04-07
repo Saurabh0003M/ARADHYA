@@ -12,6 +12,7 @@ DEFAULT_VOICE_EXTENSIONS = (
     ".m4a",
     ".mp3",
     ".ogg",
+    ".opus",
     ".wav",
 )
 
@@ -79,6 +80,7 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
     return RuntimeProfile(
         model=ModelProfile(
             provider="ollama",
+            # Change only this field to swap Gemma for another Ollama model later.
             model_name="gemma4:e4b",
             base_url="http://127.0.0.1:11434",
             request_timeout_seconds=120,
@@ -91,6 +93,7 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
         ),
         voice=VoiceProfile(
             provider="manual_transcript",
+            # This is the folder you can watch while testing the file-based voice flow.
             audio_inbox_dir=audio_root / "inbox",
             processed_audio_dir=audio_root / "processed",
             transcripts_dir=audio_root / "transcripts",
