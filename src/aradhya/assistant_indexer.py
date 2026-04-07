@@ -45,6 +45,8 @@ class DirectoryIndexManager:
                 topdown=True,
                 onerror=lambda _error: None,
             ):
+                # Filtering happens before descending so ignored folders such as
+                # venv or .git do not flood project_tree.txt.
                 dirnames[:] = [
                     dirname
                     for dirname in sorted(dirnames)
@@ -89,6 +91,7 @@ class DirectoryIndexManager:
 
         output_path = self.preferences.directory_index_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        # This write is the exact line that updates project_tree.txt on disk.
         output_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
         return DirectoryIndexSnapshot(

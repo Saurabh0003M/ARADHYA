@@ -101,9 +101,13 @@ class VoiceInboxManager:
         provider = self.profile.provider.lower()
 
         if provider == "manual_transcript":
+            # Manual mode is the current default because it gives you a visible,
+            # debuggable workflow before real Whisper wiring is added.
             return self._process_manual_transcript(audio_path)
 
         if provider == "whisper_command":
+            # This path is ready for later: configure a shell command template
+            # in profile.json and Aradhya will hand the audio file to it.
             return self._process_whisper_command(audio_path)
 
         return VoiceJobResult(
@@ -138,6 +142,8 @@ class VoiceInboxManager:
 
         transcript_path = self._write_transcript(audio_path.stem, transcript_text)
         archived_audio_path = self._archive_audio(audio_path)
+        # The manual helper file is deleted after use because the canonical
+        # transcript is now stored in audio/transcripts.
         manual_transcript_path.unlink()
 
         return VoiceJobResult(
@@ -223,6 +229,8 @@ class VoiceInboxManager:
         destination = self._unique_destination(
             self.profile.processed_audio_dir / audio_path.name
         )
+        # Moving the source file keeps the inbox clean so you can immediately
+        # see which recordings are still unprocessed.
         shutil.move(str(audio_path), str(destination))
         return destination
 

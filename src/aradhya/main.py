@@ -14,6 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _render_response(response) -> None:
+    # The CLI always shows the transcript echo first so you can see exactly
+    # what Aradhya is routing into the planner.
     if response.transcript_echo:
         print(f"Heard > {response.transcript_echo}")
     print(f"Aradhya > {response.spoken_response}")
@@ -21,6 +23,8 @@ def _render_response(response) -> None:
 
 
 def _render_voice_status(voice_manager: VoiceInboxManager) -> None:
+    # This is the quickest way to inspect where audio should be dropped and
+    # whether Aradhya currently sees any pending files.
     status = voice_manager.status()
     print(f"Voice > Provider: {status.provider}")
     print(f"Voice > Inbox: {status.inbox_dir}")
@@ -39,6 +43,8 @@ def _render_voice_status(voice_manager: VoiceInboxManager) -> None:
 
 
 def _render_model_health(model_provider) -> None:
+    # This helps verify that the configured Ollama model name in profile.json
+    # is both reachable and actually available locally.
     health = model_provider.health_check()
     print(f"Model > Provider: {health.provider}")
     print(f"Model > Configured model: {health.configured_model}")
@@ -54,6 +60,8 @@ def _process_voice_inbox(
     assistant: AradhyaAssistant,
     voice_manager: VoiceInboxManager,
 ) -> None:
+    # Processing voice is explicit so you can inspect the inbox, transcripts,
+    # and archived files while learning how the pipeline behaves.
     results = voice_manager.process_pending_audio()
     if not results:
         print("Voice > No pending audio files were found in the inbox.")
@@ -83,6 +91,8 @@ def main() -> None:
     assistant = AradhyaAssistant.from_project_root(PROJECT_ROOT)
     runtime_profile = load_runtime_profile(PROJECT_ROOT)
     voice_manager = VoiceInboxManager(runtime_profile.voice)
+    # Create the voice folders on startup so the testing workflow is visible in
+    # VS Code even before the first audio file is dropped.
     voice_manager.ensure_directories()
     model_provider = build_text_model_provider(runtime_profile.model)
 
@@ -122,6 +132,8 @@ def main() -> None:
             continue
 
         if normalized.startswith("model ask "):
+            # This command talks to the configured model engine directly and is
+            # separate from Aradhya's rule-based planner.
             prompt = command[len("model ask ") :].strip()
             if not prompt:
                 print("Model > Add a prompt after 'model ask'.")
@@ -145,6 +157,8 @@ def main() -> None:
             )
             _render_response(assistant.handle_wake(source))
             if runtime_profile.voice.poll_on_wake:
+                # Wake checks the voice inbox so pending files are surfaced
+                # before you manually trigger voice processing.
                 pending_audio = voice_manager.status().pending_audio
                 if pending_audio:
                     print(

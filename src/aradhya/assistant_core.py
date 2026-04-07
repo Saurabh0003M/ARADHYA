@@ -48,6 +48,9 @@ class AradhyaAssistant:
         self.state.pending_plan = None
         snapshot = None
 
+        # Waking Aradhya is one of the two places where project_tree.txt is
+        # intentionally refreshed, so this is the code path to inspect when
+        # you want to confirm the tree file is updating.
         if self.preferences.directory_index_policy.refresh_on_wake:
             snapshot = self.index_manager.refresh("wake")
 
@@ -92,6 +95,8 @@ class AradhyaAssistant:
         if self.state.pending_plan and self._is_confirmation_phrase(normalized):
             plan = self.state.pending_plan
             self.state.pending_plan = None
+            # Execution happens only after an explicit confirmation phrase,
+            # which is the main safety barrier in the current assistant.
             result = self.toolbox.execute(plan, self.state)
             return AssistantResponse(
                 spoken_response=result.message,
@@ -109,6 +114,8 @@ class AradhyaAssistant:
             plan.uses_local_data
             and self.preferences.directory_index_policy.refresh_on_local_query
         ):
+            # Local filesystem questions refresh the tree file again so the
+            # project index stays reasonably fresh during assistant use.
             snapshot = self.index_manager.refresh("local_query")
 
         if plan.kind == PlanKind.UNKNOWN or not plan.ready:
@@ -120,6 +127,8 @@ class AradhyaAssistant:
             )
 
         if plan.requires_confirmation:
+            # The pending plan is stored here so the next "yes proceed" can
+            # execute exactly this action and not a newer transcript.
             self.state.pending_plan = plan
             prefix = "I replaced the earlier pending task. " if replacing_pending else ""
             return AssistantResponse(

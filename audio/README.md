@@ -4,7 +4,7 @@ Aradhya now uses a folder-based voice pipeline so you have a clear place to drop
 
 ## Folders
 
-- `audio/inbox`: drop raw voice files here such as `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, or `.aac`
+- `audio/inbox`: drop raw voice files here such as `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.opus`, or `.aac`
 - `audio/processed`: Aradhya moves handled audio files here
 - `audio/transcripts`: final transcript text files land here
 - `audio/manual_transcripts`: optional fallback folder for matching `.txt` transcripts

@@ -1,28 +1,32 @@
 # Aradhya
 
-Aradhya is a personal AI laptop assistant focused on system-level help, not just chat. The current codebase now centers on a safe planner that wakes on demand, echoes the transcript, prepares a task, waits for an explicit confirmation phrase such as `yes proceed`, and only then executes.
+Aradhya is a personal AI laptop assistant focused on system-level help, not just chat. The current codebase centers on a safe planner that wakes on demand, echoes the transcript, prepares a task, waits for an explicit confirmation phrase such as `yes proceed`, and only then executes.
 
 ## Current Foundation
 
 - Wake-aware assistant session model with `wake`, `ctrl+win`, and `sleep` flow in the CLI.
 - Strict plan-then-confirm execution pipeline for system actions.
-- Local directory-index refresh that updates `project_tree.txt` on wake and local-data queries.
+- Local directory-index refresh that creates or updates `project_tree.txt` on wake and local-data queries.
 - Heuristics for opening paths, finding the most `.txt`-dense folder, reopening yesterday's active project, opening preferred security blogs, and toggling Debate AI mode.
 - Safe dry-run execution by default so the assistant can be tested without launching apps unexpectedly.
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
 - A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts.
 
+If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
+
 ## Project Structure
 
 ```text
-F:\ARADHYA
+<repo-root>
 |-- core/
 |   |-- agent/
 |   |   `-- aradhya.py
 |   `-- memory/
-|       `-- preferences.json
+|       |-- preferences.json
+|       `-- profile.json
 |-- docs/
 |   |-- ARCHITECTURE.md
+|   |-- OPERATING_GUIDE.md
 |   `-- phases/
 |-- src/
 |   `-- aradhya/
@@ -35,15 +39,29 @@ F:\ARADHYA
 |       |-- runtime_profile.py
 |       |-- voice_pipeline.py
 |       `-- main.py
+|-- audio/
 |-- tests/
 |   `-- unit/
-`-- project_tree.txt
+`-- scripts/
 ```
 
-## Run It
+## Quick Start
+
+Clone the repo, create a virtual environment, install dependencies, and run Aradhya:
 
 ```powershell
-venv\Scripts\activate
+git clone <your-github-url> aradhya
+cd aradhya
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+venv\Scripts\python.exe -m core.agent.aradhya
+```
+
+If you already activated the environment, this also works:
+
+```powershell
 python -m core.agent.aradhya
 ```
 
@@ -59,33 +77,33 @@ Inside the CLI:
 - Type `model ask <prompt>` to send a direct prompt to the configured local model.
 - Type `sleep` to return Aradhya to idle.
 
-## Preferences
+## Configuration
 
-Runtime preferences are loaded from `core/memory/preferences.json`. Important defaults:
+Runtime behavior is loaded from `core/memory/preferences.json`.
 
-- `allow_live_execution` is `false`
-- preferred security blogs are prefilled
-- `project_tree.txt` is the default directory index target
-- `game_library_roots` is empty until you configure your game install paths
+- `allow_live_execution`: if `false`, Aradhya dry-runs actions instead of opening apps or URLs.
+- `directory_index_path`: where the tree file is written.
+- `security_blog_urls`: browser targets for the security-blog feature.
+- `game_library_roots`: folders used when searching for a recent game.
 
 Runtime model and voice bindings are loaded from `core/memory/profile.json`.
 
-- The default local model is `gemma4:e4b`
-- The current Ollama home is set to `C:\Users\saura\.ollama`
-- To switch to a future model like `gemma5`, change only `"model_name"` in `profile.json`
+- The default local model is `gemma4:e4b`.
+- The Ollama model directory defaults to the current user's home folder via `Path.home() / ".ollama"`.
+- To switch to a future model like `gemma5`, change only `model_name` in `profile.json`.
 
 ## Voice Files
 
 If you want to feed voice through files right now, drop audio into `audio/inbox`.
 
-- Supported input types: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.aac`
+- Supported input types: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.opus`, `.aac`
 - Final transcripts land in `audio/transcripts`
 - Processed audio is archived in `audio/processed`
 - Until Whisper is configured, put a matching `.txt` transcript into `audio/manual_transcripts`
 
 Example:
 
-- `audio/inbox/task.mp3`
+- `audio/inbox/task.opus`
 - `audio/manual_transcripts/task.txt`
 
 Then run `voice process`.
@@ -93,8 +111,7 @@ Then run `voice process`.
 ## Testing
 
 ```powershell
-pytest tests/unit/test_agent.py
-pytest tests/unit/test_runtime_profile.py
+venv\Scripts\python.exe -m pytest tests\unit\test_agent.py tests\unit\test_runtime_profile.py
 ```
 
 ## Roadmap

@@ -26,6 +26,9 @@ ENV/
 .coverage
 htmlcov/
 
+# Generated runtime artifacts
+project_tree.txt
+
 # Logs
 *.log
 core/logs/*.log
@@ -40,6 +43,17 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+
+# Voice runtime files
+audio/inbox/*
+audio/processed/*
+audio/transcripts/*
+audio/manual_transcripts/*
+!audio/inbox/.gitkeep
+!audio/processed/.gitkeep
+!audio/transcripts/.gitkeep
+!audio/manual_transcripts/.gitkeep
+!audio/README.md
 
 # Models
 models/*.pkl
