@@ -26,6 +26,12 @@ venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
+Optional real local file transcription:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+```
+
 ## 3. Install Or Verify Ollama
 
 Confirm Ollama is available:
@@ -80,7 +86,7 @@ Drop audio files into:
 
 - `audio/inbox`
 
-Put a matching transcript into:
+In the default `manual_transcript` mode, put a matching transcript into:
 
 - `audio/manual_transcripts`
 
@@ -100,12 +106,26 @@ Supported audio formats:
 - `.opus`
 - `.aac`
 
+If you install `requirements-voice.txt`, you can switch `core/memory/profile.json` to:
+
+- `voice.provider = "faster_whisper"`
+
+Then Aradhya will transcribe dropped files locally without needing the matching `.txt` helper file.
+
 ## 8. Important Config Files
 
 - `core/memory/preferences.json`
   assistant behavior and execution policy
 - `core/memory/profile.json`
   model and voice provider configuration
+
+Useful voice fields in `profile.json`:
+
+- `voice.provider`
+- `voice.faster_whisper_model_size`
+- `voice.faster_whisper_device`
+- `voice.faster_whisper_compute_type`
+- `voice.language`
 
 ## 9. Portable Design Notes
 

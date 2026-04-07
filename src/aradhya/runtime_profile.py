@@ -41,6 +41,10 @@ class VoiceProfile:
     manual_transcripts_dir: Path
     supported_extensions: tuple[str, ...]
     whisper_command_template: str | None
+    faster_whisper_model_size: str
+    faster_whisper_device: str
+    faster_whisper_compute_type: str
+    language: str | None
     poll_on_wake: bool
 
 
@@ -100,6 +104,12 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
             manual_transcripts_dir=audio_root / "manual_transcripts",
             supported_extensions=DEFAULT_VOICE_EXTENSIONS,
             whisper_command_template=None,
+            # Faster-Whisper stays optional so a fresh clone can still run
+            # without voice-specific dependencies installed.
+            faster_whisper_model_size="base",
+            faster_whisper_device="cpu",
+            faster_whisper_compute_type="int8",
+            language=None,
             poll_on_wake=True,
         ),
     )
@@ -182,6 +192,22 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
             whisper_command_template=raw_voice.get(
                 "whisper_command_template",
                 defaults.voice.whisper_command_template,
+            ),
+            faster_whisper_model_size=raw_voice.get(
+                "faster_whisper_model_size",
+                defaults.voice.faster_whisper_model_size,
+            ),
+            faster_whisper_device=raw_voice.get(
+                "faster_whisper_device",
+                defaults.voice.faster_whisper_device,
+            ),
+            faster_whisper_compute_type=raw_voice.get(
+                "faster_whisper_compute_type",
+                defaults.voice.faster_whisper_compute_type,
+            ),
+            language=raw_voice.get(
+                "language",
+                defaults.voice.language,
             ),
             poll_on_wake=raw_voice.get(
                 "poll_on_wake",

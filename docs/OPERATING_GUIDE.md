@@ -134,11 +134,11 @@ These features are real in the current code:
 - check the configured Ollama model
 - send direct prompts to the configured Ollama model with `model ask ...`
 - process dropped voice files through the current folder-based voice workflow
+- use the configured Ollama model as a fallback planner for ambiguous system requests
 
 These features are only partially present or still planned:
 
 - true microphone capture
-- automatic Whisper transcription
 - screen reading and UI control
 - Google Meet button interaction
 - full Debate AI multi-model reasoning loop
@@ -182,6 +182,15 @@ What happens next:
 - moves the audio into `audio/processed`
 - writes the final transcript into `audio/transcripts`
 - if Aradhya is awake, it routes that transcript into the planner
+
+Optional real local file transcription:
+
+1. Install `requirements-voice.txt`
+2. Change `voice.provider` in `core/memory/profile.json` to `faster_whisper`
+3. Drop the audio file into `audio/inbox`
+4. Run `voice process`
+
+In that mode Aradhya generates the transcript locally and still uses the same inbox, transcript, and archive folders.
 
 Responsible file:
 
@@ -243,6 +252,10 @@ Useful fields in `profile.json`:
 - `model.model_name`
 - `voice.provider`
 - `voice.whisper_command_template`
+- `voice.faster_whisper_model_size`
+- `voice.faster_whisper_device`
+- `voice.faster_whisper_compute_type`
+- `voice.language`
 - `voice.audio_inbox_dir`
 
 ## 10. Most Important Code Files
@@ -254,7 +267,9 @@ Useful fields in `profile.json`:
 - `src/aradhya/assistant_indexer.py`
   tree-file generation
 - `src/aradhya/assistant_planner.py`
-  maps commands to plans
+  deterministic planner plus model-backed fallback routing
+- `src/aradhya/llm_planner.py`
+  strict JSON parsing and safe LLM intent classification
 - `src/aradhya/assistant_system_tools.py`
   task heuristics and execution behavior
 - `src/aradhya/model_provider.py`
@@ -263,3 +278,5 @@ Useful fields in `profile.json`:
   swappable model and voice config loader
 - `src/aradhya/voice_pipeline.py`
   audio inbox and transcript handling
+- `src/aradhya/voice_transcriber.py`
+  swappable file transcription providers

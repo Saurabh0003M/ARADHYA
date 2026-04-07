@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Optional local transcription stack for the file-based voice pipeline.
+# Install this file only when you want the faster_whisper provider.
+faster-whisper>=1.1.0

@@ -11,16 +11,6 @@ colorama>=0.4.6  # For colored terminal output on Windows
 pandas>=2.0.0
 numpy>=1.24.0
 
-# Audio (if needed for your audio/ folder)
-# pyaudio>=0.2.13
-# pydub>=0.25.1
-# speech-recognition>=3.10.0
-
-# AI/ML (if needed for models/)
-# openai>=1.0.0
-# anthropic>=0.7.0
-# transformers>=4.30.0
-# torch>=2.0.0
-
-# Database (uncomment as needed)
-# sqlalchemy>=2.0.0
+# Optional stacks live in separate files so a fresh clone keeps a lightweight
+# install path. See requirements-voice.txt for Faster-Whisper support and
+# requirements-windows.txt for future tray/hotkey packages.

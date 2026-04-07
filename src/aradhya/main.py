@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from loguru import logger
+
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import WakeSource
+from src.aradhya.logging_utils import configure_logging
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
 from src.aradhya.voice_pipeline import VoiceInboxManager
@@ -36,6 +39,11 @@ def _render_voice_status(voice_manager: VoiceInboxManager) -> None:
         "Voice > Whisper command configured: "
         f"{'yes' if status.whisper_command_configured else 'no'}"
     )
+    if status.provider == "faster_whisper":
+        print(f"Voice > Faster-Whisper model: {status.faster_whisper_model_size}")
+        print(f"Voice > Faster-Whisper device: {status.faster_whisper_device}")
+        print(f"Voice > Faster-Whisper compute type: {status.faster_whisper_compute_type}")
+        print(f"Voice > Faster-Whisper language: {status.language or 'auto'}")
     print(f"Voice > Pending audio files: {len(status.pending_audio)}")
     for pending_audio in status.pending_audio:
         print(f"Voice > Pending: {pending_audio.name}")
@@ -88,13 +96,22 @@ def _process_voice_inbox(
 
 
 def main() -> None:
-    assistant = AradhyaAssistant.from_project_root(PROJECT_ROOT)
     runtime_profile = load_runtime_profile(PROJECT_ROOT)
+    log_path = configure_logging(PROJECT_ROOT)
+    model_provider = build_text_model_provider(runtime_profile.model)
+    assistant = AradhyaAssistant.from_project_root(
+        PROJECT_ROOT,
+        model_provider=model_provider,
+    )
     voice_manager = VoiceInboxManager(runtime_profile.voice)
     # Create the voice folders on startup so the testing workflow is visible in
     # VS Code even before the first audio file is dropped.
     voice_manager.ensure_directories()
-    model_provider = build_text_model_provider(runtime_profile.model)
+    logger.info(
+        "Aradhya CLI started with model {} and voice provider {}",
+        runtime_profile.model.model_name,
+        runtime_profile.voice.provider,
+    )
 
     print("=" * 60)
     print("Aradhya - Personal AI Assistant")
@@ -105,6 +122,7 @@ def main() -> None:
     print("Type 'sleep' to send Aradhya idle, or 'exit' to quit.")
     print(f"Configured model > {runtime_profile.model.model_name}")
     print(f"Voice inbox > {runtime_profile.voice.audio_inbox_dir}")
+    print(f"Log file > {log_path}")
     print()
 
     while True:

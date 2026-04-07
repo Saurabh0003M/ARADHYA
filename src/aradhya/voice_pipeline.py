@@ -5,9 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
-import subprocess
+from typing import Callable
+
+from loguru import logger
 
 from src.aradhya.runtime_profile import VoiceProfile
+from src.aradhya.voice_transcriber import FileTranscriber, build_file_transcriber
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,10 @@ class VoiceStatus:
     supported_extensions: tuple[str, ...]
     pending_audio: tuple[Path, ...]
     whisper_command_configured: bool
+    faster_whisper_model_size: str
+    faster_whisper_device: str
+    faster_whisper_compute_type: str
+    language: str | None
 
 
 @dataclass(frozen=True)
@@ -39,8 +46,14 @@ class VoiceJobResult:
 class VoiceInboxManager:
     """Manages audio drop folders and optional transcription hooks."""
 
-    def __init__(self, profile: VoiceProfile):
+    def __init__(
+        self,
+        profile: VoiceProfile,
+        transcriber_factory: Callable[[VoiceProfile], FileTranscriber] = build_file_transcriber,
+    ):
         self.profile = profile
+        self._transcriber_factory = transcriber_factory
+        self._transcriber: FileTranscriber | None = None
 
     def ensure_directories(self) -> None:
         """Create the runtime voice directories if they do not exist."""
@@ -67,6 +80,10 @@ class VoiceInboxManager:
             supported_extensions=self.profile.supported_extensions,
             pending_audio=pending_audio,
             whisper_command_configured=bool(self.profile.whisper_command_template),
+            faster_whisper_model_size=self.profile.faster_whisper_model_size,
+            faster_whisper_device=self.profile.faster_whisper_device,
+            faster_whisper_compute_type=self.profile.faster_whisper_compute_type,
+            language=self.profile.language,
         )
 
     def list_pending_audio(self) -> list[Path]:
@@ -98,122 +115,49 @@ class VoiceInboxManager:
         """Process one pending audio file."""
 
         self.ensure_directories()
-        provider = self.profile.provider.lower()
-
-        if provider == "manual_transcript":
-            # Manual mode is the current default because it gives you a visible,
-            # debuggable workflow before real Whisper wiring is added.
-            return self._process_manual_transcript(audio_path)
-
-        if provider == "whisper_command":
-            # This path is ready for later: configure a shell command template
-            # in profile.json and Aradhya will hand the audio file to it.
-            return self._process_whisper_command(audio_path)
-
-        return VoiceJobResult(
-            audio_path=audio_path,
-            status="blocked",
-            message=(
-                f"Unsupported voice provider '{self.profile.provider}'. "
-                "Update profile.json with a supported provider."
-            ),
-        )
-
-    def _process_manual_transcript(self, audio_path: Path) -> VoiceJobResult:
-        manual_transcript_path = self.profile.manual_transcripts_dir / f"{audio_path.stem}.txt"
-        if not manual_transcript_path.exists():
-            return VoiceJobResult(
-                audio_path=audio_path,
-                status="waiting",
-                message=(
-                    f"Waiting for a transcript file at {manual_transcript_path}. "
-                    "Drop the audio in inbox and a matching .txt transcript in "
-                    "manual_transcripts to continue."
-                ),
-            )
-
-        transcript_text = manual_transcript_path.read_text(encoding="utf-8").strip()
-        if not transcript_text:
-            return VoiceJobResult(
-                audio_path=audio_path,
-                status="blocked",
-                message=f"The manual transcript file {manual_transcript_path} is empty.",
-            )
-
-        transcript_path = self._write_transcript(audio_path.stem, transcript_text)
-        archived_audio_path = self._archive_audio(audio_path)
-        # The manual helper file is deleted after use because the canonical
-        # transcript is now stored in audio/transcripts.
-        manual_transcript_path.unlink()
-
-        return VoiceJobResult(
-            audio_path=audio_path,
-            status="processed",
-            message=f"Processed {audio_path.name} using the manual transcript flow.",
-            transcript_text=transcript_text,
-            transcript_path=transcript_path,
-            archived_audio_path=archived_audio_path,
-        )
-
-    def _process_whisper_command(self, audio_path: Path) -> VoiceJobResult:
-        template = self.profile.whisper_command_template
-        if not template:
-            return VoiceJobResult(
-                audio_path=audio_path,
-                status="blocked",
-                message=(
-                    "Voice provider is set to whisper_command, but no "
-                    "whisper_command_template is configured in profile.json."
-                ),
-            )
-
-        transcript_path = self._unique_destination(
+        transcript_destination = self._unique_destination(
             self.profile.transcripts_dir / f"{audio_path.stem}.txt"
         )
-        rendered_command = template.format(
-            audio_path=str(audio_path),
-            transcript_path=str(transcript_path),
-        )
-        completed = subprocess.run(
-            rendered_command,
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
 
-        transcript_text = ""
-        if transcript_path.exists():
-            transcript_text = transcript_path.read_text(encoding="utf-8").strip()
-        elif completed.stdout.strip():
-            transcript_text = completed.stdout.strip()
-            transcript_path.write_text(transcript_text + "\n", encoding="utf-8")
-
-        if completed.returncode != 0:
+        # Every provider feeds through the same transcript/archive pipeline so
+        # manual transcripts, shell commands, and Faster-Whisper behave alike.
+        try:
+            transcription = self._get_transcriber().transcribe(
+                audio_path,
+                transcript_destination,
+            )
+        except ValueError as error:
             return VoiceJobResult(
                 audio_path=audio_path,
                 status="blocked",
-                message=(
-                    f"Whisper command failed for {audio_path.name}: "
-                    f"{completed.stderr.strip() or completed.stdout.strip()}"
-                ),
+                message=str(error),
             )
 
-        if not transcript_text:
+        if transcription.status != "processed":
             return VoiceJobResult(
                 audio_path=audio_path,
-                status="blocked",
-                message=(
-                    f"Whisper command finished for {audio_path.name}, but no transcript "
-                    "text was produced."
-                ),
+                status=transcription.status,
+                message=transcription.message,
+                transcript_text=transcription.transcript_text,
+                transcript_path=transcription.transcript_path,
             )
 
+        transcript_path = transcription.transcript_path or self._write_transcript(
+            audio_path.stem,
+            transcription.transcript_text,
+        )
         archived_audio_path = self._archive_audio(audio_path)
+        self._cleanup_paths(transcription.cleanup_paths)
+        logger.info(
+            "Processed audio file {} via provider {}",
+            audio_path.name,
+            self.profile.provider,
+        )
         return VoiceJobResult(
             audio_path=audio_path,
-            status="processed",
-            message=f"Processed {audio_path.name} using the Whisper command flow.",
-            transcript_text=transcript_text,
+            status=transcription.status,
+            message=transcription.message,
+            transcript_text=transcription.transcript_text,
             transcript_path=transcript_path,
             archived_audio_path=archived_audio_path,
         )
@@ -233,6 +177,16 @@ class VoiceInboxManager:
         # see which recordings are still unprocessed.
         shutil.move(str(audio_path), str(destination))
         return destination
+
+    def _cleanup_paths(self, cleanup_paths: tuple[Path, ...]) -> None:
+        for cleanup_path in cleanup_paths:
+            if cleanup_path.exists():
+                cleanup_path.unlink()
+
+    def _get_transcriber(self) -> FileTranscriber:
+        if self._transcriber is None:
+            self._transcriber = self._transcriber_factory(self.profile)
+        return self._transcriber
 
     def _unique_destination(self, candidate: Path) -> Path:
         if not candidate.exists():

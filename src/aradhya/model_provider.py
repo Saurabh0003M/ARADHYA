@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from loguru import logger
 import requests
 
 from src.aradhya.runtime_profile import ModelProfile
@@ -59,6 +60,11 @@ class OllamaTextModelProvider:
         self.session = session or requests.Session()
 
     def health_check(self) -> ModelHealth:
+        logger.debug(
+            "Checking Ollama health at {} for model {}",
+            self.profile.base_url,
+            self.profile.model_name,
+        )
         try:
             response = self.session.get(
                 f"{self.profile.base_url}/api/tags",
@@ -106,6 +112,11 @@ class OllamaTextModelProvider:
         *,
         system_prompt: str | None = None,
     ) -> ModelResult:
+        logger.debug(
+            "Sending prompt to Ollama model {} with system prompt override={}",
+            self.profile.model_name,
+            system_prompt is not None,
+        )
         payload = {
             "model": self.profile.model_name,
             "prompt": prompt,

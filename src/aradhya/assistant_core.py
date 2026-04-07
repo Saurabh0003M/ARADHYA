@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from loguru import logger
+
 from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import (
     AssistantPreferences,
@@ -17,6 +19,7 @@ from src.aradhya.assistant_models import (
     load_preferences,
 )
 from src.aradhya.assistant_planner import IntentPlanner
+from src.aradhya.model_provider import TextModelProvider
 from src.aradhya.assistant_system_tools import SystemToolbox
 
 
@@ -26,6 +29,7 @@ class AradhyaAssistant:
     def __init__(
         self,
         preferences: AssistantPreferences,
+        model_provider: TextModelProvider | None = None,
         now_provider: Callable[[], datetime] | None = None,
     ):
         self.preferences = preferences
@@ -33,20 +37,29 @@ class AradhyaAssistant:
         self.state = AssistantState()
         self.index_manager = DirectoryIndexManager(preferences)
         self.toolbox = SystemToolbox(preferences)
-        self.planner = IntentPlanner(self.toolbox, self.now_provider)
+        self.planner = IntentPlanner(
+            self.toolbox,
+            self.now_provider,
+            model_provider=model_provider,
+        )
         self._confirmation_phrases = {
             self._normalize_phrase(phrase)
             for phrase in self.preferences.confirmation_phrases
         }
 
     @classmethod
-    def from_project_root(cls, project_root: Path | None = None) -> "AradhyaAssistant":
-        return cls(load_preferences(project_root))
+    def from_project_root(
+        cls,
+        project_root: Path | None = None,
+        model_provider: TextModelProvider | None = None,
+    ) -> "AradhyaAssistant":
+        return cls(load_preferences(project_root), model_provider=model_provider)
 
     def handle_wake(self, source: WakeSource) -> AssistantResponse:
         self.state.is_awake = True
         self.state.pending_plan = None
         snapshot = None
+        logger.info("Aradhya woke via {}", source.value)
 
         # Waking Aradhya is one of the two places where project_tree.txt is
         # intentionally refreshed, so this is the code path to inspect when
@@ -67,9 +80,11 @@ class AradhyaAssistant:
     def go_idle(self) -> AssistantResponse:
         self.state.is_awake = False
         self.state.pending_plan = None
+        logger.info("Aradhya returned to idle state")
         return AssistantResponse(spoken_response="Aradhya is going idle.")
 
     def handle_transcript(self, transcript: str) -> AssistantResponse:
+        logger.info("Handling transcript: {}", transcript)
         if not self.state.is_awake:
             return AssistantResponse(
                 spoken_response=(
@@ -87,6 +102,7 @@ class AradhyaAssistant:
 
         if self.state.pending_plan and self._is_cancel_phrase(normalized):
             self.state.pending_plan = None
+            logger.info("Canceled pending plan after transcript '{}'", transcript)
             return AssistantResponse(
                 spoken_response="I canceled the pending task.",
                 transcript_echo=transcript,
@@ -98,6 +114,7 @@ class AradhyaAssistant:
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
             result = self.toolbox.execute(plan, self.state)
+            logger.info("Executed confirmed plan {} with success={}", plan.kind, result.success)
             return AssistantResponse(
                 spoken_response=result.message,
                 transcript_echo=transcript,
@@ -119,6 +136,7 @@ class AradhyaAssistant:
             snapshot = self.index_manager.refresh("local_query")
 
         if plan.kind == PlanKind.UNKNOWN or not plan.ready:
+            logger.info("Planner returned non-executable plan {}", plan.kind)
             return AssistantResponse(
                 spoken_response=plan.summary,
                 transcript_echo=transcript,
@@ -130,6 +148,7 @@ class AradhyaAssistant:
             # The pending plan is stored here so the next "yes proceed" can
             # execute exactly this action and not a newer transcript.
             self.state.pending_plan = plan
+            logger.info("Stored pending plan {} awaiting confirmation", plan.kind)
             prefix = "I replaced the earlier pending task. " if replacing_pending else ""
             return AssistantResponse(
                 spoken_response=(
@@ -143,6 +162,7 @@ class AradhyaAssistant:
             )
 
         result = self.toolbox.execute(plan, self.state)
+        logger.info("Executed immediate plan {} with success={}", plan.kind, result.success)
         return AssistantResponse(
             spoken_response=result.message,
             transcript_echo=transcript,

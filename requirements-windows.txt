@@ -1,0 +1,8 @@
+-r requirements.txt
+
+# Reserved for later desktop-shell work such as a tray icon, hotkeys, and
+# screen-aware automation adapters.
+# pystray>=0.19.5
+# keyboard>=0.13.5
+# pillow>=10.0.0
+# uiautomation>=2.0.18

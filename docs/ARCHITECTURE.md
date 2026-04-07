@@ -31,7 +31,9 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 ### 3. Planner Layer
 
 - Converts transcripts into structured plans.
-- Uses simple rule-based routing for now.
+- Uses deterministic routing first for crisp local commands.
+- Falls back to the configured local model only when the rules cannot classify the request.
+- Requires the model to return a strict JSON shape instead of free-form instructions.
 - Knows which requests need local file awareness, external-tool handoff, or Debate AI.
 
 ### 4. Confirmation Gate
@@ -94,7 +96,7 @@ This index is a support artifact for context and auditing. Local task previews s
 3. Save the transcript into `audio/transcripts`.
 4. Route the transcript into the assistant planner when Aradhya is awake.
 
-The default provider is currently `manual_transcript`, which lets the repo work immediately even before Whisper is installed. Once a Whisper command flow is chosen, the voice provider can be switched to `whisper_command` in `profile.json`.
+The default provider is currently `manual_transcript`, which lets the repo work immediately even before Whisper is installed. The current repo also supports an optional `faster_whisper` provider for real local file transcription, while keeping `manual_transcript` as the zero-setup default. A `whisper_command` provider remains available for external command-based workflows.
 
 ## Long-Term Vision
 

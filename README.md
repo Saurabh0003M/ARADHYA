@@ -8,9 +8,10 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 - Strict plan-then-confirm execution pipeline for system actions.
 - Local directory-index refresh that creates or updates `project_tree.txt` on wake and local-data queries.
 - Heuristics for opening paths, finding the most `.txt`-dense folder, reopening yesterday's active project, opening preferred security blogs, and toggling Debate AI mode.
+- Hybrid planning that keeps deterministic routing first and uses the configured Ollama model as a JSON-only fallback classifier for ambiguous requests.
 - Safe dry-run execution by default so the assistant can be tested without launching apps unexpectedly.
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
-- A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts.
+- A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts, plus an optional `faster_whisper` provider for real local transcription.
 
 If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 
@@ -32,12 +33,15 @@ If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 |   `-- aradhya/
 |       |-- assistant_core.py
 |       |-- assistant_indexer.py
+|       |-- llm_planner.py
+|       |-- logging_utils.py
 |       |-- assistant_models.py
 |       |-- assistant_planner.py
 |       |-- assistant_system_tools.py
 |       |-- model_provider.py
 |       |-- runtime_profile.py
 |       |-- voice_pipeline.py
+|       |-- voice_transcriber.py
 |       `-- main.py
 |-- audio/
 |-- tests/
@@ -57,6 +61,12 @@ venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 venv\Scripts\python.exe -m core.agent.aradhya
+```
+
+Optional local transcription:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 ```
 
 If you already activated the environment, this also works:
@@ -91,6 +101,9 @@ Runtime model and voice bindings are loaded from `core/memory/profile.json`.
 - The default local model is `gemma4:e4b`.
 - The Ollama model directory defaults to the current user's home folder via `Path.home() / ".ollama"`.
 - To switch to a future model like `gemma5`, change only `model_name` in `profile.json`.
+- The default voice provider is `manual_transcript` so the repo still works immediately after clone.
+- To enable real local file transcription, install `requirements-voice.txt` and change `voice.provider` to `faster_whisper`.
+- `voice.faster_whisper_model_size`, `voice.faster_whisper_device`, `voice.faster_whisper_compute_type`, and `voice.language` control the optional Faster-Whisper provider.
 
 ## Voice Files
 
@@ -99,7 +112,8 @@ If you want to feed voice through files right now, drop audio into `audio/inbox`
 - Supported input types: `.mp3`, `.wav`, `.m4a`, `.flac`, `.ogg`, `.opus`, `.aac`
 - Final transcripts land in `audio/transcripts`
 - Processed audio is archived in `audio/processed`
-- Until Whisper is configured, put a matching `.txt` transcript into `audio/manual_transcripts`
+- In the default `manual_transcript` mode, put a matching `.txt` transcript into `audio/manual_transcripts`
+- In `faster_whisper` mode, Aradhya generates the transcript itself from the dropped audio file
 
 Example:
 
@@ -111,14 +125,14 @@ Then run `voice process`.
 ## Testing
 
 ```powershell
-venv\Scripts\python.exe -m pytest tests\unit\test_agent.py tests\unit\test_runtime_profile.py
+venv\Scripts\python.exe -m pytest tests\unit
 ```
 
 ## Roadmap
 
 The current implementation establishes the assistant core for the updated vision. The next layers are:
 
-- Whisper-based speech input and transcript playback
+- microphone-based push-to-talk voice capture
 - screen-reading plus UI control adapters
 - external-tool handoff for heavy document work
 - multi-model Debate AI orchestration

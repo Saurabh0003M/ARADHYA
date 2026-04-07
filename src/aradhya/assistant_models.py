@@ -132,6 +132,20 @@ def _project_root_from_here() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _build_default_user_roots(project_root: Path) -> tuple[Path, ...]:
+    """Return safe default search roots for the current machine.
+
+    The assistant should not assume a specific drive letter such as ``F:/``.
+    Instead, it searches the current user's home folder and, when different,
+    the cloned project root so the repo remains discoverable after a fresh clone.
+    """
+
+    roots: list[Path] = [Path.home()]
+    if project_root not in roots and not str(project_root).startswith(str(Path.home())):
+        roots.append(project_root)
+    return tuple(roots)
+
+
 def _resolve_paths(
     raw_paths: list[str] | tuple[str, ...] | None,
     project_root: Path,
@@ -156,7 +170,7 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
     root = project_root or _project_root_from_here()
 
     return AssistantPreferences(
-        user_roots=(Path.home(), Path("F:/")),
+        user_roots=_build_default_user_roots(root),
         directory_index_path=root / "project_tree.txt",
         confirmation_phrases=("yes proceed", "proceed", "confirm", "go ahead"),
         security_blog_urls=DEFAULT_SECURITY_BLOGS,

@@ -1,23 +1,70 @@
-"""Rule-based planner for Aradhya's current local assistant scope."""
+"""Hybrid planner that prefers fast local rules before LLM fallback."""
 
 from __future__ import annotations
 
 import re
+from typing import Callable
+
+from loguru import logger
 
 from src.aradhya.assistant_models import AssistantState, PlanAction, PlanKind
 from src.aradhya.assistant_system_tools import SystemToolbox
+from src.aradhya.llm_planner import LLMIntentPlanner
+from src.aradhya.model_provider import TextModelProvider
 
 
 class IntentPlanner:
-    """Maps natural-language requests onto assistant plans."""
+    """Maps natural-language requests onto safe assistant plans.
 
-    def __init__(self, toolbox: SystemToolbox, now_provider):
+    The planner keeps the existing deterministic routes for crisp commands such
+    as ``open Notes`` or ``enable debate mode``. When those rules do not match,
+    it can ask the configured local model to classify the request into a narrow
+    JSON schema that still routes back through the same safe toolbox methods.
+    """
+
+    def __init__(
+        self,
+        toolbox: SystemToolbox,
+        now_provider: Callable,
+        model_provider: TextModelProvider | None = None,
+    ):
         self.toolbox = toolbox
         self.now_provider = now_provider
+        self.llm_planner = (
+            LLMIntentPlanner(toolbox, model_provider, now_provider)
+            if model_provider is not None
+            else None
+        )
 
     def build_plan(self, transcript: str, state: AssistantState) -> PlanAction:
         normalized = self._normalize_text(transcript)
+        # Fast local matches stay first so exact commands remain responsive and
+        # predictable even when the model is unavailable.
+        rule_based_plan = self._build_rule_based_plan(transcript, normalized, state)
+        if rule_based_plan is not None:
+            return rule_based_plan
 
+        if self.llm_planner is not None:
+            logger.info("No rule matched transcript '{}'; using LLM fallback planner.", transcript)
+            return self.llm_planner.build_plan(transcript, state)
+
+        return PlanAction(
+            kind=PlanKind.UNKNOWN,
+            summary=(
+                "I can currently plan system tasks like opening paths, finding .txt-heavy "
+                "folders, reopening yesterday's project, opening security blogs, and "
+                "toggling Debate AI mode."
+            ),
+            requires_confirmation=False,
+            ready=False,
+        )
+
+    def _build_rule_based_plan(
+        self,
+        transcript: str,
+        normalized: str,
+        state: AssistantState,
+    ) -> PlanAction | None:
         if self._is_toggle_debate_request(normalized, enable=True):
             return self.toolbox.plan_toggle_debate(True)
 
@@ -48,16 +95,7 @@ class IntentPlanner:
         if normalized.startswith("open "):
             return self.toolbox.plan_open_path(transcript[5:].strip())
 
-        return PlanAction(
-            kind=PlanKind.UNKNOWN,
-            summary=(
-                "I can currently plan system tasks like opening paths, finding .txt-heavy "
-                "folders, reopening yesterday's project, opening security blogs, and "
-                "toggling Debate AI mode."
-            ),
-            requires_confirmation=False,
-            ready=False,
-        )
+        return None
 
     def _normalize_text(self, text: str) -> str:
         return " ".join(re.findall(r"[a-z0-9+.]+", text.lower()))

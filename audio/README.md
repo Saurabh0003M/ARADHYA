@@ -22,7 +22,23 @@ The default voice provider is `manual_transcript`.
 
 Aradhya will move the audio into `audio/processed`, save the final transcript in `audio/transcripts`, and if Aradhya is awake it will immediately route that transcript into the assistant planner.
 
-## Whisper Later
+## Faster-Whisper File Transcription
+
+If you want real local transcription from dropped audio files:
+
+1. Install the optional dependencies:
+   `venv\Scripts\python.exe -m pip install -r requirements-voice.txt`
+2. Update `core/memory/profile.json`
+3. Change `"provider"` from `"manual_transcript"` to `"faster_whisper"`
+4. Optionally tune:
+   - `"faster_whisper_model_size"`
+   - `"faster_whisper_device"`
+   - `"faster_whisper_compute_type"`
+   - `"language"`
+
+In `faster_whisper` mode, you only drop the audio file into `audio/inbox`, then run `voice process`. Aradhya will generate the transcript locally, save it in `audio/transcripts`, and archive the handled audio.
+
+## Whisper Command Alternative
 
 When you install or choose a Whisper command workflow, update `core/memory/profile.json`:
 

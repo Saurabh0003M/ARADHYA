@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from src.aradhya.model_provider import OllamaTextModelProvider
+from src.aradhya.assistant_models import build_default_preferences
 from src.aradhya.runtime_profile import (
     ModelProfile,
     VoiceProfile,
@@ -46,8 +48,10 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
             "base_url": "http://localhost:11434",
         },
         "voice": {
-            "provider": "manual_transcript",
+            "provider": "faster_whisper",
             "audio_inbox_dir": "audio/dropbox",
+            "faster_whisper_model_size": "small",
+            "faster_whisper_device": "cpu",
         },
     }
     (tmp_path / "core" / "memory" / "profile.json").write_text(
@@ -59,6 +63,9 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
 
     assert profile.model.model_name == "gemma5"
     assert profile.voice.audio_inbox_dir == tmp_path / "audio" / "dropbox"
+    assert profile.voice.provider == "faster_whisper"
+    assert profile.voice.faster_whisper_model_size == "small"
+    assert profile.voice.faster_whisper_device == "cpu"
 
 
 def test_ollama_provider_uses_configured_model_name():
@@ -93,6 +100,10 @@ def test_voice_inbox_manual_transcript_flow_moves_audio_and_saves_text(tmp_path)
         manual_transcripts_dir=tmp_path / "audio" / "manual_transcripts",
         supported_extensions=(".mp3", ".wav"),
         whisper_command_template=None,
+        faster_whisper_model_size="base",
+        faster_whisper_device="cpu",
+        faster_whisper_compute_type="int8",
+        language=None,
         poll_on_wake=True,
     )
     manager = VoiceInboxManager(profile)
@@ -114,3 +125,12 @@ def test_voice_inbox_manual_transcript_flow_moves_audio_and_saves_text(tmp_path)
     assert result.archived_audio_path is not None
     assert result.archived_audio_path.exists()
     assert not audio_path.exists()
+
+
+def test_default_preferences_use_portable_roots(tmp_path):
+    external_project_root = Path("Z:/AradhyaClone")
+    preferences = build_default_preferences(external_project_root)
+
+    assert Path.home() in preferences.user_roots
+    assert external_project_root in preferences.user_roots
+    assert Path("F:/") not in preferences.user_roots
