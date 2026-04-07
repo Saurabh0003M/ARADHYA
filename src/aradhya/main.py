@@ -11,6 +11,10 @@ from src.aradhya.assistant_models import WakeSource
 from src.aradhya.logging_utils import configure_logging
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
+from src.aradhya.voice_activation import (
+    VoiceActivatedAradhya,
+    describe_voice_activation_support,
+)
 from src.aradhya.voice_pipeline import VoiceInboxManager
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -25,10 +29,15 @@ def _render_response(response) -> None:
     print()
 
 
-def _render_voice_status(voice_manager: VoiceInboxManager) -> None:
+def _render_voice_status(
+    voice_manager: VoiceInboxManager,
+    runtime_profile,
+    live_voice_runtime: VoiceActivatedAradhya | None,
+) -> None:
     # This is the quickest way to inspect where audio should be dropped and
     # whether Aradhya currently sees any pending files.
     status = voice_manager.status()
+    activation_support = describe_voice_activation_support(runtime_profile)
     print(f"Voice > Provider: {status.provider}")
     print(f"Voice > Inbox: {status.inbox_dir}")
     print(f"Voice > Processed: {status.processed_dir}")
@@ -44,6 +53,20 @@ def _render_voice_status(voice_manager: VoiceInboxManager) -> None:
         print(f"Voice > Faster-Whisper device: {status.faster_whisper_device}")
         print(f"Voice > Faster-Whisper compute type: {status.faster_whisper_compute_type}")
         print(f"Voice > Faster-Whisper language: {status.language or 'auto'}")
+    print(
+        "Voice > Live activation available: "
+        f"{'yes' if activation_support.available else 'no'}"
+    )
+    print(
+        f"Voice > Live activation running: "
+        f"{'yes' if live_voice_runtime and live_voice_runtime.is_running() else 'no'}"
+    )
+    print(
+        "Voice > Live activation hotkey: "
+        f"{'+'.join(runtime_profile.voice_activation.hotkey_modifiers).upper()}"
+        f"{'+' + runtime_profile.voice_activation.hotkey_key.upper() if runtime_profile.voice_activation.hotkey_key else ''}"
+    )
+    print(f"Voice > Live activation note: {activation_support.message}")
     print(f"Voice > Pending audio files: {len(status.pending_audio)}")
     for pending_audio in status.pending_audio:
         print(f"Voice > Pending: {pending_audio.name}")
@@ -104,6 +127,7 @@ def main() -> None:
         model_provider=model_provider,
     )
     voice_manager = VoiceInboxManager(runtime_profile.voice)
+    live_voice_runtime: VoiceActivatedAradhya | None = None
     # Create the voice folders on startup so the testing workflow is visible in
     # VS Code even before the first audio file is dropped.
     voice_manager.ensure_directories()
@@ -117,7 +141,7 @@ def main() -> None:
     print("Aradhya - Personal AI Assistant")
     print("=" * 60)
     print("Type 'wake' or 'ctrl+win' to simulate the wake trigger.")
-    print("Type 'voice status' or 'voice process' for the audio inbox flow.")
+    print("Type 'voice status', 'voice process', 'voice activate', or 'voice stop'.")
     print("Type 'model ping' or 'model ask <prompt>' for the configured local model.")
     print("Type 'sleep' to send Aradhya idle, or 'exit' to quit.")
     print(f"Configured model > {runtime_profile.model.model_name}")
@@ -125,11 +149,26 @@ def main() -> None:
     print(f"Log file > {log_path}")
     print()
 
+    if runtime_profile.voice_activation.enabled_on_startup:
+        try:
+            live_voice_runtime = VoiceActivatedAradhya(
+                assistant=assistant,
+                voice_manager=voice_manager,
+                runtime_profile=runtime_profile,
+                output_handler=print,
+            )
+            live_voice_runtime.start()
+        except Exception as error:
+            print(f"Voice > Live activation auto-start failed: {error}")
+            print()
+
     while True:
         command = input("You > ").strip()
         normalized = command.lower()
 
         if normalized == "exit":
+            if live_voice_runtime and live_voice_runtime.is_running():
+                live_voice_runtime.stop()
             print("Aradhya > Shutting down.")
             break
 
@@ -138,11 +177,34 @@ def main() -> None:
             continue
 
         if normalized == "voice status":
-            _render_voice_status(voice_manager)
+            _render_voice_status(voice_manager, runtime_profile, live_voice_runtime)
             continue
 
         if normalized == "voice process":
             _process_voice_inbox(assistant, voice_manager)
+            continue
+
+        if normalized == "voice activate":
+            try:
+                if live_voice_runtime is None:
+                    live_voice_runtime = VoiceActivatedAradhya(
+                        assistant=assistant,
+                        voice_manager=voice_manager,
+                        runtime_profile=runtime_profile,
+                        output_handler=print,
+                    )
+                live_voice_runtime.start()
+            except Exception as error:
+                print(f"Voice > Live activation failed: {error}")
+                print()
+            continue
+
+        if normalized == "voice stop":
+            if live_voice_runtime and live_voice_runtime.is_running():
+                live_voice_runtime.stop()
+            else:
+                print("Voice > Live voice activation is not running.")
+                print()
             continue
 
         if normalized == "model ping":

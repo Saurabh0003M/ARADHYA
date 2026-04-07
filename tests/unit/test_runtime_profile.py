@@ -53,6 +53,12 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
             "faster_whisper_model_size": "small",
             "faster_whisper_device": "cpu",
         },
+        "voice_activation": {
+            "enabled_on_startup": True,
+            "hotkey_modifiers": ["ctrl", "shift"],
+            "hotkey_key": "v",
+            "silence_duration": 2.5,
+        },
     }
     (tmp_path / "core" / "memory" / "profile.json").write_text(
         json.dumps(profile_payload),
@@ -66,6 +72,10 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
     assert profile.voice.provider == "faster_whisper"
     assert profile.voice.faster_whisper_model_size == "small"
     assert profile.voice.faster_whisper_device == "cpu"
+    assert profile.voice_activation.enabled_on_startup is True
+    assert profile.voice_activation.hotkey_modifiers == ("ctrl", "shift")
+    assert profile.voice_activation.hotkey_key == "v"
+    assert profile.voice_activation.silence_duration == 2.5
 
 
 def test_ollama_provider_uses_configured_model_name():

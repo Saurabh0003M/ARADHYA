@@ -32,6 +32,12 @@ Optional real local file transcription:
 venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 ```
 
+Optional live microphone activation:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
+```
+
 ## 3. Install Or Verify Ollama
 
 Confirm Ollama is available:
@@ -112,6 +118,12 @@ If you install `requirements-voice.txt`, you can switch `core/memory/profile.jso
 
 Then Aradhya will transcribe dropped files locally without needing the matching `.txt` helper file.
 
+If you also want live microphone activation:
+
+- keep `voice.provider` as `faster_whisper` or `whisper_command`
+- review the `voice_activation` section in `core/memory/profile.json`
+- start Aradhya and run `voice activate`
+
 ## 8. Important Config Files
 
 - `core/memory/preferences.json`
@@ -126,6 +138,10 @@ Useful voice fields in `profile.json`:
 - `voice.faster_whisper_device`
 - `voice.faster_whisper_compute_type`
 - `voice.language`
+- `voice_activation.hotkey_modifiers`
+- `voice_activation.hotkey_key`
+- `voice_activation.silence_duration`
+- `voice_activation.silence_threshold`
 
 ## 9. Portable Design Notes
 

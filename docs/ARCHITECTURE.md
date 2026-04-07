@@ -24,6 +24,7 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 ### 2. Perception Layer
 
 - Whisper will handle speech-to-text.
+- Optional live microphone activation can capture speech from a global hotkey and feed it into the same voice inbox pipeline.
 - Future screen-reading adapters will inspect visible UI elements.
 - The current repo simulates this with direct CLI text input.
 - A folder-based voice inbox now exists so audio files can be dropped into `audio/inbox` and processed through a transcription pipeline.
@@ -97,6 +98,8 @@ This index is a support artifact for context and auditing. Local task previews s
 4. Route the transcript into the assistant planner when Aradhya is awake.
 
 The default provider is currently `manual_transcript`, which lets the repo work immediately even before Whisper is installed. The current repo also supports an optional `faster_whisper` provider for real local file transcription, while keeping `manual_transcript` as the zero-setup default. A `whisper_command` provider remains available for external command-based workflows.
+
+When live voice activation is enabled, microphone captures are written into the same inbox/transcript/archive workflow instead of introducing a separate transcription path. That keeps debugging, transcript inspection, and safety behavior consistent.
 
 ## Long-Term Vision
 

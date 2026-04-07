@@ -12,6 +12,7 @@ from src.aradhya.assistant_models import (
 )
 from src.aradhya.runtime_profile import (
     RuntimeProfile,
+    VoiceActivationProfile,
     build_default_runtime_profile,
     load_runtime_profile,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "PlanAction",
     "PlanKind",
     "RuntimeProfile",
+    "VoiceActivationProfile",
     "WakeSource",
     "build_default_preferences",
     "build_default_runtime_profile",

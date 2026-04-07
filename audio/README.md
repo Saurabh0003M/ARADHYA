@@ -38,6 +38,17 @@ If you want real local transcription from dropped audio files:
 
 In `faster_whisper` mode, you only drop the audio file into `audio/inbox`, then run `voice process`. Aradhya will generate the transcript locally, save it in `audio/transcripts`, and archive the handled audio.
 
+## Live Microphone Activation
+
+Aradhya can also feed microphone captures into the same inbox pipeline.
+
+1. Install `requirements-voice-activation.txt`
+2. Set `voice.provider` to `faster_whisper` or `whisper_command`
+3. Start Aradhya and run `voice activate`
+4. Press the configured hotkey, speak, and let Aradhya transcribe the saved capture
+
+This path still archives the handled audio and writes the transcript into the same folders as dropped files, so it stays easy to inspect and debug.
+
 ## Whisper Command Alternative
 
 When you install or choose a Whisper command workflow, update `core/memory/profile.json`:

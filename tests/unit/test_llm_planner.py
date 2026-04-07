@@ -139,3 +139,27 @@ def test_llm_fallback_handles_provider_errors(tmp_path):
     assert response.plan is not None
     assert response.plan.kind == PlanKind.UNKNOWN
     assert "provider offline" in response.spoken_response
+
+
+def test_llm_fallback_accepts_markdown_wrapped_json(tmp_path):
+    target_dir = tmp_path / "Notes"
+    target_dir.mkdir()
+    model_provider = FakeModelProvider(
+        """
+        ```json
+        {"intent": "OPEN_PATH", "confidence": 0.88, "reasoning": "The user wants a folder", "target": "Notes", "enabled": null}
+        ```
+        """
+    )
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        model_provider=model_provider,
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+
+    response = assistant.handle_transcript("launch the notes folder")
+
+    assert response.plan is not None
+    assert response.plan.kind == PlanKind.OPEN_PATH
+    assert response.awaiting_confirmation is True

@@ -60,9 +60,11 @@ Once Aradhya starts, type these exactly:
 ```text
 model ping
 voice status
+voice activate
 wake
 open aradhya
 yes proceed
+voice stop
 find the folder with the highest concentration of .txt files
 yes proceed
 sleep
@@ -73,9 +75,11 @@ What each command does:
 
 - `model ping`: checks Ollama and confirms whether the configured model is reachable
 - `voice status`: shows the current audio folders and pending voice files
+- `voice activate`: starts the background hotkey listener for microphone capture
 - `wake`: wakes Aradhya and refreshes `project_tree.txt`
 - `open aradhya`: creates a plan to open the best-matching path
 - `yes proceed`: executes the pending plan
+- `voice stop`: stops live microphone capture mode
 - `.txt` query: triggers a local-data search and refreshes the tree again
 - `sleep`: clears pending work and puts Aradhya idle
 - `exit`: closes the CLI
@@ -135,6 +139,7 @@ These features are real in the current code:
 - send direct prompts to the configured Ollama model with `model ask ...`
 - process dropped voice files through the current folder-based voice workflow
 - use the configured Ollama model as a fallback planner for ambiguous system requests
+- optionally listen for a global hotkey, capture microphone audio, and route it through the same planner
 
 These features are only partially present or still planned:
 
@@ -191,6 +196,14 @@ Optional real local file transcription:
 4. Run `voice process`
 
 In that mode Aradhya generates the transcript locally and still uses the same inbox, transcript, and archive folders.
+
+Optional live voice activation:
+
+1. Install `requirements-voice-activation.txt`
+2. Set `voice.provider` to `faster_whisper` or `whisper_command`
+3. Run `voice activate`
+4. Press the configured hotkey from `profile.json`
+5. Speak your request and wait for Aradhya to print the transcript and response
 
 Responsible file:
 
@@ -257,6 +270,11 @@ Useful fields in `profile.json`:
 - `voice.faster_whisper_compute_type`
 - `voice.language`
 - `voice.audio_inbox_dir`
+- `voice_activation.enabled_on_startup`
+- `voice_activation.hotkey_modifiers`
+- `voice_activation.hotkey_key`
+- `voice_activation.silence_duration`
+- `voice_activation.silence_threshold`
 
 ## 10. Most Important Code Files
 
@@ -270,12 +288,20 @@ Useful fields in `profile.json`:
   deterministic planner plus model-backed fallback routing
 - `src/aradhya/llm_planner.py`
   strict JSON parsing and safe LLM intent classification
+- `src/aradhya/json_extractor.py`
+  robust JSON extraction from imperfect model responses
 - `src/aradhya/assistant_system_tools.py`
   task heuristics and execution behavior
 - `src/aradhya/model_provider.py`
   Ollama provider layer
+- `src/aradhya/hotkey_listener.py`
+  optional global hotkey listener for live voice activation
+- `src/aradhya/microphone_capture.py`
+  optional sounddevice-based microphone capture
 - `src/aradhya/runtime_profile.py`
   swappable model and voice config loader
+- `src/aradhya/voice_activation.py`
+  background hotkey + microphone integration using the same inbox pipeline
 - `src/aradhya/voice_pipeline.py`
   audio inbox and transcript handling
 - `src/aradhya/voice_transcriber.py`

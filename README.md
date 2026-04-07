@@ -12,6 +12,7 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 - Safe dry-run execution by default so the assistant can be tested without launching apps unexpectedly.
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
 - A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts, plus an optional `faster_whisper` provider for real local transcription.
+- Optional live voice activation that can listen for a global hotkey, record from the microphone, and route the transcript through the same planner and confirmation gate.
 
 If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 
@@ -35,11 +36,15 @@ If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 |       |-- assistant_indexer.py
 |       |-- llm_planner.py
 |       |-- logging_utils.py
+|       |-- json_extractor.py
 |       |-- assistant_models.py
 |       |-- assistant_planner.py
 |       |-- assistant_system_tools.py
+|       |-- hotkey_listener.py
+|       |-- microphone_capture.py
 |       |-- model_provider.py
 |       |-- runtime_profile.py
+|       |-- voice_activation.py
 |       |-- voice_pipeline.py
 |       |-- voice_transcriber.py
 |       `-- main.py
@@ -69,6 +74,12 @@ Optional local transcription:
 venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 ```
 
+Optional live microphone activation:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
+```
+
 If you already activated the environment, this also works:
 
 ```powershell
@@ -83,6 +94,8 @@ Inside the CLI:
 - Type `yes proceed` to execute the pending plan.
 - Type `voice status` to inspect the audio inbox setup.
 - Type `voice process` to process dropped audio files.
+- Type `voice activate` to start background hotkey-based microphone capture.
+- Type `voice stop` to stop the background hotkey listener.
 - Type `model ping` to check the configured Ollama model.
 - Type `model ask <prompt>` to send a direct prompt to the configured local model.
 - Type `sleep` to return Aradhya to idle.
@@ -104,6 +117,8 @@ Runtime model and voice bindings are loaded from `core/memory/profile.json`.
 - The default voice provider is `manual_transcript` so the repo still works immediately after clone.
 - To enable real local file transcription, install `requirements-voice.txt` and change `voice.provider` to `faster_whisper`.
 - `voice.faster_whisper_model_size`, `voice.faster_whisper_device`, `voice.faster_whisper_compute_type`, and `voice.language` control the optional Faster-Whisper provider.
+- Live microphone activation is configured under `voice_activation` in `profile.json`.
+- For live voice activation, use `voice.provider = faster_whisper` or `voice.provider = whisper_command`, then install `requirements-voice-activation.txt`.
 
 ## Voice Files
 
@@ -121,6 +136,17 @@ Example:
 - `audio/manual_transcripts/task.txt`
 
 Then run `voice process`.
+
+## Live Voice Activation
+
+If you want Aradhya to listen through the microphone:
+
+1. Install `requirements-voice-activation.txt`
+2. Set `voice.provider` to `faster_whisper` or `whisper_command`
+3. Adjust `voice_activation` settings in `core/memory/profile.json` if needed
+4. Start the CLI and run `voice activate`
+
+Live capture writes audio into the same inbox flow, so transcripts, archives, and planner routing stay consistent with the file-based path.
 
 ## Testing
 

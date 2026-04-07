@@ -49,11 +49,28 @@ class VoiceProfile:
 
 
 @dataclass(frozen=True)
+class VoiceActivationProfile:
+    """Configuration for optional live microphone activation."""
+
+    enabled_on_startup: bool
+    hotkey_modifiers: tuple[str, ...]
+    hotkey_key: str
+    preferred_backend: str
+    sample_rate: int
+    channels: int
+    chunk_size: int
+    silence_threshold: float
+    silence_duration: float
+    max_recording_duration: float
+
+
+@dataclass(frozen=True)
 class RuntimeProfile:
     """Combined runtime profile for Aradhya."""
 
     model: ModelProfile
     voice: VoiceProfile
+    voice_activation: VoiceActivationProfile
 
 
 def _project_root_from_here() -> Path:
@@ -112,6 +129,18 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
             language=None,
             poll_on_wake=True,
         ),
+        voice_activation=VoiceActivationProfile(
+            enabled_on_startup=False,
+            hotkey_modifiers=("ctrl", "win"),
+            hotkey_key="",
+            preferred_backend="sounddevice",
+            sample_rate=16000,
+            channels=1,
+            chunk_size=1024,
+            silence_threshold=0.01,
+            silence_duration=1.5,
+            max_recording_duration=30.0,
+        ),
     )
 
 
@@ -136,6 +165,7 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
 
     raw_model = data.get("model", {})
     raw_voice = data.get("voice", {})
+    raw_voice_activation = data.get("voice_activation", {})
 
     return RuntimeProfile(
         model=ModelProfile(
@@ -212,6 +242,50 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
             poll_on_wake=raw_voice.get(
                 "poll_on_wake",
                 defaults.voice.poll_on_wake,
+            ),
+        ),
+        voice_activation=VoiceActivationProfile(
+            enabled_on_startup=raw_voice_activation.get(
+                "enabled_on_startup",
+                defaults.voice_activation.enabled_on_startup,
+            ),
+            hotkey_modifiers=tuple(
+                raw_voice_activation.get(
+                    "hotkey_modifiers",
+                    defaults.voice_activation.hotkey_modifiers,
+                )
+            ),
+            hotkey_key=raw_voice_activation.get(
+                "hotkey_key",
+                defaults.voice_activation.hotkey_key,
+            ),
+            preferred_backend=raw_voice_activation.get(
+                "preferred_backend",
+                defaults.voice_activation.preferred_backend,
+            ),
+            sample_rate=raw_voice_activation.get(
+                "sample_rate",
+                defaults.voice_activation.sample_rate,
+            ),
+            channels=raw_voice_activation.get(
+                "channels",
+                defaults.voice_activation.channels,
+            ),
+            chunk_size=raw_voice_activation.get(
+                "chunk_size",
+                defaults.voice_activation.chunk_size,
+            ),
+            silence_threshold=raw_voice_activation.get(
+                "silence_threshold",
+                defaults.voice_activation.silence_threshold,
+            ),
+            silence_duration=raw_voice_activation.get(
+                "silence_duration",
+                defaults.voice_activation.silence_duration,
+            ),
+            max_recording_duration=raw_voice_activation.get(
+                "max_recording_duration",
+                defaults.voice_activation.max_recording_duration,
             ),
         ),
     )

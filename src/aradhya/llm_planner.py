@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-import json
-import re
 from typing import Any, Callable
 
 from loguru import logger
 
 from src.aradhya.assistant_models import AssistantState, PlanAction, PlanKind
+from src.aradhya.json_extractor import (
+    JSONExtractionError,
+    extract_json_from_llm_response,
+    validate_json_structure,
+)
 from src.aradhya.assistant_system_tools import SystemToolbox
 from src.aradhya.model_provider import TextModelProvider
 
@@ -116,14 +119,15 @@ class LLMIntentPlanner:
         )
 
     def _parse_decision(self, response_text: str) -> LLMPlannerDecision:
-        match = re.search(r"\{.*\}", response_text, re.DOTALL)
-        if not match:
-            raise ValueError("The model response did not contain valid JSON.")
-
         try:
-            payload = json.loads(match.group(0))
-        except json.JSONDecodeError as error:
-            raise ValueError(f"Invalid JSON from model: {error}") from error
+            payload = extract_json_from_llm_response(response_text)
+            validate_json_structure(
+                payload,
+                required_keys=("intent", "confidence", "reasoning", "target", "enabled"),
+                allowed_keys=("intent", "confidence", "reasoning", "target", "enabled"),
+            )
+        except JSONExtractionError as error:
+            raise ValueError(str(error)) from error
 
         intent = str(payload.get("intent", "UNKNOWN")).upper().strip()
         confidence = self._coerce_confidence(payload.get("confidence"))
