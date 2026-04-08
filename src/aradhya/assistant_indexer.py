@@ -9,7 +9,9 @@ import json
 import os
 from pathlib import Path
 import re
-from typing import Callable
+from typing import Callable, Iterator
+
+from loguru import logger
 
 from src.aradhya.assistant_models import (
     AssistantPreferences,
@@ -499,16 +501,25 @@ class DirectoryIndexManager:
 
         return accumulators
 
+    def _walk_tree(self, root: Path) -> Iterator[tuple[str, list[str], list[str]]]:
+        """Walk a tree while surfacing inaccessible paths in the logs."""
+
+        def handle_error(error: OSError) -> None:
+            location = error.filename or str(root)
+            logger.warning(
+                "Skipping inaccessible path during directory scan at {}: {}",
+                location,
+                error,
+            )
+
+        yield from os.walk(root, topdown=True, onerror=handle_error)
+
     def _scan_user_root(self, root: Path, accumulator: _DriveAccumulator) -> None:
         root_label = str(root)
         accumulator.user_roots.add(root_label)
         marker_names = {marker.lower() for marker in self.preferences.project_markers}
 
-        for current_root, dirnames, filenames in os.walk(
-            root,
-            topdown=True,
-            onerror=lambda _error: None,
-        ):
+        for current_root, dirnames, filenames in self._walk_tree(root):
             dirnames[:] = [
                 dirname
                 for dirname in sorted(dirnames)
@@ -573,11 +584,7 @@ class DirectoryIndexManager:
     def _scan_game_root(self, root: Path, accumulator: _DriveAccumulator) -> None:
         accumulator.game_roots.add(str(root))
         blocked_tokens = ("crash", "unins", "setup", "redistributable")
-        for current_root, dirnames, filenames in os.walk(
-            root,
-            topdown=True,
-            onerror=lambda _error: None,
-        ):
+        for current_root, dirnames, filenames in self._walk_tree(root):
             dirnames[:] = [
                 dirname
                 for dirname in sorted(dirnames)
@@ -925,11 +932,7 @@ class DirectoryIndexManager:
         max_files = 500
         max_depth = 3
 
-        for current_root, dirnames, filenames in os.walk(
-            project_path,
-            topdown=True,
-            onerror=lambda _error: None,
-        ):
+        for current_root, dirnames, filenames in self._walk_tree(project_path):
             current_path = Path(current_root)
             try:
                 depth = len(current_path.relative_to(project_path).parts)

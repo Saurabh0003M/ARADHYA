@@ -19,6 +19,7 @@ from src.aradhya.voice_activation import (
 from src.aradhya.voice_pipeline import VoiceInboxManager
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+MAX_DIRECT_MODEL_PROMPT_CHARS = 4000
 
 
 def _render_response(response) -> None:
@@ -89,6 +90,23 @@ def _render_model_health(model_provider) -> None:
     # This command doubles as a diagnostic scan so the user can see which local
     # models Ollama currently exposes on this machine.
     render_model_health(model_provider.health_check())
+
+
+def _sanitize_direct_model_prompt(prompt: str) -> str:
+    normalized = " ".join(prompt.split())
+    if not normalized:
+        raise ValueError("Add a prompt after 'model ask'.")
+    if len(normalized) > MAX_DIRECT_MODEL_PROMPT_CHARS:
+        raise ValueError(
+            "Direct model prompts must stay under "
+            f"{MAX_DIRECT_MODEL_PROMPT_CHARS} characters."
+        )
+    return normalized
+
+
+def _stop_live_voice_runtime(live_voice_runtime: VoiceActivatedAradhya | None) -> None:
+    if live_voice_runtime and live_voice_runtime.is_running():
+        live_voice_runtime.stop()
 
 
 def _process_voice_inbox(
@@ -167,93 +185,102 @@ def main() -> None:
             print(f"Voice > Live activation auto-start failed: {error}")
             print()
 
-    while True:
-        command = input("You > ").strip()
-        normalized = command.lower()
-
-        if normalized == "exit":
-            if live_voice_runtime and live_voice_runtime.is_running():
-                live_voice_runtime.stop()
-            print("Aradhya > Shutting down.")
-            break
-
-        if normalized == "sleep":
-            _render_response(assistant.go_idle())
-            continue
-
-        if normalized == "voice status":
-            _render_voice_status(voice_manager, runtime_profile, live_voice_runtime)
-            continue
-
-        if normalized == "voice process":
-            _process_voice_inbox(assistant, voice_manager)
-            continue
-
-        if normalized == "voice activate":
+    try:
+        while True:
             try:
-                if live_voice_runtime is None:
-                    live_voice_runtime = VoiceActivatedAradhya(
-                        assistant=assistant,
-                        voice_manager=voice_manager,
-                        runtime_profile=runtime_profile,
-                        output_handler=print,
-                    )
-                live_voice_runtime.start()
-            except Exception as error:
-                print(f"Voice > Live activation failed: {error}")
+                command = input("You > ").strip()
+            except (EOFError, KeyboardInterrupt):
                 print()
-            continue
+                print("Aradhya > Shutting down.")
+                break
 
-        if normalized == "voice stop":
-            if live_voice_runtime and live_voice_runtime.is_running():
-                live_voice_runtime.stop()
-            else:
-                print("Voice > Live voice activation is not running.")
-                print()
-            continue
+            normalized = command.lower()
 
-        if normalized == "model ping":
-            _render_model_health(model_provider)
-            continue
+            if normalized == "exit":
+                print("Aradhya > Shutting down.")
+                break
 
-        if normalized.startswith("model ask "):
-            # This command talks to the configured model engine directly and is
-            # separate from Aradhya's rule-based planner.
-            prompt = command[len("model ask ") :].strip()
-            if not prompt:
-                print("Model > Add a prompt after 'model ask'.")
-                print()
+            if normalized == "sleep":
+                _render_response(assistant.go_idle())
                 continue
 
-            try:
-                result = model_provider.generate(prompt)
-            except Exception as error:  # pragma: no cover - defensive CLI path
-                print(f"Model > Generation failed: {error}")
-                print()
+            if normalized == "voice status":
+                _render_voice_status(voice_manager, runtime_profile, live_voice_runtime)
                 continue
 
-            print(f"Model > {result.text}")
-            print()
-            continue
+            if normalized == "voice process":
+                _process_voice_inbox(assistant, voice_manager)
+                continue
 
-        if normalized in {"wake", "ctrl+win"}:
-            source = (
-                WakeSource.HOTKEY if normalized == "ctrl+win" else WakeSource.FLOATING_ICON
-            )
-            _render_response(assistant.handle_wake(source))
-            if runtime_profile.voice.poll_on_wake:
-                # Wake checks the voice inbox so pending files are surfaced
-                # before you manually trigger voice processing.
-                pending_audio = voice_manager.status().pending_audio
-                if pending_audio:
-                    print(
-                        f"Voice > {len(pending_audio)} pending audio file(s) are waiting in "
-                        f"{runtime_profile.voice.audio_inbox_dir}"
-                    )
+            if normalized == "voice activate":
+                try:
+                    if live_voice_runtime is None:
+                        live_voice_runtime = VoiceActivatedAradhya(
+                            assistant=assistant,
+                            voice_manager=voice_manager,
+                            runtime_profile=runtime_profile,
+                            output_handler=print,
+                        )
+                    live_voice_runtime.start()
+                except Exception as error:
+                    print(f"Voice > Live activation failed: {error}")
                     print()
-            continue
+                continue
 
-        _render_response(assistant.handle_transcript(command))
+            if normalized == "voice stop":
+                if live_voice_runtime and live_voice_runtime.is_running():
+                    live_voice_runtime.stop()
+                else:
+                    print("Voice > Live voice activation is not running.")
+                    print()
+                continue
+
+            if normalized == "model ping":
+                _render_model_health(model_provider)
+                continue
+
+            if normalized.startswith("model ask "):
+                # This command talks to the configured model engine directly and is
+                # separate from Aradhya's rule-based planner.
+                try:
+                    prompt = _sanitize_direct_model_prompt(command[len("model ask ") :])
+                except ValueError as error:
+                    print(f"Model > {error}")
+                    print()
+                    continue
+
+                try:
+                    result = model_provider.generate(prompt)
+                except Exception as error:  # pragma: no cover - defensive CLI path
+                    print(f"Model > Generation failed: {error}")
+                    print()
+                    continue
+
+                print(f"Model > {result.text}")
+                print()
+                continue
+
+            if normalized in {"wake", "ctrl+win"}:
+                source = (
+                    WakeSource.HOTKEY if normalized == "ctrl+win" else WakeSource.FLOATING_ICON
+                )
+                _render_response(assistant.handle_wake(source))
+                if runtime_profile.voice.poll_on_wake:
+                    # Wake checks the voice inbox so pending files are surfaced
+                    # before you manually trigger voice processing.
+                    pending_audio = voice_manager.status().pending_audio
+                    if pending_audio:
+                        print(
+                            f"Voice > {len(pending_audio)} pending audio file(s) are waiting in "
+                            f"{runtime_profile.voice.audio_inbox_dir}"
+                        )
+                        print()
+                continue
+
+            _render_response(assistant.handle_transcript(command))
+    finally:
+        _stop_live_voice_runtime(live_voice_runtime)
+        logger.info("Aradhya CLI stopped")
 
 
 if __name__ == "__main__":

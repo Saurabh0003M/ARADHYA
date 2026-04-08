@@ -6,6 +6,9 @@ import os
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
+
+from loguru import logger
 
 from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import (
@@ -15,6 +18,15 @@ from src.aradhya.assistant_models import (
     PlanAction,
     PlanKind,
 )
+
+EXACT_NAME_MATCH_SCORE = 1.0
+PARTIAL_NAME_MATCH_SCORE = 0.5
+DIRECTORY_BONUS = 0.4
+SHORTCUT_PENALTY = -0.2
+PREFERRED_ROOT_BONUS = 0.3
+APPDATA_PENALTY = -0.5
+MAX_DEPTH_BONUS = 0.3
+DEPTH_PENALTY_PER_PART = 0.02
 
 
 class SystemToolbox:
@@ -52,23 +64,34 @@ class SystemToolbox:
         )
 
     def plan_open_security_blogs(self) -> PlanAction:
-        urls = tuple(self.preferences.security_blog_urls)
+        configured_urls = tuple(self.preferences.security_blog_urls)
+        urls = self._validated_browser_urls(configured_urls)
+        skipped_url_count = len(configured_urls) - len(urls)
         if not urls:
             return PlanAction(
                 kind=PlanKind.OPEN_SECURITY_BLOGS,
-                summary="Security blog preferences are empty, so there is nothing to open yet.",
+                summary=(
+                    "Security blog preferences are empty or invalid, so there is nothing "
+                    "safe to open yet."
+                ),
                 requires_confirmation=False,
                 ready=False,
             )
 
+        skipped_suffix = (
+            f" I skipped {skipped_url_count} invalid URL(s)."
+            if skipped_url_count
+            else ""
+        )
         return PlanAction(
             kind=PlanKind.OPEN_SECURITY_BLOGS,
             summary=(
                 "I am ready to open your preferred security blogs: "
                 + ", ".join(urls)
                 + "."
+                + skipped_suffix
             ),
-            metadata={"urls": list(urls)},
+            metadata={"urls": list(urls), "skipped_url_count": skipped_url_count},
         )
 
     def plan_locate_txt_dense_folder(self) -> PlanAction:
@@ -260,24 +283,45 @@ class SystemToolbox:
         lowered_query = query.lower()
 
         if lowered_name == lowered_query:
-            score += 1.0
+            score += EXACT_NAME_MATCH_SCORE
         elif lowered_query in lowered_name:
-            score += 0.5
+            score += PARTIAL_NAME_MATCH_SCORE
 
         if path.is_dir():
-            score += 0.4
+            score += DIRECTORY_BONUS
 
         if path.suffix.lower() == ".lnk":
-            score -= 0.2
+            score += SHORTCUT_PENALTY
 
-        if lowered_path.startswith("f:\\"):
-            score += 0.3
+        if self._is_in_preferred_user_root(path):
+            score += PREFERRED_ROOT_BONUS
 
         if "appdata" in lowered_path:
-            score -= 0.5
+            score += APPDATA_PENALTY
 
-        score += max(0.0, 0.3 - len(path.parts) * 0.02)
+        score += max(0.0, MAX_DEPTH_BONUS - len(path.parts) * DEPTH_PENALTY_PER_PART)
         return score
+
+    def _validated_browser_urls(self, urls: tuple[str, ...]) -> tuple[str, ...]:
+        safe_urls: list[str] = []
+        for url in urls:
+            parsed = urlparse(url)
+            if parsed.scheme in {"http", "https"} and parsed.netloc:
+                safe_urls.append(url)
+                continue
+
+            logger.warning("Skipping unsupported browser URL in preferences: {}", url)
+
+        return tuple(safe_urls)
+
+    def _is_in_preferred_user_root(self, path: Path) -> bool:
+        for root in self.preferences.user_roots:
+            try:
+                path.relative_to(root)
+                return True
+            except ValueError:
+                continue
+        return False
 
     def _yesterday_label(self, now: datetime) -> str:
         return (now - timedelta(days=1)).date().isoformat()
