@@ -1,5 +1,7 @@
 # Aradhya OI Roadmap
 
+For the full product thesis and category definition, see `docs/OI_VISION.md`.
+
 ## Vision
 
 Aradhya is being built as an `OI`: `Operating Intelligence`.

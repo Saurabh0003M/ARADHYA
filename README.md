@@ -42,7 +42,8 @@ intent, gather live context, and safely operate the machine under policy.
 - Future screen-reading, browser-operation, and UI-guidance capabilities for
   form filling, guided workflows, and on-screen assistance.
 
-If you want the product-level vision and build order, open
+If you want the product-level vision, open `docs/OI_VISION.md`.
+If you want the milestone order and implementation direction, open
 `docs/OI_ROADMAP.md`.
 
 ## Project Structure
@@ -196,5 +197,6 @@ The current implementation establishes the assistant core for the updated vision
 - multi-model Debate AI orchestration
 - the longer-term Aradhya OS direction
 
-For the full OI roadmap, milestone order, and time/space complexity notes, see
+For the full OI vision, see `docs/OI_VISION.md`.
+For the roadmap, milestone order, and time/space complexity notes, see
 `docs/OI_ROADMAP.md`.
