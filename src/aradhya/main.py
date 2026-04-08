@@ -9,6 +9,7 @@ from loguru import logger
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import WakeSource
 from src.aradhya.logging_utils import configure_logging
+from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
 from src.aradhya.voice_activation import (
@@ -74,17 +75,9 @@ def _render_voice_status(
 
 
 def _render_model_health(model_provider) -> None:
-    # This helps verify that the configured Ollama model name in profile.json
-    # is both reachable and actually available locally.
-    health = model_provider.health_check()
-    print(f"Model > Provider: {health.provider}")
-    print(f"Model > Configured model: {health.configured_model}")
-    print(f"Model > Reachable: {'yes' if health.reachable else 'no'}")
-    print(f"Model > Ready: {'yes' if health.ready else 'no'}")
-    if health.available_models:
-        print(f"Model > Available: {', '.join(health.available_models)}")
-    print(f"Model > {health.message}")
-    print()
+    # This command doubles as a diagnostic scan so the user can see which local
+    # models Ollama currently exposes on this machine.
+    render_model_health(model_provider.health_check())
 
 
 def _process_voice_inbox(
@@ -121,6 +114,7 @@ def _process_voice_inbox(
 def main() -> None:
     runtime_profile = load_runtime_profile(PROJECT_ROOT)
     log_path = configure_logging(PROJECT_ROOT)
+    runtime_profile = bootstrap_runtime_profile(runtime_profile, PROJECT_ROOT)
     model_provider = build_text_model_provider(runtime_profile.model)
     assistant = AradhyaAssistant.from_project_root(
         PROJECT_ROOT,

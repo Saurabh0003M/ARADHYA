@@ -289,3 +289,33 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
             ),
         ),
     )
+
+
+def persist_model_name(project_root: Path | None, model_name: str) -> Path:
+    """Persist the chosen Ollama model name into ``core/memory/profile.json``."""
+
+    root = project_root or _project_root_from_here()
+    profile_path = root / "core" / "memory" / "profile.json"
+    payload: dict[str, object] = {}
+
+    if profile_path.exists():
+        raw_text = profile_path.read_text(encoding="utf-8").strip()
+        if raw_text:
+            try:
+                existing_payload = json.loads(raw_text)
+            except json.JSONDecodeError:
+                existing_payload = {}
+            if isinstance(existing_payload, dict):
+                payload = existing_payload
+
+    raw_model = payload.get("model")
+    if not isinstance(raw_model, dict):
+        raw_model = {}
+
+    raw_model.setdefault("provider", "ollama")
+    raw_model["model_name"] = model_name
+    payload["model"] = raw_model
+
+    profile_path.parent.mkdir(parents=True, exist_ok=True)
+    profile_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return profile_path
