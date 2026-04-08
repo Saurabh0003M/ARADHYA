@@ -42,5 +42,12 @@
     "silence_threshold": 0.01,
     "silence_duration": 1.5,
     "max_recording_duration": 30.0
+  },
+  "voice_output": {
+    "enabled": false,
+    "provider": "pyttsx3",
+    "voice_id": "",
+    "rate": 185,
+    "volume": 1.0
   }
 }

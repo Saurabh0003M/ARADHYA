@@ -67,6 +67,17 @@ def _render_voice_status(
         f"{'+'.join(runtime_profile.voice_activation.hotkey_modifiers).upper()}"
         f"{'+' + runtime_profile.voice_activation.hotkey_key.upper() if runtime_profile.voice_activation.hotkey_key else ''}"
     )
+    print(
+        "Voice > Spoken replies enabled: "
+        f"{'yes' if runtime_profile.voice_output.enabled else 'no'}"
+    )
+    print(f"Voice > Spoken reply provider: {runtime_profile.voice_output.provider}")
+    print(
+        "Voice > Spoken reply voice: "
+        f"{runtime_profile.voice_output.voice_id or 'system default'}"
+    )
+    print(f"Voice > Spoken reply rate: {runtime_profile.voice_output.rate}")
+    print(f"Voice > Spoken reply volume: {runtime_profile.voice_output.volume}")
     print(f"Voice > Live activation note: {activation_support.message}")
     print(f"Voice > Pending audio files: {len(status.pending_audio)}")
     for pending_audio in status.pending_audio:

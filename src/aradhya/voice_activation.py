@@ -16,7 +16,8 @@ from src.aradhya.hotkey_listener import HotkeyListener, build_hotkey_config
 from src.aradhya.logging_utils import configure_logging
 from src.aradhya.microphone_capture import AudioConfig, MicrophoneCapture, get_available_backend
 from src.aradhya.model_provider import build_text_model_provider
-from src.aradhya.runtime_profile import RuntimeProfile, load_runtime_profile
+from src.aradhya.runtime_profile import RuntimeProfile, VoiceOutputProfile, load_runtime_profile
+from src.aradhya.speech_synthesizer import SpeechSynthesizer, build_speech_synthesizer
 from src.aradhya.voice_pipeline import VoiceInboxManager, VoiceJobResult
 
 
@@ -44,6 +45,10 @@ class VoiceActivatedAradhya:
         output_handler: Callable[[str], None] | None = None,
         microphone: MicrophoneCapture | None = None,
         hotkey_listener: HotkeyListener | None = None,
+        speech_synthesizer: SpeechSynthesizer | None = None,
+        speech_synthesizer_factory: Callable[[VoiceOutputProfile], SpeechSynthesizer | None] = (
+            build_speech_synthesizer
+        ),
     ):
         if runtime_profile.voice.provider not in {"faster_whisper", "whisper_command"}:
             raise RuntimeError(
@@ -63,6 +68,7 @@ class VoiceActivatedAradhya:
         self._activation_lock = threading.Lock()
         self._running = False
         self._capture_counter = 0
+        self._speech_output_warning: str | None = None
         self.microphone = microphone or MicrophoneCapture(
             config=AudioConfig(
                 sample_rate=runtime_profile.voice_activation.sample_rate,
@@ -81,6 +87,15 @@ class VoiceActivatedAradhya:
             ),
             self._handle_hotkey_press,
         )
+        self.speech_synthesizer = speech_synthesizer
+        if self.speech_synthesizer is None:
+            try:
+                self.speech_synthesizer = speech_synthesizer_factory(
+                    runtime_profile.voice_output
+                )
+            except Exception as error:
+                self._speech_output_warning = str(error)
+                logger.warning("Speech output is unavailable: {}", error)
 
     def start(self) -> None:
         """Start listening for the configured wake hotkey."""
@@ -104,6 +119,10 @@ class VoiceActivatedAradhya:
         self.output_handler(
             f"Voice > Live voice activation is running. Press {hotkey_description} to speak."
         )
+        if self._speech_output_warning is not None:
+            self.output_handler(
+                f"Voice > Spoken replies are unavailable: {self._speech_output_warning}"
+            )
 
     def stop(self) -> None:
         """Stop listening for the live voice hotkey."""
@@ -156,6 +175,7 @@ class VoiceActivatedAradhya:
             self.output_handler(f"Heard > {voice_job.transcript_text}")
             response = self.assistant.handle_transcript(voice_job.transcript_text)
             self.output_handler(f"Aradhya > {response.spoken_response}")
+            self._speak_reply(response.spoken_response)
             if response.awaiting_confirmation:
                 self.output_handler(
                     "Voice > Say 'yes proceed' or 'cancel' with the hotkey or the CLI."
@@ -175,6 +195,19 @@ class VoiceActivatedAradhya:
             self.output_handler(f"Voice > Transcript saved to {voice_job.transcript_path}")
         if voice_job.archived_audio_path is not None:
             self.output_handler(f"Voice > Archived audio to {voice_job.archived_audio_path}")
+
+    def _speak_reply(self, reply_text: str) -> None:
+        if self.speech_synthesizer is None:
+            return
+
+        try:
+            self.speech_synthesizer.speak(reply_text)
+        except Exception as error:
+            logger.warning("Speech output failed during live voice activation: {}", error)
+            self.output_handler(
+                f"Voice > Spoken reply failed: {error}. Continuing with text output only."
+            )
+            self.speech_synthesizer = None
 
 
 def describe_voice_activation_support(runtime_profile: RuntimeProfile) -> VoiceActivationSupport:

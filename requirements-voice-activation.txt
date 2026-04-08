@@ -3,3 +3,4 @@
 # Optional live voice activation stack.
 sounddevice>=0.4.6
 pynput>=1.7.7
+pyttsx3>=2.90

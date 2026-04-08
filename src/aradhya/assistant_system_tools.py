@@ -188,6 +188,9 @@ class SystemToolbox:
         return PlanAction(
             kind=PlanKind.TOGGLE_DEBATE,
             summary=f"I am ready to set Debate AI mode to {state_label}.",
+            # Debate mode changes only Aradhya's internal routing state, so it
+            # can execute immediately without opening apps, files, or URLs.
+            requires_confirmation=False,
             metadata={"enabled": enabled},
         )
 

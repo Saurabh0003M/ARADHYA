@@ -59,6 +59,13 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
             "hotkey_key": "v",
             "silence_duration": 2.5,
         },
+        "voice_output": {
+            "enabled": True,
+            "provider": "pyttsx3",
+            "voice_id": "zira",
+            "rate": 210,
+            "volume": 0.7,
+        },
     }
     (tmp_path / "core" / "memory" / "profile.json").write_text(
         json.dumps(profile_payload),
@@ -76,6 +83,21 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
     assert profile.voice_activation.hotkey_modifiers == ("ctrl", "shift")
     assert profile.voice_activation.hotkey_key == "v"
     assert profile.voice_activation.silence_duration == 2.5
+    assert profile.voice_output.enabled is True
+    assert profile.voice_output.provider == "pyttsx3"
+    assert profile.voice_output.voice_id == "zira"
+    assert profile.voice_output.rate == 210
+    assert profile.voice_output.volume == 0.7
+
+
+def test_default_runtime_profile_disables_spoken_replies_by_default():
+    profile = build_default_runtime_profile()
+
+    assert profile.voice_output.enabled is False
+    assert profile.voice_output.provider == "pyttsx3"
+    assert profile.voice_output.voice_id == ""
+    assert profile.voice_output.rate == 185
+    assert profile.voice_output.volume == 1.0
 
 
 def test_ollama_provider_uses_configured_model_name():

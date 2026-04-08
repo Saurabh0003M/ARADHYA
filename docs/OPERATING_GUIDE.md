@@ -75,7 +75,7 @@ What each command does:
 
 - `model ping`: checks Ollama and confirms whether the configured model is reachable
 - `voice status`: shows the current audio folders and pending voice files
-- `voice activate`: starts the background hotkey listener for microphone capture
+- `voice activate`: starts the background hotkey listener for microphone capture and optional spoken replies
 - `wake`: wakes Aradhya and refreshes `project_tree.txt`
 - `open aradhya`: creates a plan to open the best-matching path
 - `yes proceed`: executes the pending plan
@@ -128,7 +128,7 @@ These features are real in the current code:
 - wake and go idle
 - echo transcripts
 - build a plan before acting
-- require explicit confirmation before execution
+- require explicit confirmation before device-affecting execution
 - refresh the local tree index
 - dry-run or execute path opens, depending on config
 - find the strongest `.txt`-heavy folder
@@ -140,10 +140,11 @@ These features are real in the current code:
 - process dropped voice files through the current folder-based voice workflow
 - use the configured Ollama model as a fallback planner for ambiguous system requests
 - optionally listen for a global hotkey, capture microphone audio, and route it through the same planner
+- optionally speak Aradhya's live voice replies aloud with a local TTS provider
 
 These features are only partially present or still planned:
 
-- true microphone capture
+- ambient or wake-word-based listening without push-to-talk
 - screen reading and UI control
 - Google Meet button interaction
 - full Debate AI multi-model reasoning loop
@@ -201,9 +202,12 @@ Optional live voice activation:
 
 1. Install `requirements-voice-activation.txt`
 2. Set `voice.provider` to `faster_whisper` or `whisper_command`
-3. Run `voice activate`
-4. Press the configured hotkey from `profile.json`
-5. Speak your request and wait for Aradhya to print the transcript and response
+3. Set `voice_output.enabled` to `true` if you want spoken replies
+4. Run `voice activate`
+5. Press the configured hotkey from `profile.json`
+6. Speak your request and wait for Aradhya to print the transcript and response
+
+If spoken replies are enabled, Aradhya speaks only the assistant reply itself. Status lines such as recording, transcript saves, and archive paths remain text-only for auditability.
 
 Responsible file:
 
@@ -275,6 +279,11 @@ Useful fields in `profile.json`:
 - `voice_activation.hotkey_key`
 - `voice_activation.silence_duration`
 - `voice_activation.silence_threshold`
+- `voice_output.enabled`
+- `voice_output.provider`
+- `voice_output.voice_id`
+- `voice_output.rate`
+- `voice_output.volume`
 
 ## 10. Most Important Code Files
 

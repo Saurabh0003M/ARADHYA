@@ -9,7 +9,7 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 1. Wake explicitly through a floating icon or the `Ctrl + Win` hotkey.
 2. Echo the transcript so the user can verify what Aradhya heard.
 3. Plan before acting.
-4. Require an explicit confirmation phrase such as `yes proceed`.
+4. Require an explicit confirmation phrase such as `yes proceed` for device-affecting actions.
 5. Refresh local context whenever Aradhya wakes or is asked about local data.
 6. Keep Debate AI mode optional and off by default.
 
@@ -25,6 +25,7 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 
 - Whisper will handle speech-to-text.
 - Optional live microphone activation can capture speech from a global hotkey and feed it into the same voice inbox pipeline.
+- Optional local speech output can read Aradhya's live voice replies aloud without changing the planning or execution model.
 - Future screen-reading adapters will inspect visible UI elements.
 - The current repo simulates this with direct CLI text input.
 - A folder-based voice inbox now exists so audio files can be dropped into `audio/inbox` and processed through a transcription pipeline.
@@ -39,8 +40,9 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 
 ### 4. Confirmation Gate
 
-- Every executable system task must pause behind an explicit approval phrase.
+- Every device-affecting system task must pause behind an explicit approval phrase.
 - Pending plans can be confirmed or canceled.
+- Low-risk internal assistant state changes can execute immediately.
 - This replaces the earlier confidence-based auto-open behavior.
 
 ### 5. Executor Layer

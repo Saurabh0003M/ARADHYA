@@ -5,7 +5,7 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 ## Current Foundation
 
 - Wake-aware assistant session model with `wake`, `ctrl+win`, and `sleep` flow in the CLI.
-- Strict plan-then-confirm execution pipeline for system actions.
+- Strict confirmation for device-affecting system actions, with immediate execution for low-risk internal state changes.
 - Local directory-index refresh that creates or updates `project_tree.txt` on wake and local-data queries.
 - Heuristics for opening paths, finding the most `.txt`-dense folder, reopening yesterday's active project, opening preferred security blogs, and toggling Debate AI mode.
 - Hybrid planning that keeps deterministic routing first and uses the configured Ollama model as a JSON-only fallback classifier for ambiguous requests.
@@ -13,6 +13,7 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
 - A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts, plus an optional `faster_whisper` provider for real local transcription.
 - Optional live voice activation that can listen for a global hotkey, record from the microphone, and route the transcript through the same planner and confirmation gate.
+- Optional local spoken replies during live voice activation through a Windows-friendly `pyttsx3` output provider.
 
 If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 
@@ -109,7 +110,7 @@ Runtime behavior is loaded from `core/memory/preferences.json`.
 - `security_blog_urls`: browser targets for the security-blog feature.
 - `game_library_roots`: folders used when searching for a recent game.
 
-Runtime model and voice bindings are loaded from `core/memory/profile.json`.
+Runtime model, voice, and spoken-reply bindings are loaded from `core/memory/profile.json`.
 
 - The default local model is `gemma4:e4b`.
 - The Ollama model directory defaults to the current user's home folder via `Path.home() / ".ollama"`.
@@ -118,6 +119,8 @@ Runtime model and voice bindings are loaded from `core/memory/profile.json`.
 - To enable real local file transcription, install `requirements-voice.txt` and change `voice.provider` to `faster_whisper`.
 - `voice.faster_whisper_model_size`, `voice.faster_whisper_device`, `voice.faster_whisper_compute_type`, and `voice.language` control the optional Faster-Whisper provider.
 - Live microphone activation is configured under `voice_activation` in `profile.json`.
+- Spoken replies for push-to-talk voice mode are configured under `voice_output` in `profile.json`.
+- To enable spoken replies, install `requirements-voice-activation.txt` and set `voice_output.enabled` to `true`.
 - For live voice activation, use `voice.provider = faster_whisper` or `voice.provider = whisper_command`, then install `requirements-voice-activation.txt`.
 
 ## Voice Files
@@ -143,10 +146,11 @@ If you want Aradhya to listen through the microphone:
 
 1. Install `requirements-voice-activation.txt`
 2. Set `voice.provider` to `faster_whisper` or `whisper_command`
-3. Adjust `voice_activation` settings in `core/memory/profile.json` if needed
-4. Start the CLI and run `voice activate`
+3. Optionally set `voice_output.enabled` to `true` if you want spoken replies
+4. Adjust `voice_activation` and `voice_output` settings in `core/memory/profile.json` if needed
+5. Start the CLI and run `voice activate`
 
-Live capture writes audio into the same inbox flow, so transcripts, archives, and planner routing stay consistent with the file-based path.
+Live capture writes audio into the same inbox flow, so transcripts, archives, planner routing, and optional spoken replies stay consistent with the file-based path.
 
 ## Testing
 

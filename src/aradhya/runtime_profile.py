@@ -65,12 +65,24 @@ class VoiceActivationProfile:
 
 
 @dataclass(frozen=True)
+class VoiceOutputProfile:
+    """Configuration for optional spoken replies."""
+
+    enabled: bool
+    provider: str
+    voice_id: str
+    rate: int
+    volume: float
+
+
+@dataclass(frozen=True)
 class RuntimeProfile:
     """Combined runtime profile for Aradhya."""
 
     model: ModelProfile
     voice: VoiceProfile
     voice_activation: VoiceActivationProfile
+    voice_output: VoiceOutputProfile
 
 
 def _project_root_from_here() -> Path:
@@ -141,6 +153,13 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
             silence_duration=1.5,
             max_recording_duration=30.0,
         ),
+        voice_output=VoiceOutputProfile(
+            enabled=False,
+            provider="pyttsx3",
+            voice_id="",
+            rate=185,
+            volume=1.0,
+        ),
     )
 
 
@@ -166,6 +185,7 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     raw_model = data.get("model", {})
     raw_voice = data.get("voice", {})
     raw_voice_activation = data.get("voice_activation", {})
+    raw_voice_output = data.get("voice_output", {})
 
     return RuntimeProfile(
         model=ModelProfile(
@@ -286,6 +306,28 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
             max_recording_duration=raw_voice_activation.get(
                 "max_recording_duration",
                 defaults.voice_activation.max_recording_duration,
+            ),
+        ),
+        voice_output=VoiceOutputProfile(
+            enabled=raw_voice_output.get(
+                "enabled",
+                defaults.voice_output.enabled,
+            ),
+            provider=raw_voice_output.get(
+                "provider",
+                defaults.voice_output.provider,
+            ),
+            voice_id=raw_voice_output.get(
+                "voice_id",
+                defaults.voice_output.voice_id,
+            ),
+            rate=raw_voice_output.get(
+                "rate",
+                defaults.voice_output.rate,
+            ),
+            volume=raw_voice_output.get(
+                "volume",
+                defaults.voice_output.volume,
             ),
         ),
     )
