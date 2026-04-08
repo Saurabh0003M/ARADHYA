@@ -35,8 +35,11 @@ class AradhyaAssistant:
         self.preferences = preferences
         self.now_provider = now_provider or datetime.now
         self.state = AssistantState()
-        self.index_manager = DirectoryIndexManager(preferences)
-        self.toolbox = SystemToolbox(preferences)
+        self.index_manager = DirectoryIndexManager(
+            preferences,
+            now_provider=self.now_provider,
+        )
+        self.toolbox = SystemToolbox(preferences, self.index_manager)
         self.planner = IntentPlanner(
             self.toolbox,
             self.now_provider,
@@ -61,16 +64,16 @@ class AradhyaAssistant:
         snapshot = None
         logger.info("Aradhya woke via {}", source.value)
 
-        # Waking Aradhya is one of the two places where project_tree.txt is
-        # intentionally refreshed, so this is the code path to inspect when
-        # you want to confirm the tree file is updating.
         if self.preferences.directory_index_policy.refresh_on_wake:
-            snapshot = self.index_manager.refresh("wake")
+            snapshot = self.index_manager.refresh_if_stale("wake")
 
         source_label = source.value.replace("_", " ")
         message = f"Aradhya is awake via {source_label}. Tell me what you want to do."
         if snapshot is not None:
-            message += " I refreshed the local directory index."
+            if snapshot.refreshed:
+                message += " I refreshed the local directory index."
+            else:
+                message += " I reused the fresh local directory cache."
 
         return AssistantResponse(
             spoken_response=message,
@@ -131,9 +134,7 @@ class AradhyaAssistant:
             plan.uses_local_data
             and self.preferences.directory_index_policy.refresh_on_local_query
         ):
-            # Local filesystem questions refresh the tree file again so the
-            # project index stays reasonably fresh during assistant use.
-            snapshot = self.index_manager.refresh("local_query")
+            snapshot = self.index_manager.last_snapshot
 
         if plan.kind == PlanKind.UNKNOWN or not plan.ready:
             logger.info("Planner returned non-executable plan {}", plan.kind)

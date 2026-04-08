@@ -1,5 +1,6 @@
 {
   "directory_index_path": "project_tree.txt",
+  "context_cache_dir": "data/processed/context",
   "confirmation_phrases": [
     "yes proceed",
     "proceed",
@@ -23,6 +24,7 @@
   "directory_index_policy": {
     "refresh_on_wake": true,
     "refresh_on_local_query": true,
+    "refresh_interval_seconds": 60,
     "ignored_names": [
       ".git",
       "__pycache__",
@@ -33,6 +35,7 @@
       "tmp",
       "venv"
     ],
-    "max_nodes": 25000
+    "max_nodes": 25000,
+    "max_name_candidates_per_key": 25
   }
 }

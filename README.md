@@ -17,6 +17,34 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 
 If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
 
+## Aradhya OI Features
+
+Aradhya is being shaped as an `OI` layer: `Operating Intelligence`.
+The operating system runs the machine. Aradhya is meant to understand
+intent, gather live context, and safely operate the machine under policy.
+
+- Swappable model engine through Ollama so users can replace today's model
+  with future local models without rewriting Aradhya itself.
+- Wake-aware operating flow with explicit active and idle states.
+- Policy-bounded execution with confirmation for device-affecting actions.
+- Local machine context through `project_tree.txt`, configured roots, and
+  path-aware heuristics.
+- Diagnostics for local model readiness, Ollama reachability, and startup
+  model selection when the configured engine is missing.
+- Deterministic-first planning with local-model fallback classification for
+  ambiguous requests.
+- Voice inbox workflow for dropped recordings, transcripts, and archived audio.
+- Push-to-talk live voice activation through a global hotkey.
+- Optional spoken replies through a local Windows-friendly text-to-speech path.
+- Debate AI mode for future multi-model critique, rebuttal, and consensus.
+- External-tool handoff direction for large PDF, document, and conversion work
+  that is better delegated than rebuilt inside Aradhya.
+- Future screen-reading, browser-operation, and UI-guidance capabilities for
+  form filling, guided workflows, and on-screen assistance.
+
+If you want the product-level vision and build order, open
+`docs/OI_ROADMAP.md`.
+
 ## Project Structure
 
 ```text
@@ -167,3 +195,6 @@ The current implementation establishes the assistant core for the updated vision
 - external-tool handoff for heavy document work
 - multi-model Debate AI orchestration
 - the longer-term Aradhya OS direction
+
+For the full OI roadmap, milestone order, and time/space complexity notes, see
+`docs/OI_ROADMAP.md`.
