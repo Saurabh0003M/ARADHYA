@@ -38,6 +38,16 @@ Optional live microphone activation:
 venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 ```
 
+If the local `venv` points at a missing Python installation, recreate it instead of reusing it:
+
+```powershell
+Remove-Item -Recurse -Force .\venv
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
 ## 3. Install Or Verify Ollama
 
 Confirm Ollama is available:
@@ -55,6 +65,7 @@ ollama pull gemma4:e4b
 You can switch to another Ollama model later by editing:
 
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 and changing:
 
@@ -77,6 +88,7 @@ venv\Scripts\python.exe -m core.agent.aradhya
 Inside Aradhya:
 
 ```text
+cache validate
 model ping
 voice status
 wake
@@ -142,6 +154,8 @@ Useful voice fields in `profile.json`:
 - `voice_activation.hotkey_key`
 - `voice_activation.silence_duration`
 - `voice_activation.silence_threshold`
+
+Aradhya merges `profile.local.json` over `profile.json`, and the interactive model bootstrap writes there so local model choices do not modify shared repo defaults.
 
 ## 9. Portable Design Notes
 

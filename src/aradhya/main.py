@@ -8,6 +8,10 @@ from loguru import logger
 
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import WakeSource
+from src.aradhya.cache_diagnostics import (
+    format_cache_validation_report,
+    run_cache_validation,
+)
 from src.aradhya.logging_utils import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
 from src.aradhya.model_provider import build_text_model_provider
@@ -92,6 +96,13 @@ def _render_model_health(model_provider) -> None:
     render_model_health(model_provider.health_check())
 
 
+def _render_cache_validation(assistant: AradhyaAssistant) -> None:
+    report = run_cache_validation(assistant.preferences)
+    for line in format_cache_validation_report(report):
+        print(line)
+    print()
+
+
 def _sanitize_direct_model_prompt(prompt: str) -> str:
     normalized = " ".join(prompt.split())
     if not normalized:
@@ -165,6 +176,7 @@ def main() -> None:
     print("=" * 60)
     print("Type 'wake' or 'ctrl+win' to simulate the wake trigger.")
     print("Type 'voice status', 'voice process', 'voice activate', or 'voice stop'.")
+    print("Type 'cache validate' to benchmark the current context cache.")
     print("Type 'model ping' or 'model ask <prompt>' for the configured local model.")
     print("Type 'sleep' to send Aradhya idle, or 'exit' to quit.")
     print(f"Configured model > {runtime_profile.model.model_name}")
@@ -237,6 +249,10 @@ def main() -> None:
 
             if normalized == "model ping":
                 _render_model_health(model_provider)
+                continue
+
+            if normalized == "cache validate":
+                _render_cache_validation(assistant)
                 continue
 
             if normalized.startswith("model ask "):

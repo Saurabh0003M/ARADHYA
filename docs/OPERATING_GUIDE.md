@@ -58,6 +58,7 @@ Why this works:
 Once Aradhya starts, type these exactly:
 
 ```text
+cache validate
 model ping
 voice status
 voice activate
@@ -73,6 +74,7 @@ exit
 
 What each command does:
 
+- `cache validate`: rebuilds the context cache, measures warm-cache reuse, and checks whether a targeted rescan can discover a new probe folder
 - `model ping`: checks Ollama and confirms whether the configured model is reachable
 - `voice status`: shows the current audio folders and pending voice files
 - `voice activate`: starts the background hotkey listener for microphone capture and optional spoken replies
@@ -120,6 +122,11 @@ Where the refresh happens in code:
   local-data requests refresh again in `handle_transcript()`
 - `src/aradhya/assistant_indexer.py`
   `output_path.write_text(...)` is the line that actually rewrites `project_tree.txt`
+
+The human-readable tree file is only the summary artifact. The cache source of truth is:
+
+- `data/processed/context/manifest.json`
+- `data/processed/context/drive_*.json`
 
 ## 6. What Aradhya Can Actually Do Right Now
 
@@ -218,6 +225,7 @@ Responsible file:
 Open:
 
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 Current model section:
 
@@ -244,6 +252,7 @@ Example future change:
 Why this is swappable:
 
 - the assistant reads the runtime profile from `profile.json`
+- startup model selection writes machine-specific choices into `profile.local.json`
 - `src/aradhya/model_provider.py` builds the provider from config
 - Aradhya code does not hard-code Gemma inside the planner or CLI
 
@@ -253,6 +262,7 @@ Open:
 
 - `core/memory/preferences.json`
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 Useful fields in `preferences.json`:
 

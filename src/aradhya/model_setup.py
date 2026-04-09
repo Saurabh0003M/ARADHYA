@@ -181,7 +181,8 @@ def _apply_selected_model(
         profile_path = persist_model_name(project_root, model_name)
     except OSError as error:
         output_handler(
-            f"Model > I could not save {model_name} to profile.json. Details: {error}"
+            "Model > I could not save "
+            f"{model_name} to the local runtime override file. Details: {error}"
         )
     else:
         output_handler(f"Model > Saved {model_name} to {profile_path}.")

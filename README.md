@@ -122,6 +122,7 @@ Inside the CLI:
 - Type `ctrl+win` to simulate the hotkey wake path.
 - Type a spoken request as plain text.
 - Type `yes proceed` to execute the pending plan.
+- Type `cache validate` to rebuild and benchmark the context cache.
 - Type `voice status` to inspect the audio inbox setup.
 - Type `voice process` to process dropped audio files.
 - Type `voice activate` to start background hotkey-based microphone capture.
@@ -140,8 +141,10 @@ Runtime behavior is loaded from `core/memory/preferences.json`.
 - `game_library_roots`: folders used when searching for a recent game.
 
 Runtime model, voice, and spoken-reply bindings are loaded from `core/memory/profile.json`.
+Machine-specific overrides can live in `core/memory/profile.local.json`, which is git-ignored and merged over the shared profile at runtime.
 
 - The default local model is `gemma4:e4b`.
+- Interactive startup model selection writes only to `profile.local.json` so local choices do not dirty the shared repo defaults.
 - The Ollama model directory defaults to the current user's home folder via `Path.home() / ".ollama"`.
 - To switch to a future model like `gemma5`, change only `model_name` in `profile.json`.
 - The default voice provider is `manual_transcript` so the repo still works immediately after clone.
@@ -185,6 +188,16 @@ Live capture writes audio into the same inbox flow, so transcripts, archives, pl
 
 ```powershell
 venv\Scripts\python.exe -m pytest tests\unit
+```
+
+If `venv\Scripts\python.exe` points at a missing base installation, recreate the environment locally instead of reusing an old `venv` directory:
+
+```powershell
+Remove-Item -Recurse -Force .\venv
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
 ## Roadmap

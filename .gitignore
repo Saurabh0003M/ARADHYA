@@ -25,9 +25,15 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+pytest_tmp/
+pytest_basetemp*/
 
 # Generated runtime artifacts
 project_tree.txt
+.tmp/
+python_temp*/
+python_temp_cli_*/
+python_temp_debug_*/
 
 # Logs
 *.log
@@ -37,6 +43,9 @@ core/logs/*.log
 # Environment
 .env
 .env.local
+.python313/
+python-*-amd64.exe
+core/memory/*.local.json
 
 # Data
 data/raw/*
