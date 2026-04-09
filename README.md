@@ -55,11 +55,16 @@ If you want the milestone order and implementation direction, open
 |   |   `-- aradhya.py
 |   `-- memory/
 |       |-- preferences.json
-|       `-- profile.json
+|       |-- profile.json
+|       `-- profile.local.json
 |-- docs/
 |   |-- ARCHITECTURE.md
 |   |-- OPERATING_GUIDE.md
 |   `-- phases/
+|-- scripts/
+|   |-- doctor.bat
+|   |-- first_run.bat
+|   `-- run_agent.bat
 |-- src/
 |   `-- aradhya/
 |       |-- assistant_core.py
@@ -81,12 +86,22 @@ If you want the milestone order and implementation direction, open
 |-- audio/
 |-- tests/
 |   `-- unit/
-`-- scripts/
+`-- requirements.txt
 ```
 
 ## Quick Start
 
 Clone the repo, create a virtual environment, install dependencies, and run Aradhya:
+
+On Windows, the quickest setup path is:
+
+```powershell
+git clone <your-github-url> aradhya
+cd aradhya
+scripts\first_run.bat
+```
+
+If you want the manual setup steps instead:
 
 ```powershell
 git clone <your-github-url> aradhya
@@ -114,6 +129,12 @@ If you already activated the environment, this also works:
 
 ```powershell
 python -m core.agent.aradhya
+```
+
+To verify a new machine after cloning on `C:` or `D:`, run:
+
+```powershell
+scripts\doctor.bat
 ```
 
 Inside the CLI:
@@ -154,6 +175,14 @@ Machine-specific overrides can live in `core/memory/profile.local.json`, which i
 - Spoken replies for push-to-talk voice mode are configured under `voice_output` in `profile.json`.
 - To enable spoken replies, install `requirements-voice-activation.txt` and set `voice_output.enabled` to `true`.
 - For live voice activation, use `voice.provider = faster_whisper` or `voice.provider = whisper_command`, then install `requirements-voice-activation.txt`.
+
+## Windows Helper Scripts
+
+- `scripts\first_run.bat`: finds a usable Python launcher, creates or repairs `venv`, installs the core dependencies, records a dependency stamp, and then runs the setup doctor.
+- `scripts\doctor.bat`: checks Python availability, verifies the local `venv`, confirms core dependencies, warns when `requirements*.txt` changed after the last install, and inspects Ollama plus the configured model.
+- `scripts\setup.bat`: compatibility wrapper that now delegates to `scripts\first_run.bat`.
+- `scripts\run_agent.bat`: launches Aradhya through the repo-local `venv`.
+- `scripts\run_tests.bat`: runs the unit test suite through the repo-local `venv`.
 
 ## Voice Files
 
@@ -198,6 +227,12 @@ py -3.10 -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+If you want a quick health check after pulling changes or moving the repo to another laptop, run:
+
+```powershell
+scripts\doctor.bat
 ```
 
 ## Roadmap

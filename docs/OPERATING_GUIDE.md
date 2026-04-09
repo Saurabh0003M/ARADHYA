@@ -21,16 +21,31 @@ Useful files to pin in VS Code:
 - `src/aradhya/voice_pipeline.py`
 - `core/memory/preferences.json`
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 ## 2. Create The Environment
 
 In the VS Code terminal:
+
+Fastest path on Windows:
+
+```powershell
+scripts\first_run.bat
+```
+
+Manual path:
 
 ```powershell
 py -3.10 -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+To verify a cloned machine after setup, run:
+
+```powershell
+scripts\doctor.bat
 ```
 
 Why this is portable:
