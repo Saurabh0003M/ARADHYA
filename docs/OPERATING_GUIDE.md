@@ -21,16 +21,31 @@ Useful files to pin in VS Code:
 - `src/aradhya/voice_pipeline.py`
 - `core/memory/preferences.json`
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 ## 2. Create The Environment
 
 In the VS Code terminal:
+
+Fastest path on Windows:
+
+```powershell
+scripts\first_run.bat
+```
+
+Manual path:
 
 ```powershell
 py -3.10 -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install -r requirements.txt
 venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+To verify a cloned machine after setup, run:
+
+```powershell
+scripts\doctor.bat
 ```
 
 Why this is portable:
@@ -58,6 +73,7 @@ Why this works:
 Once Aradhya starts, type these exactly:
 
 ```text
+cache validate
 model ping
 voice status
 voice activate
@@ -73,9 +89,10 @@ exit
 
 What each command does:
 
+- `cache validate`: rebuilds the context cache, measures warm-cache reuse, and checks whether a targeted rescan can discover a new probe folder
 - `model ping`: checks Ollama and confirms whether the configured model is reachable
 - `voice status`: shows the current audio folders and pending voice files
-- `voice activate`: starts the background hotkey listener for microphone capture
+- `voice activate`: starts the background hotkey listener for microphone capture and optional spoken replies
 - `wake`: wakes Aradhya and refreshes `project_tree.txt`
 - `open aradhya`: creates a plan to open the best-matching path
 - `yes proceed`: executes the pending plan
@@ -121,6 +138,11 @@ Where the refresh happens in code:
 - `src/aradhya/assistant_indexer.py`
   `output_path.write_text(...)` is the line that actually rewrites `project_tree.txt`
 
+The human-readable tree file is only the summary artifact. The cache source of truth is:
+
+- `data/processed/context/manifest.json`
+- `data/processed/context/drive_*.json`
+
 ## 6. What Aradhya Can Actually Do Right Now
 
 These features are real in the current code:
@@ -128,7 +150,7 @@ These features are real in the current code:
 - wake and go idle
 - echo transcripts
 - build a plan before acting
-- require explicit confirmation before execution
+- require explicit confirmation before device-affecting execution
 - refresh the local tree index
 - dry-run or execute path opens, depending on config
 - find the strongest `.txt`-heavy folder
@@ -140,10 +162,11 @@ These features are real in the current code:
 - process dropped voice files through the current folder-based voice workflow
 - use the configured Ollama model as a fallback planner for ambiguous system requests
 - optionally listen for a global hotkey, capture microphone audio, and route it through the same planner
+- optionally speak Aradhya's live voice replies aloud with a local TTS provider
 
 These features are only partially present or still planned:
 
-- true microphone capture
+- ambient or wake-word-based listening without push-to-talk
 - screen reading and UI control
 - Google Meet button interaction
 - full Debate AI multi-model reasoning loop
@@ -201,9 +224,12 @@ Optional live voice activation:
 
 1. Install `requirements-voice-activation.txt`
 2. Set `voice.provider` to `faster_whisper` or `whisper_command`
-3. Run `voice activate`
-4. Press the configured hotkey from `profile.json`
-5. Speak your request and wait for Aradhya to print the transcript and response
+3. Set `voice_output.enabled` to `true` if you want spoken replies
+4. Run `voice activate`
+5. Press the configured hotkey from `profile.json`
+6. Speak your request and wait for Aradhya to print the transcript and response
+
+If spoken replies are enabled, Aradhya speaks only the assistant reply itself. Status lines such as recording, transcript saves, and archive paths remain text-only for auditability.
 
 Responsible file:
 
@@ -214,6 +240,7 @@ Responsible file:
 Open:
 
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 Current model section:
 
@@ -240,6 +267,7 @@ Example future change:
 Why this is swappable:
 
 - the assistant reads the runtime profile from `profile.json`
+- startup model selection writes machine-specific choices into `profile.local.json`
 - `src/aradhya/model_provider.py` builds the provider from config
 - Aradhya code does not hard-code Gemma inside the planner or CLI
 
@@ -249,6 +277,7 @@ Open:
 
 - `core/memory/preferences.json`
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 Useful fields in `preferences.json`:
 
@@ -259,6 +288,8 @@ Useful fields in `preferences.json`:
 - `game_library_roots`
 - `directory_index_policy.refresh_on_wake`
 - `directory_index_policy.refresh_on_local_query`
+- `directory_index_policy.miss_cache_ttl_seconds`
+- `directory_index_policy.miss_refresh_debounce_seconds`
 
 Useful fields in `profile.json`:
 
@@ -275,6 +306,11 @@ Useful fields in `profile.json`:
 - `voice_activation.hotkey_key`
 - `voice_activation.silence_duration`
 - `voice_activation.silence_threshold`
+- `voice_output.enabled`
+- `voice_output.provider`
+- `voice_output.voice_id`
+- `voice_output.rate`
+- `voice_output.volume`
 
 ## 10. Most Important Code Files
 

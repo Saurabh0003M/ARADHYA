@@ -104,7 +104,20 @@ class FakeHotkeyListener:
         return self.started and not self.stopped
 
 
-def build_runtime_profile(tmp_path):
+class FakeSpeechSynthesizer:
+    def __init__(self):
+        self.spoken_texts: list[str] = []
+
+    def speak(self, text: str) -> None:
+        self.spoken_texts.append(text)
+
+
+class ExplodingSpeechSynthesizer:
+    def speak(self, text: str) -> None:
+        raise RuntimeError(f"Cannot speak: {text}")
+
+
+def build_runtime_profile(tmp_path, *, spoken_replies_enabled: bool = False):
     profile = build_default_runtime_profile(tmp_path)
     return replace(
         profile,
@@ -116,16 +129,21 @@ def build_runtime_profile(tmp_path):
             transcripts_dir=tmp_path / "audio" / "transcripts",
             manual_transcripts_dir=tmp_path / "audio" / "manual_transcripts",
         ),
+        voice_output=replace(
+            profile.voice_output,
+            enabled=spoken_replies_enabled,
+        ),
     )
 
 
 def test_voice_activation_routes_live_capture_into_assistant(tmp_path):
-    runtime_profile = build_runtime_profile(tmp_path)
+    runtime_profile = build_runtime_profile(tmp_path, spoken_replies_enabled=True)
     outputs: list[str] = []
     assistant = FakeAssistant()
     voice_manager = FakeVoiceManager(runtime_profile.voice)
     microphone = FakeMicrophone()
     hotkey_listener = FakeHotkeyListener()
+    speech_synthesizer = FakeSpeechSynthesizer()
 
     runtime = VoiceActivatedAradhya(
         assistant=assistant,
@@ -134,6 +152,7 @@ def test_voice_activation_routes_live_capture_into_assistant(tmp_path):
         output_handler=outputs.append,
         microphone=microphone,
         hotkey_listener=hotkey_listener,
+        speech_synthesizer=speech_synthesizer,
     )
 
     runtime.start()
@@ -147,6 +166,10 @@ def test_voice_activation_routes_live_capture_into_assistant(tmp_path):
     assert any("Recording started" in line for line in outputs)
     assert any("Heard > open notes" in line for line in outputs)
     assert any("yes proceed" in line for line in outputs)
+    assert speech_synthesizer.spoken_texts == [
+        "I am ready to open that path. Say yes proceed when you want me to execute it."
+    ]
+    assert all(not line.startswith("Voice >") for line in speech_synthesizer.spoken_texts)
 
 
 def test_voice_activation_does_not_rewake_when_assistant_is_already_awake(tmp_path):
@@ -169,6 +192,57 @@ def test_voice_activation_does_not_rewake_when_assistant_is_already_awake(tmp_pa
 
     assert assistant.wake_count == 0
     assert assistant.last_transcript == "open notes"
+
+
+def test_voice_activation_falls_back_to_text_when_spoken_reply_backend_is_missing(tmp_path):
+    runtime_profile = build_runtime_profile(tmp_path, spoken_replies_enabled=True)
+    outputs: list[str] = []
+    assistant = FakeAssistant()
+    voice_manager = FakeVoiceManager(runtime_profile.voice)
+
+    def fail_build(_profile):
+        raise RuntimeError("pyttsx3 is not installed")
+
+    runtime = VoiceActivatedAradhya(
+        assistant=assistant,
+        voice_manager=voice_manager,
+        runtime_profile=runtime_profile,
+        output_handler=outputs.append,
+        microphone=FakeMicrophone(),
+        hotkey_listener=FakeHotkeyListener(),
+        speech_synthesizer_factory=fail_build,
+    )
+
+    runtime.start()
+    runtime._handle_hotkey_press()
+
+    assert any("Spoken replies are unavailable" in line for line in outputs)
+    assert any("Aradhya >" in line for line in outputs)
+    assert assistant.last_transcript == "open notes"
+
+
+def test_voice_activation_disables_spoken_replies_after_runtime_tts_error(tmp_path):
+    runtime_profile = build_runtime_profile(tmp_path, spoken_replies_enabled=True)
+    outputs: list[str] = []
+    assistant = FakeAssistant()
+
+    runtime = VoiceActivatedAradhya(
+        assistant=assistant,
+        voice_manager=FakeVoiceManager(runtime_profile.voice),
+        runtime_profile=runtime_profile,
+        output_handler=outputs.append,
+        microphone=FakeMicrophone(),
+        hotkey_listener=FakeHotkeyListener(),
+        speech_synthesizer=ExplodingSpeechSynthesizer(),
+    )
+
+    runtime.start()
+    runtime._handle_hotkey_press()
+    runtime._handle_hotkey_press()
+
+    assert any("Spoken reply failed" in line for line in outputs)
+    assert assistant.last_transcript == "open notes"
+    assert runtime.speech_synthesizer is None
 
 
 def test_voice_activation_support_rejects_manual_transcript_provider(tmp_path):

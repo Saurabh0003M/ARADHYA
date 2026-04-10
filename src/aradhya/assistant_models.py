@@ -44,6 +44,7 @@ class DirectoryIndexPolicy:
 
     refresh_on_wake: bool = True
     refresh_on_local_query: bool = True
+    refresh_interval_seconds: int = 60
     ignored_names: tuple[str, ...] = (
         ".git",
         "__pycache__",
@@ -55,6 +56,9 @@ class DirectoryIndexPolicy:
         "venv",
     )
     max_nodes: int | None = 25000
+    max_name_candidates_per_key: int = 25
+    miss_cache_ttl_seconds: int = 300
+    miss_refresh_debounce_seconds: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -63,6 +67,7 @@ class AssistantPreferences:
 
     user_roots: tuple[Path, ...]
     directory_index_path: Path
+    context_cache_dir: Path
     confirmation_phrases: tuple[str, ...]
     security_blog_urls: tuple[str, ...]
     project_markers: tuple[str, ...]
@@ -105,6 +110,7 @@ class DirectoryIndexSnapshot:
     scanned_roots: tuple[str, ...]
     node_count: int
     truncated: bool
+    refreshed: bool
 
 
 @dataclass
@@ -172,6 +178,7 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
     return AssistantPreferences(
         user_roots=_build_default_user_roots(root),
         directory_index_path=root / "project_tree.txt",
+        context_cache_dir=root / "data" / "processed" / "context",
         confirmation_phrases=("yes proceed", "proceed", "confirm", "go ahead"),
         security_blog_urls=DEFAULT_SECURITY_BLOGS,
         project_markers=(
@@ -215,6 +222,10 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
             "refresh_on_local_query",
             defaults.directory_index_policy.refresh_on_local_query,
         ),
+        refresh_interval_seconds=raw_policy.get(
+            "refresh_interval_seconds",
+            defaults.directory_index_policy.refresh_interval_seconds,
+        ),
         ignored_names=tuple(
             raw_policy.get(
                 "ignored_names", defaults.directory_index_policy.ignored_names
@@ -222,6 +233,18 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         ),
         max_nodes=raw_policy.get(
             "max_nodes", defaults.directory_index_policy.max_nodes
+        ),
+        max_name_candidates_per_key=raw_policy.get(
+            "max_name_candidates_per_key",
+            defaults.directory_index_policy.max_name_candidates_per_key,
+        ),
+        miss_cache_ttl_seconds=raw_policy.get(
+            "miss_cache_ttl_seconds",
+            defaults.directory_index_policy.miss_cache_ttl_seconds,
+        ),
+        miss_refresh_debounce_seconds=raw_policy.get(
+            "miss_refresh_debounce_seconds",
+            defaults.directory_index_policy.miss_refresh_debounce_seconds,
         ),
     )
 
@@ -232,10 +255,18 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         root,
         (defaults.directory_index_path,),
     )
+    context_cache_paths = _resolve_paths(
+        [data.get("context_cache_dir")]
+        if data.get("context_cache_dir")
+        else None,
+        root,
+        (defaults.context_cache_dir,),
+    )
 
     return AssistantPreferences(
         user_roots=_resolve_paths(data.get("user_roots"), root, defaults.user_roots),
         directory_index_path=directory_index_paths[0],
+        context_cache_dir=context_cache_paths[0],
         confirmation_phrases=tuple(
             data.get("confirmation_phrases", defaults.confirmation_phrases)
         ),

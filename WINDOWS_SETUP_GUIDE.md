@@ -17,7 +17,25 @@ git clone <your-github-url> aradhya
 cd aradhya
 ```
 
-## 2. Create The Virtual Environment
+## 2. Recommended First Run
+
+For most Windows machines, use the bootstrap script first:
+
+```powershell
+scripts\first_run.bat
+```
+
+What it does:
+
+- finds a usable Python launcher on the machine
+- checks that the version is at least Python 3.10
+- creates or repairs the repo-local `venv`
+- installs `requirements.txt` and `requirements-dev.txt`
+- runs `scripts\doctor.bat` so the remaining Ollama and model steps are obvious
+
+The older `scripts\setup.bat` entrypoint still works, but it now delegates to `scripts\first_run.bat`.
+
+## 3. Manual Virtual Environment Setup
 
 ```powershell
 py -3.10 -m venv venv
@@ -38,7 +56,34 @@ Optional live microphone activation:
 venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 ```
 
-## 3. Install Or Verify Ollama
+If the local `venv` points at a missing Python installation, recreate it instead of reusing it:
+
+```powershell
+Remove-Item -Recurse -Force .\venv
+py -3.10 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+```
+
+## 4. Verify The Machine State
+
+Run:
+
+```powershell
+scripts\doctor.bat
+```
+
+The doctor script checks:
+
+- Python availability on `PATH`
+- Python version suitability
+- whether `venv` exists and is healthy
+- whether core dependencies are installed
+- whether `requirements.txt` or `requirements-dev.txt` changed after the last recorded install
+- whether Ollama is available and whether the configured model is installed
+
+## 5. Install Or Verify Ollama
 
 Confirm Ollama is available:
 
@@ -55,28 +100,30 @@ ollama pull gemma4:e4b
 You can switch to another Ollama model later by editing:
 
 - `core/memory/profile.json`
+- `core/memory/profile.local.json`
 
 and changing:
 
 - `model.model_name`
 
-## 4. Open The Project In VS Code
+## 6. Open The Project In VS Code
 
 ```powershell
 code .
 ```
 
-## 5. Start Aradhya
+## 7. Start Aradhya
 
 ```powershell
 venv\Scripts\python.exe -m core.agent.aradhya
 ```
 
-## 6. First Demo Commands
+## 8. First Demo Commands
 
 Inside Aradhya:
 
 ```text
+cache validate
 model ping
 voice status
 wake
@@ -86,7 +133,7 @@ sleep
 exit
 ```
 
-## 7. Voice Workflow
+## 9. Voice Workflow
 
 Drop audio files into:
 
@@ -124,7 +171,7 @@ If you also want live microphone activation:
 - review the `voice_activation` section in `core/memory/profile.json`
 - start Aradhya and run `voice activate`
 
-## 8. Important Config Files
+## 10. Important Config Files
 
 - `core/memory/preferences.json`
   assistant behavior and execution policy
@@ -143,7 +190,9 @@ Useful voice fields in `profile.json`:
 - `voice_activation.silence_duration`
 - `voice_activation.silence_threshold`
 
-## 9. Portable Design Notes
+Aradhya merges `profile.local.json` over `profile.json`, and the interactive model bootstrap writes there so local model choices do not modify shared repo defaults.
+
+## 11. Portable Design Notes
 
 Aradhya is now written so it can run from any clone location:
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,6 +16,8 @@ DEFAULT_VOICE_EXTENSIONS = (
     ".opus",
     ".wav",
 )
+PROFILE_FILENAME = "profile.json"
+PROFILE_LOCAL_FILENAME = "profile.local.json"
 
 
 @dataclass(frozen=True)
@@ -65,16 +68,33 @@ class VoiceActivationProfile:
 
 
 @dataclass(frozen=True)
+class VoiceOutputProfile:
+    """Configuration for optional spoken replies."""
+
+    enabled: bool
+    provider: str
+    voice_id: str
+    rate: int
+    volume: float
+
+
+@dataclass(frozen=True)
 class RuntimeProfile:
     """Combined runtime profile for Aradhya."""
 
     model: ModelProfile
     voice: VoiceProfile
     voice_activation: VoiceActivationProfile
+    voice_output: VoiceOutputProfile
 
 
 def _project_root_from_here() -> Path:
     return Path(__file__).resolve().parents[2]
+
+
+def _runtime_profile_paths(project_root: Path) -> tuple[Path, Path]:
+    memory_dir = project_root / "core" / "memory"
+    return memory_dir / PROFILE_FILENAME, memory_dir / PROFILE_LOCAL_FILENAME
 
 
 def _resolve_path(
@@ -89,6 +109,36 @@ def _resolve_path(
     if not path.is_absolute():
         path = project_root / path
     return path
+
+
+def _load_profile_payload(profile_path: Path) -> dict[str, object]:
+    if not profile_path.exists():
+        return {}
+
+    raw_text = profile_path.read_text(encoding="utf-8").strip()
+    if not raw_text:
+        return {}
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def _deep_merge_payloads(
+    base_payload: dict[str, object],
+    override_payload: dict[str, object],
+) -> dict[str, object]:
+    merged = deepcopy(base_payload)
+    for key, value in override_payload.items():
+        existing = merged.get(key)
+        if isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _deep_merge_payloads(existing, value)
+            continue
+        merged[key] = deepcopy(value)
+    return merged
 
 
 def build_default_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
@@ -141,6 +191,13 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
             silence_duration=1.5,
             max_recording_duration=30.0,
         ),
+        voice_output=VoiceOutputProfile(
+            enabled=False,
+            provider="pyttsx3",
+            voice_id="",
+            rate=185,
+            volume=1.0,
+        ),
     )
 
 
@@ -149,23 +206,16 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
 
     root = project_root or _project_root_from_here()
     defaults = build_default_runtime_profile(root)
-    profile_path = root / "core" / "memory" / "profile.json"
-
-    if not profile_path.exists():
-        return defaults
-
-    raw_text = profile_path.read_text(encoding="utf-8").strip()
-    if not raw_text:
-        return defaults
-
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        return defaults
+    profile_path, local_profile_path = _runtime_profile_paths(root)
+    data = _deep_merge_payloads(
+        _load_profile_payload(profile_path),
+        _load_profile_payload(local_profile_path),
+    )
 
     raw_model = data.get("model", {})
     raw_voice = data.get("voice", {})
     raw_voice_activation = data.get("voice_activation", {})
+    raw_voice_output = data.get("voice_output", {})
 
     return RuntimeProfile(
         model=ModelProfile(
@@ -288,25 +338,37 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
                 defaults.voice_activation.max_recording_duration,
             ),
         ),
+        voice_output=VoiceOutputProfile(
+            enabled=raw_voice_output.get(
+                "enabled",
+                defaults.voice_output.enabled,
+            ),
+            provider=raw_voice_output.get(
+                "provider",
+                defaults.voice_output.provider,
+            ),
+            voice_id=raw_voice_output.get(
+                "voice_id",
+                defaults.voice_output.voice_id,
+            ),
+            rate=raw_voice_output.get(
+                "rate",
+                defaults.voice_output.rate,
+            ),
+            volume=raw_voice_output.get(
+                "volume",
+                defaults.voice_output.volume,
+            ),
+        ),
     )
 
 
 def persist_model_name(project_root: Path | None, model_name: str) -> Path:
-    """Persist the chosen Ollama model name into ``core/memory/profile.json``."""
+    """Persist the chosen Ollama model name into ``core/memory/profile.local.json``."""
 
     root = project_root or _project_root_from_here()
-    profile_path = root / "core" / "memory" / "profile.json"
-    payload: dict[str, object] = {}
-
-    if profile_path.exists():
-        raw_text = profile_path.read_text(encoding="utf-8").strip()
-        if raw_text:
-            try:
-                existing_payload = json.loads(raw_text)
-            except json.JSONDecodeError:
-                existing_payload = {}
-            if isinstance(existing_payload, dict):
-                payload = existing_payload
+    _profile_path, local_profile_path = _runtime_profile_paths(root)
+    payload = _load_profile_payload(local_profile_path)
 
     raw_model = payload.get("model")
     if not isinstance(raw_model, dict):
@@ -316,6 +378,6 @@ def persist_model_name(project_root: Path | None, model_name: str) -> Path:
     raw_model["model_name"] = model_name
     payload["model"] = raw_model
 
-    profile_path.parent.mkdir(parents=True, exist_ok=True)
-    profile_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    return profile_path
+    local_profile_path.parent.mkdir(parents=True, exist_ok=True)
+    local_profile_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return local_profile_path

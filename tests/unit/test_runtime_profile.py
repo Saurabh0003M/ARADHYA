@@ -10,6 +10,7 @@ from src.aradhya.runtime_profile import (
     VoiceProfile,
     build_default_runtime_profile,
     load_runtime_profile,
+    persist_model_name,
 )
 from src.aradhya.voice_pipeline import VoiceInboxManager
 
@@ -59,6 +60,13 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
             "hotkey_key": "v",
             "silence_duration": 2.5,
         },
+        "voice_output": {
+            "enabled": True,
+            "provider": "pyttsx3",
+            "voice_id": "zira",
+            "rate": 210,
+            "volume": 0.7,
+        },
     }
     (tmp_path / "core" / "memory" / "profile.json").write_text(
         json.dumps(profile_payload),
@@ -76,6 +84,68 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
     assert profile.voice_activation.hotkey_modifiers == ("ctrl", "shift")
     assert profile.voice_activation.hotkey_key == "v"
     assert profile.voice_activation.silence_duration == 2.5
+    assert profile.voice_output.enabled is True
+    assert profile.voice_output.provider == "pyttsx3"
+    assert profile.voice_output.voice_id == "zira"
+    assert profile.voice_output.rate == 210
+    assert profile.voice_output.volume == 0.7
+
+
+def test_default_runtime_profile_disables_spoken_replies_by_default():
+    profile = build_default_runtime_profile()
+
+    assert profile.voice_output.enabled is False
+    assert profile.voice_output.provider == "pyttsx3"
+    assert profile.voice_output.voice_id == ""
+    assert profile.voice_output.rate == 185
+    assert profile.voice_output.volume == 1.0
+
+
+def test_load_runtime_profile_merges_local_override_without_clobbering_shared_defaults(tmp_path):
+    (tmp_path / "core" / "memory").mkdir(parents=True)
+    (tmp_path / "core" / "memory" / "profile.json").write_text(
+        json.dumps(
+            {
+                "model": {
+                    "provider": "ollama",
+                    "model_name": "gemma4:e4b",
+                    "base_url": "http://127.0.0.1:11434",
+                },
+                "voice": {
+                    "provider": "manual_transcript",
+                    "audio_inbox_dir": "audio/inbox",
+                },
+                "voice_output": {
+                    "enabled": False,
+                    "provider": "pyttsx3",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "core" / "memory" / "profile.local.json").write_text(
+        json.dumps(
+            {
+                "model": {
+                    "model_name": "phi4-mini",
+                },
+                "voice_output": {
+                    "enabled": True,
+                    "voice_id": "zira",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    profile = load_runtime_profile(tmp_path)
+
+    assert profile.model.model_name == "phi4-mini"
+    assert profile.model.provider == "ollama"
+    assert profile.voice.provider == "manual_transcript"
+    assert profile.voice_output.enabled is True
+    assert profile.voice_output.provider == "pyttsx3"
+    assert profile.voice_output.voice_id == "zira"
 
 
 def test_ollama_provider_uses_configured_model_name():
@@ -144,3 +214,32 @@ def test_default_preferences_use_portable_roots(tmp_path):
     assert Path.home() in preferences.user_roots
     assert external_project_root in preferences.user_roots
     assert Path("F:/") not in preferences.user_roots
+
+
+def test_persist_model_name_updates_local_override_file(tmp_path):
+    profile = build_default_runtime_profile(tmp_path)
+    profile_path = tmp_path / "core" / "memory" / "profile.json"
+    profile_path.parent.mkdir(parents=True)
+    profile_path.write_text(
+        json.dumps(
+            {
+                "model": {
+                    "provider": profile.model.provider,
+                    "model_name": profile.model.model_name,
+                    "base_url": profile.model.base_url,
+                },
+                "voice": {"provider": profile.voice.provider},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    override_path = persist_model_name(tmp_path, "phi4-mini")
+
+    payload = json.loads(override_path.read_text(encoding="utf-8"))
+    shared_payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert override_path == tmp_path / "core" / "memory" / "profile.local.json"
+    assert payload["model"]["model_name"] == "phi4-mini"
+    assert payload["model"]["provider"] == "ollama"
+    assert shared_payload["model"]["model_name"] == profile.model.model_name
+    assert shared_payload["voice"]["provider"] == profile.voice.provider

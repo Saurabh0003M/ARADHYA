@@ -157,7 +157,7 @@ def test_bootstrap_keeps_profile_when_ollama_is_unreachable(monkeypatch, tmp_pat
     assert any("https://ollama.com/download" in line for line in outputs)
 
 
-def test_persist_model_name_updates_profile_json(tmp_path):
+def test_persist_model_name_updates_local_override_file(tmp_path):
     profile = build_default_runtime_profile(tmp_path)
     profile_path = tmp_path / "core" / "memory" / "profile.json"
     profile_path.parent.mkdir(parents=True)
@@ -175,9 +175,12 @@ def test_persist_model_name_updates_profile_json(tmp_path):
         encoding="utf-8",
     )
 
-    persist_model_name(tmp_path, "phi4-mini")
+    override_path = persist_model_name(tmp_path, "phi4-mini")
 
-    payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    payload = json.loads(override_path.read_text(encoding="utf-8"))
+    shared_payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    assert override_path == tmp_path / "core" / "memory" / "profile.local.json"
     assert payload["model"]["model_name"] == "phi4-mini"
     assert payload["model"]["provider"] == "ollama"
-    assert payload["voice"]["provider"] == profile.voice.provider
+    assert shared_payload["model"]["model_name"] == profile.model.model_name
+    assert shared_payload["voice"]["provider"] == profile.voice.provider

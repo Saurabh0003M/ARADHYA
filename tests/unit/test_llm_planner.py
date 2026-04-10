@@ -16,6 +16,7 @@ def build_test_preferences(tmp_path):
     return AssistantPreferences(
         user_roots=(tmp_path,),
         directory_index_path=tmp_path / "directory-index.txt",
+        context_cache_dir=tmp_path / "context-cache",
         confirmation_phrases=("yes proceed",),
         security_blog_urls=("https://example.com/security",),
         project_markers=("pyproject.toml",),
