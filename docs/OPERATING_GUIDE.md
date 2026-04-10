@@ -288,6 +288,8 @@ Useful fields in `preferences.json`:
 - `game_library_roots`
 - `directory_index_policy.refresh_on_wake`
 - `directory_index_policy.refresh_on_local_query`
+- `directory_index_policy.miss_cache_ttl_seconds`
+- `directory_index_policy.miss_refresh_debounce_seconds`
 
 Useful fields in `profile.json`:
 

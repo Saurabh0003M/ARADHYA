@@ -28,6 +28,8 @@ def build_test_preferences(
     refresh_interval_seconds: int = 60,
     max_nodes: int = 200,
     max_name_candidates_per_key: int = 25,
+    miss_cache_ttl_seconds: int = 300,
+    miss_refresh_debounce_seconds: float = 2.0,
 ) -> AssistantPreferences:
     return AssistantPreferences(
         user_roots=user_roots,
@@ -42,6 +44,8 @@ def build_test_preferences(
             max_nodes=max_nodes,
             refresh_interval_seconds=refresh_interval_seconds,
             max_name_candidates_per_key=max_name_candidates_per_key,
+            miss_cache_ttl_seconds=miss_cache_ttl_seconds,
+            miss_refresh_debounce_seconds=miss_refresh_debounce_seconds,
         ),
     )
 
@@ -209,3 +213,39 @@ def test_candidate_lists_are_capped_and_summary_stays_compact(tmp_path):
 
     assert len(candidates) == 25
     assert "notes.txt" not in summary_text
+
+
+def test_named_path_lookup_negative_cache_skips_repeat_refreshes(tmp_path, monkeypatch):
+    user_root = tmp_path / "user"
+    user_root.mkdir()
+
+    clock = MutableClock(datetime(2026, 4, 5, 10, 0, 0))
+    preferences = build_test_preferences(
+        tmp_path,
+        user_roots=(user_root,),
+        miss_cache_ttl_seconds=10,
+        miss_refresh_debounce_seconds=2.0,
+    )
+    manager = DirectoryIndexManager(preferences, now_provider=clock.now)
+    manager.refresh("wake")
+
+    refresh_calls = 0
+    original_refresh = manager._refresh_relevant_roots
+
+    def tracked_refresh(reason: str, **kwargs):
+        nonlocal refresh_calls
+        refresh_calls += 1
+        return original_refresh(reason, **kwargs)
+
+    monkeypatch.setattr(manager, "_refresh_relevant_roots", tracked_refresh)
+
+    assert manager.find_named_paths("missing target") == []
+    assert refresh_calls == 1
+
+    clock.advance(seconds=1)
+    assert manager.find_named_paths("missing target") == []
+    assert refresh_calls == 1
+
+    clock.advance(seconds=11)
+    assert manager.find_named_paths("missing target") == []
+    assert refresh_calls == 2

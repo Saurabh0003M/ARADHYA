@@ -32,6 +32,9 @@ def test_cache_validation_exercises_cold_warm_and_targeted_paths(tmp_path):
     assert report.warm_snapshot.refreshed is False
     assert report.manifest_path.exists()
     assert report.shard_paths
+    assert report.exact_query is not None
+    assert report.exact_lookup_found is True
+    assert report.repeat_miss_negative_cached is True
     assert report.targeted_skip_reason is None
     assert report.targeted_probe_path is not None
     assert report.targeted_lookup_found is True
@@ -42,4 +45,6 @@ def test_cache_validation_exercises_cold_warm_and_targeted_paths(tmp_path):
     rendered = format_cache_validation_report(report)
     assert any("Cold refresh" in line for line in rendered)
     assert any("Warm reuse" in line for line in rendered)
+    assert any("Exact lookup" in line for line in rendered)
+    assert any("negative_cache=yes" in line for line in rendered)
     assert any("Targeted lookup found probe: yes" in line for line in rendered)

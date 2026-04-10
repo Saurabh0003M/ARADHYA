@@ -36,6 +36,8 @@
       "venv"
     ],
     "max_nodes": 25000,
-    "max_name_candidates_per_key": 25
+    "max_name_candidates_per_key": 25,
+    "miss_cache_ttl_seconds": 300,
+    "miss_refresh_debounce_seconds": 2.0
   }
 }

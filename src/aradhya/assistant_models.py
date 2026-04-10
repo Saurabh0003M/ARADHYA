@@ -57,6 +57,8 @@ class DirectoryIndexPolicy:
     )
     max_nodes: int | None = 25000
     max_name_candidates_per_key: int = 25
+    miss_cache_ttl_seconds: int = 300
+    miss_refresh_debounce_seconds: float = 2.0
 
 
 @dataclass(frozen=True)
@@ -235,6 +237,14 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         max_name_candidates_per_key=raw_policy.get(
             "max_name_candidates_per_key",
             defaults.directory_index_policy.max_name_candidates_per_key,
+        ),
+        miss_cache_ttl_seconds=raw_policy.get(
+            "miss_cache_ttl_seconds",
+            defaults.directory_index_policy.miss_cache_ttl_seconds,
+        ),
+        miss_refresh_debounce_seconds=raw_policy.get(
+            "miss_refresh_debounce_seconds",
+            defaults.directory_index_policy.miss_refresh_debounce_seconds,
         ),
     )
 

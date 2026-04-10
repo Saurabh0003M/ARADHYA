@@ -250,6 +250,17 @@ class _DriveAccumulator:
     file_count: int = 0
 
 
+@dataclass(frozen=True)
+class _LoadedCacheState:
+    """Memoized cache payload plus runtime-only lookup indexes."""
+
+    manifest: ContextCacheManifest
+    shards: dict[str, DriveCacheShard]
+    exact_name_index: dict[str, tuple[CachedPathCandidate, ...]]
+    manifest_mtime_ns: int
+    shard_mtime_ns: dict[str, int]
+
+
 class DirectoryIndexManager:
     """Maintains a compact context cache plus a summary tree artifact."""
 
@@ -265,6 +276,9 @@ class DirectoryIndexManager:
         }
         self._manifest_path = self.preferences.context_cache_dir / "manifest.json"
         self._last_snapshot: DirectoryIndexSnapshot | None = None
+        self._loaded_cache_state: _LoadedCacheState | None = None
+        self._negative_lookup_cache: dict[str, datetime] = {}
+        self._targeted_refresh_cache: dict[str, datetime] = {}
 
     @property
     def last_snapshot(self) -> DirectoryIndexSnapshot | None:
@@ -312,13 +326,26 @@ class DirectoryIndexManager:
 
         snapshot = self.refresh_if_stale(reason)
         _manifest, shards = self._load_cache()
+        normalized_query = self._normalize_key(query)
         matches = self._lookup_named_paths(shards, query, limit)
-        if matches or snapshot.refreshed:
+        if matches:
+            self._clear_negative_lookup(normalized_query)
             return matches
-
-        self._refresh_relevant_roots(reason, user_roots=self.preferences.user_roots)
+        if snapshot.refreshed:
+            self._remember_negative_lookup(normalized_query)
+            return []
+        if self._is_negative_lookup_cached(normalized_query):
+            return []
+        if not self._maybe_refresh_relevant_roots(reason, user_roots=self.preferences.user_roots):
+            self._remember_negative_lookup(normalized_query)
+            return []
         _manifest, shards = self._load_cache()
-        return self._lookup_named_paths(shards, query, limit)
+        matches = self._lookup_named_paths(shards, query, limit)
+        if matches:
+            self._clear_negative_lookup(normalized_query)
+            return matches
+        self._remember_negative_lookup(normalized_query)
+        return []
 
     def find_txt_dense_folder(
         self,
@@ -332,7 +359,8 @@ class DirectoryIndexManager:
         if candidate is not None or snapshot.refreshed:
             return candidate
 
-        self._refresh_relevant_roots(reason, user_roots=self.preferences.user_roots)
+        if not self._maybe_refresh_relevant_roots(reason, user_roots=self.preferences.user_roots):
+            return None
         _manifest, shards = self._load_cache()
         return self._lookup_txt_dense_folder(shards)
 
@@ -349,7 +377,8 @@ class DirectoryIndexManager:
         if candidate is not None or snapshot.refreshed:
             return candidate
 
-        self._refresh_relevant_roots(reason, user_roots=self.preferences.user_roots)
+        if not self._maybe_refresh_relevant_roots(reason, user_roots=self.preferences.user_roots):
+            return None
         _manifest, shards = self._load_cache()
         return self._lookup_yesterdays_project(shards, now)
 
@@ -365,9 +394,37 @@ class DirectoryIndexManager:
         if candidate is not None or snapshot.refreshed:
             return candidate
 
-        self._refresh_relevant_roots(reason, game_roots=self.preferences.game_library_roots)
+        if not self._maybe_refresh_relevant_roots(
+            reason,
+            game_roots=self.preferences.game_library_roots,
+        ):
+            return None
         _manifest, shards = self._load_cache()
         return self._lookup_recent_game(shards)
+
+    def _maybe_refresh_relevant_roots(
+        self,
+        reason: str,
+        *,
+        user_roots: tuple[Path, ...] = (),
+        game_roots: tuple[Path, ...] = (),
+    ) -> bool:
+        refresh_scope = self._targeted_refresh_scope(
+            user_roots=user_roots,
+            game_roots=game_roots,
+        )
+        if refresh_scope is None:
+            return False
+        if self._is_targeted_refresh_debounced(refresh_scope):
+            return False
+
+        self._targeted_refresh_cache[refresh_scope] = self.now_provider()
+        self._refresh_relevant_roots(
+            reason,
+            user_roots=user_roots,
+            game_roots=game_roots,
+        )
+        return True
 
     def _refresh_relevant_roots(
         self,
@@ -467,6 +524,8 @@ class DirectoryIndexManager:
         )
         self._write_manifest(manifest)
         self._write_shards(final_shards)
+        self._negative_lookup_cache.clear()
+        self._loaded_cache_state = self._build_loaded_cache_state(manifest, final_shards)
 
         snapshot = DirectoryIndexSnapshot(
             path=self.preferences.directory_index_path,
@@ -552,7 +611,7 @@ class DirectoryIndexManager:
             txt_count = sum(
                 1
                 for filename in visible_files
-                if Path(filename).suffix.lower() == ".txt"
+                if filename.lower().endswith(".txt")
             )
             if txt_count > 0 and visible_files:
                 accumulator.txt_folders.append(
@@ -660,11 +719,17 @@ class DirectoryIndexManager:
         )
 
     def _load_cache(self) -> tuple[ContextCacheManifest, dict[str, DriveCacheShard]]:
+        if self._loaded_cache_state is not None and self._is_loaded_cache_state_current(
+            self._loaded_cache_state
+        ):
+            return self._loaded_cache_state.manifest, self._loaded_cache_state.shards
+
         manifest = self._read_manifest()
         shards = {
             drive_key: self._read_shard(filename)
             for drive_key, filename in manifest.shards.items()
         }
+        self._loaded_cache_state = self._build_loaded_cache_state(manifest, shards)
         return manifest, shards
 
     def _read_manifest(self) -> ContextCacheManifest:
@@ -867,6 +932,10 @@ class DirectoryIndexManager:
         shards: dict[str, DriveCacheShard],
         key: str,
     ) -> tuple[CachedPathCandidate, ...]:
+        exact_name_index = self._exact_name_index_for(shards)
+        if key in exact_name_index:
+            return exact_name_index[key]
+
         collected: list[CachedPathCandidate] = []
         seen_paths: set[str] = set()
         for shard in shards.values():
@@ -997,6 +1066,132 @@ class DirectoryIndexManager:
                 deduped[folder.path] = folder
         return list(deduped.values())
 
+    def _build_loaded_cache_state(
+        self,
+        manifest: ContextCacheManifest,
+        shards: dict[str, DriveCacheShard],
+    ) -> _LoadedCacheState:
+        shard_mtime_ns = {
+            filename: self._file_mtime_ns(self.preferences.context_cache_dir / filename)
+            for filename in manifest.shards.values()
+        }
+        return _LoadedCacheState(
+            manifest=manifest,
+            shards=shards,
+            exact_name_index=self._build_exact_name_index(shards),
+            manifest_mtime_ns=self._file_mtime_ns(self._manifest_path),
+            shard_mtime_ns=shard_mtime_ns,
+        )
+
+    def _build_exact_name_index(
+        self,
+        shards: dict[str, DriveCacheShard],
+    ) -> dict[str, tuple[CachedPathCandidate, ...]]:
+        aggregated: dict[str, list[CachedPathCandidate]] = defaultdict(list)
+        seen_paths: dict[str, set[str]] = defaultdict(set)
+
+        for shard in shards.values():
+            for key, shard_candidates in shard.name_candidates.items():
+                for candidate in shard_candidates:
+                    if candidate.path in seen_paths[key]:
+                        continue
+                    seen_paths[key].add(candidate.path)
+                    aggregated[key].append(candidate)
+
+        exact_name_index: dict[str, tuple[CachedPathCandidate, ...]] = {}
+        max_candidates = self.preferences.directory_index_policy.max_name_candidates_per_key
+        for key, candidates in aggregated.items():
+            candidates.sort(key=self._candidate_priority, reverse=True)
+            exact_name_index[key] = tuple(candidates[:max_candidates])
+        return exact_name_index
+
+    def _exact_name_index_for(
+        self,
+        shards: dict[str, DriveCacheShard],
+    ) -> dict[str, tuple[CachedPathCandidate, ...]]:
+        if self._loaded_cache_state is not None and self._loaded_cache_state.shards is shards:
+            return self._loaded_cache_state.exact_name_index
+        return self._build_exact_name_index(shards)
+
+    def _is_loaded_cache_state_current(self, cache_state: _LoadedCacheState) -> bool:
+        if self._file_mtime_ns(self._manifest_path) != cache_state.manifest_mtime_ns:
+            return False
+        current_filenames = set(cache_state.manifest.shards.values())
+        if current_filenames != set(cache_state.shard_mtime_ns):
+            return False
+
+        for filename, recorded_mtime_ns in cache_state.shard_mtime_ns.items():
+            shard_path = self.preferences.context_cache_dir / filename
+            if self._file_mtime_ns(shard_path) != recorded_mtime_ns:
+                return False
+        return True
+
+    def _targeted_refresh_scope(
+        self,
+        *,
+        user_roots: tuple[Path, ...] = (),
+        game_roots: tuple[Path, ...] = (),
+    ) -> str | None:
+        affected_drive_keys = self._affected_drive_keys(user_roots=user_roots, game_roots=game_roots)
+        if not affected_drive_keys:
+            return None
+
+        scope_labels: list[str] = []
+        if user_roots:
+            scope_labels.append("user")
+        if game_roots:
+            scope_labels.append("game")
+        return f"{'+'.join(scope_labels)}:{'|'.join(affected_drive_keys)}"
+
+    def _affected_drive_keys(
+        self,
+        *,
+        user_roots: tuple[Path, ...] = (),
+        game_roots: tuple[Path, ...] = (),
+    ) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                {
+                    self._drive_key_for_path(path)
+                    for path in (*user_roots, *game_roots)
+                    if path.exists()
+                }
+            )
+        )
+
+    def _is_targeted_refresh_debounced(self, refresh_scope: str) -> bool:
+        last_refresh_at = self._targeted_refresh_cache.get(refresh_scope)
+        if last_refresh_at is None:
+            return False
+        debounce_window = timedelta(
+            seconds=self.preferences.directory_index_policy.miss_refresh_debounce_seconds
+        )
+        return self.now_provider() - last_refresh_at < debounce_window
+
+    def _remember_negative_lookup(self, normalized_query: str) -> None:
+        if not normalized_query:
+            return
+        self._negative_lookup_cache[normalized_query] = self.now_provider()
+
+    def _clear_negative_lookup(self, normalized_query: str) -> None:
+        if not normalized_query:
+            return
+        self._negative_lookup_cache.pop(normalized_query, None)
+
+    def _is_negative_lookup_cached(self, normalized_query: str) -> bool:
+        if not normalized_query:
+            return False
+
+        cached_at = self._negative_lookup_cache.get(normalized_query)
+        if cached_at is None:
+            return False
+
+        ttl = timedelta(seconds=self.preferences.directory_index_policy.miss_cache_ttl_seconds)
+        if self.now_provider() - cached_at > ttl:
+            self._negative_lookup_cache.pop(normalized_query, None)
+            return False
+        return True
+
     def _is_manifest_stale(self, manifest: ContextCacheManifest) -> bool:
         refresh_interval = timedelta(seconds=manifest.refresh_interval_seconds)
         return self.now_provider() - manifest.generated_at > refresh_interval
@@ -1057,6 +1252,12 @@ class DirectoryIndexManager:
             return path.stat().st_mtime
         except OSError:
             return None
+
+    def _file_mtime_ns(self, path: Path) -> int:
+        try:
+            return path.stat().st_mtime_ns
+        except OSError:
+            return -1
 
     def _should_ignore_name(self, name: str) -> bool:
         return name.lower() in self._ignored_names

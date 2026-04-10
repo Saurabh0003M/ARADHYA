@@ -160,6 +160,8 @@ Runtime behavior is loaded from `core/memory/preferences.json`.
 - `directory_index_path`: where the tree file is written.
 - `security_blog_urls`: browser targets for the security-blog feature.
 - `game_library_roots`: folders used when searching for a recent game.
+- `directory_index_policy.miss_cache_ttl_seconds`: how long repeated missing path lookups stay suppressed before Aradhya tries another targeted refresh.
+- `directory_index_policy.miss_refresh_debounce_seconds`: minimum gap between miss-driven targeted refreshes for the same root scope.
 
 Runtime model, voice, and spoken-reply bindings are loaded from `core/memory/profile.json`.
 Machine-specific overrides can live in `core/memory/profile.local.json`, which is git-ignored and merged over the shared profile at runtime.

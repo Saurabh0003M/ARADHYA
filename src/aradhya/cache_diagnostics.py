@@ -21,6 +21,13 @@ class CacheValidationReport:
     warm_refresh_seconds: float
     manifest_path: Path
     shard_paths: tuple[Path, ...]
+    exact_query: str | None
+    exact_query_seconds: float
+    exact_lookup_found: bool
+    miss_query: str
+    first_miss_query_seconds: float
+    repeat_miss_query_seconds: float
+    repeat_miss_negative_cached: bool
     targeted_query: str
     targeted_query_seconds: float
     targeted_lookup_found: bool
@@ -46,10 +53,30 @@ def run_cache_validation(preferences: AssistantPreferences) -> CacheValidationRe
     warm_snapshot = manager.refresh_if_stale("cache_validate_warm")
     warm_refresh_seconds = perf_counter() - warm_start
 
+    exact_query = _pick_exact_cached_query(manager, preferences.user_roots)
+    exact_query_seconds = 0.0
+    exact_lookup_found = False
+    if exact_query is not None:
+        exact_start = perf_counter()
+        exact_matches = manager.find_named_paths(exact_query, reason="cache_validate_exact")
+        exact_query_seconds = perf_counter() - exact_start
+        exact_lookup_found = bool(exact_matches)
+
     probe_parent = preferences.context_cache_dir.parent / "cache_validation"
     probe_suffix = cold_snapshot.generated_at.strftime("%Y%m%d%H%M%S%f").translate(
         str.maketrans("0123456789", "abcdefghij")
     )
+    miss_query = f"zzqvmiss{probe_suffix}"
+    first_miss_start = perf_counter()
+    manager.find_named_paths(miss_query, reason="cache_validate_miss_first")
+    first_miss_query_seconds = perf_counter() - first_miss_start
+    repeat_miss_start = perf_counter()
+    manager.find_named_paths(miss_query, reason="cache_validate_miss_repeat")
+    repeat_miss_query_seconds = perf_counter() - repeat_miss_start
+    repeat_miss_negative_cached = manager._is_negative_lookup_cached(  # noqa: SLF001 - diagnostics validate miss cache behavior
+        manager._normalize_key(miss_query)
+    )
+
     targeted_query = f"zzqvprobe{probe_suffix}"
     targeted_probe_path: Path | None = None
     targeted_query_seconds = 0.0
@@ -91,6 +118,13 @@ def run_cache_validation(preferences: AssistantPreferences) -> CacheValidationRe
         warm_refresh_seconds=warm_refresh_seconds,
         manifest_path=manifest_path,
         shard_paths=shard_paths,
+        exact_query=exact_query,
+        exact_query_seconds=exact_query_seconds,
+        exact_lookup_found=exact_lookup_found,
+        miss_query=miss_query,
+        first_miss_query_seconds=first_miss_query_seconds,
+        repeat_miss_query_seconds=repeat_miss_query_seconds,
+        repeat_miss_negative_cached=repeat_miss_negative_cached,
         targeted_query=targeted_query,
         targeted_query_seconds=targeted_query_seconds,
         targeted_lookup_found=targeted_lookup_found,
@@ -117,6 +151,22 @@ def format_cache_validation_report(report: CacheValidationReport) -> tuple[str, 
             "Cache > Warm reuse: "
             f"{report.warm_refresh_seconds:.3f}s "
             f"(refreshed={'yes' if report.warm_snapshot.refreshed else 'no'})"
+        ),
+        (
+            "Cache > Exact lookup: "
+            + (
+                f"{report.exact_query} ({report.exact_query_seconds:.3f}s, "
+                f"found={'yes' if report.exact_lookup_found else 'no'})"
+                if report.exact_query is not None
+                else "no cached query available"
+            )
+        ),
+        (
+            "Cache > Miss lookup: "
+            f"{report.miss_query} "
+            f"(first={report.first_miss_query_seconds:.3f}s, "
+            f"repeat={report.repeat_miss_query_seconds:.3f}s, "
+            f"negative_cache={'yes' if report.repeat_miss_negative_cached else 'no'})"
         ),
     ]
 
@@ -171,3 +221,17 @@ def _lookup_exact_cached_paths(
             normalized_query,
         )
     )
+
+
+def _pick_exact_cached_query(
+    manager: DirectoryIndexManager,
+    user_roots: tuple[Path, ...],
+) -> str | None:
+    _manifest, shards = manager._load_cache()  # noqa: SLF001 - diagnostics inspect cache contents
+    for shard in shards.values():
+        for candidates in shard.name_candidates.values():
+            for candidate in candidates:
+                candidate_path = Path(candidate.path)
+                if _is_within_user_roots(candidate_path, user_roots) and candidate_path.name:
+                    return candidate_path.name
+    return None
