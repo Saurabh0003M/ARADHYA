@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,8 +19,10 @@ from src.aradhya.assistant_models import (
     DirectoryIndexSnapshot,
 )
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SUMMARY_DEPTH = 2
+SHALLOW_SIGNATURE_DEPTH = 2
+SHALLOW_SIGNATURE_ENTRY_LIMIT = 512
 MISC_DRIVE_KEY = "misc"
 
 
@@ -113,6 +116,7 @@ class ContextCacheManifest:
     refresh_interval_seconds: int
     indexed_roots: tuple[str, ...]
     game_roots: tuple[str, ...]
+    root_signatures: dict[str, str]
     shards: dict[str, str]
     total_indexed_nodes: int
     summary_node_count: int
@@ -125,6 +129,7 @@ class ContextCacheManifest:
             "refresh_interval_seconds": self.refresh_interval_seconds,
             "indexed_roots": list(self.indexed_roots),
             "game_roots": list(self.game_roots),
+            "root_signatures": self.root_signatures,
             "shards": self.shards,
             "total_indexed_nodes": self.total_indexed_nodes,
             "summary_node_count": self.summary_node_count,
@@ -135,9 +140,18 @@ class ContextCacheManifest:
     def from_dict(cls, payload: dict[str, object]) -> "ContextCacheManifest":
         generated_at = datetime.fromisoformat(str(payload.get("generated_at", "")))
         raw_shards = payload.get("shards", {})
+        raw_root_signatures = payload.get("root_signatures", {})
         shards = (
             {str(key): str(value) for key, value in raw_shards.items()}
             if isinstance(raw_shards, dict)
+            else {}
+        )
+        root_signatures = (
+            {
+                str(key): str(value)
+                for key, value in raw_root_signatures.items()
+            }
+            if isinstance(raw_root_signatures, dict)
             else {}
         )
         return cls(
@@ -146,6 +160,7 @@ class ContextCacheManifest:
             refresh_interval_seconds=int(payload.get("refresh_interval_seconds", 0)),
             indexed_roots=tuple(str(item) for item in payload.get("indexed_roots", [])),
             game_roots=tuple(str(item) for item in payload.get("game_roots", [])),
+            root_signatures=root_signatures,
             shards=shards,
             total_indexed_nodes=int(payload.get("total_indexed_nodes", 0)),
             summary_node_count=int(payload.get("summary_node_count", 0)),
@@ -307,6 +322,8 @@ class DirectoryIndexManager:
             return self.refresh(reason)
 
         if self._is_manifest_stale(manifest):
+            return self.refresh(reason)
+        if self._have_root_signatures_changed(manifest):
             return self.refresh(reason)
 
         snapshot = DirectoryIndexSnapshot(
@@ -512,6 +529,7 @@ class DirectoryIndexManager:
             refresh_interval_seconds=self.preferences.directory_index_policy.refresh_interval_seconds,
             indexed_roots=tuple(str(root) for root in self.preferences.user_roots if root.exists()),
             game_roots=tuple(str(root) for root in self.preferences.game_library_roots if root.exists()),
+            root_signatures=self._build_root_signatures(),
             shards={
                 drive_key: self._shard_filename(drive_key)
                 for drive_key in sorted(final_shards)
@@ -862,7 +880,7 @@ class DirectoryIndexManager:
                 if len(candidates) >= limit:
                     break
 
-        return [Path(candidate.path) for candidate in candidates[:limit]]
+        return self._existing_paths_from_candidates(candidates, limit)
 
     def _lookup_txt_dense_folder(
         self,
@@ -873,6 +891,8 @@ class DirectoryIndexManager:
 
         for shard in shards.values():
             for candidate in shard.txt_folders:
+                if not Path(candidate.path).exists():
+                    continue
                 score = (candidate.txt_count, candidate.density, -candidate.depth)
                 if best_score is None or score > best_score:
                     best_score = score
@@ -896,6 +916,8 @@ class DirectoryIndexManager:
 
         for shard in shards.values():
             for candidate in shard.projects:
+                if not Path(candidate.path).exists():
+                    continue
                 activity_time = datetime.fromtimestamp(candidate.latest_activity)
                 if activity_time.date() != target_day:
                     continue
@@ -917,6 +939,8 @@ class DirectoryIndexManager:
 
         for shard in shards.values():
             for candidate in shard.games:
+                if not Path(candidate.path).exists():
+                    continue
                 if best_candidate is None or candidate.latest_activity > best_candidate.latest_activity:
                     best_candidate = candidate
 
@@ -971,6 +995,21 @@ class DirectoryIndexManager:
         candidates.append(candidate)
         candidates.sort(key=self._candidate_priority, reverse=True)
         del candidates[self.preferences.directory_index_policy.max_name_candidates_per_key :]
+
+    def _existing_paths_from_candidates(
+        self,
+        candidates: list[CachedPathCandidate],
+        limit: int,
+    ) -> list[Path]:
+        existing_paths: list[Path] = []
+        for candidate in candidates:
+            path = Path(candidate.path)
+            if not path.exists():
+                continue
+            existing_paths.append(path)
+            if len(existing_paths) >= limit:
+                break
+        return existing_paths
 
     def _candidate_priority(self, candidate: CachedPathCandidate) -> tuple[int, int, float]:
         return (
@@ -1196,6 +1235,9 @@ class DirectoryIndexManager:
         refresh_interval = timedelta(seconds=manifest.refresh_interval_seconds)
         return self.now_provider() - manifest.generated_at > refresh_interval
 
+    def _have_root_signatures_changed(self, manifest: ContextCacheManifest) -> bool:
+        return manifest.root_signatures != self._build_root_signatures()
+
     def _is_manifest_compatible(self, manifest: ContextCacheManifest) -> bool:
         expected_user_roots = tuple(
             str(root) for root in self.preferences.user_roots if root.exists()
@@ -1258,6 +1300,77 @@ class DirectoryIndexManager:
             return path.stat().st_mtime_ns
         except OSError:
             return -1
+
+    def _build_root_signatures(self) -> dict[str, str]:
+        signatures: dict[str, str] = {}
+        for root in (*self.preferences.user_roots, *self.preferences.game_library_roots):
+            if not root.exists():
+                continue
+            signatures[str(root)] = self._compute_root_signature(root)
+        return signatures
+
+    def _compute_root_signature(self, root: Path) -> str:
+        labels: list[str] = []
+        recorded_entries = 0
+
+        try:
+            root_stat = root.stat()
+        except OSError:
+            return "unavailable"
+
+        labels.append(f"root:{root}:{root_stat.st_mtime_ns}")
+
+        def visit(current: Path, depth: int) -> None:
+            nonlocal recorded_entries
+            if depth > SHALLOW_SIGNATURE_DEPTH or recorded_entries >= SHALLOW_SIGNATURE_ENTRY_LIMIT:
+                return
+
+            try:
+                entries = sorted(current.iterdir(), key=lambda path: path.name.lower())
+            except OSError as error:
+                labels.append(
+                    f"error:{self._signature_relative_path(current, root)}:{type(error).__name__}"
+                )
+                return
+
+            for entry in entries:
+                if self._should_ignore_name(entry.name):
+                    continue
+
+                try:
+                    entry_stat = entry.stat()
+                    is_directory = entry.is_dir()
+                except OSError:
+                    labels.append(f"missing:{self._signature_relative_path(entry, root)}")
+                    continue
+
+                relative_path = self._signature_relative_path(entry, root)
+                label = f"{'d' if is_directory else 'f'}:{relative_path}:{entry_stat.st_mtime_ns}"
+                if not is_directory:
+                    label += f":{entry_stat.st_size}"
+                labels.append(label)
+
+                recorded_entries += 1
+                if recorded_entries >= SHALLOW_SIGNATURE_ENTRY_LIMIT:
+                    labels.append("truncated")
+                    return
+
+                if is_directory:
+                    visit(entry, depth + 1)
+                    if recorded_entries >= SHALLOW_SIGNATURE_ENTRY_LIMIT:
+                        return
+
+        visit(root, depth=0)
+        return hashlib.sha256("\n".join(labels).encode("utf-8")).hexdigest()
+
+    def _signature_relative_path(self, path: Path, root: Path) -> str:
+        try:
+            relative_path = path.relative_to(root)
+        except ValueError:
+            return str(path)
+        if relative_path == Path("."):
+            return "."
+        return relative_path.as_posix()
 
     def _should_ignore_name(self, name: str) -> bool:
         return name.lower() in self._ignored_names

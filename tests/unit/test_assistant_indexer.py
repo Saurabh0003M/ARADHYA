@@ -97,6 +97,27 @@ def test_refresh_if_stale_reuses_fresh_cache_without_rewriting_summary(tmp_path)
     assert preferences.directory_index_path.read_text(encoding="utf-8") == first_summary
 
 
+def test_refresh_if_stale_rebuilds_when_shallow_root_changes_within_refresh_window(tmp_path):
+    user_root = tmp_path / "user"
+    docs_dir = user_root / "docs"
+    docs_dir.mkdir(parents=True)
+    (docs_dir / "one.txt").write_text("one", encoding="utf-8")
+
+    clock = MutableClock(datetime(2026, 4, 5, 10, 0, 0))
+    preferences = build_test_preferences(tmp_path, user_roots=(user_root,))
+    manager = DirectoryIndexManager(preferences, now_provider=clock.now)
+
+    first_snapshot = manager.refresh("wake")
+    clock.advance(seconds=30)
+    (docs_dir / "two.txt").write_text("two", encoding="utf-8")
+
+    second_snapshot = manager.refresh_if_stale("wake")
+
+    assert first_snapshot.refreshed is True
+    assert second_snapshot.refreshed is True
+    assert second_snapshot.generated_at > first_snapshot.generated_at
+
+
 def test_invalid_manifest_triggers_rebuild(tmp_path):
     user_root = tmp_path / "user"
     user_root.mkdir()
@@ -115,7 +136,7 @@ def test_invalid_manifest_triggers_rebuild(tmp_path):
     repaired_manifest = json.loads(
         (preferences.context_cache_dir / "manifest.json").read_text(encoding="utf-8")
     )
-    assert repaired_manifest["schema_version"] == 1
+    assert repaired_manifest["schema_version"] == 2
 
 
 def test_named_path_lookup_triggers_targeted_rescan_on_cache_miss(tmp_path):
@@ -134,6 +155,26 @@ def test_named_path_lookup_triggers_targeted_rescan_on_cache_miss(tmp_path):
     matches = manager.find_named_paths("Notes")
 
     assert target_dir in matches
+    assert manager.last_snapshot is not None
+    assert manager.last_snapshot.refreshed is True
+
+
+def test_named_path_lookup_drops_deleted_cached_hits_within_refresh_window(tmp_path):
+    user_root = tmp_path / "user"
+    target_dir = user_root / "Notes"
+    target_dir.mkdir(parents=True)
+
+    clock = MutableClock(datetime(2026, 4, 5, 10, 0, 0))
+    preferences = build_test_preferences(tmp_path, user_roots=(user_root,))
+    manager = DirectoryIndexManager(preferences, now_provider=clock.now)
+
+    manager.refresh("wake")
+    clock.advance(seconds=30)
+    target_dir.rmdir()
+
+    matches = manager.find_named_paths("Notes")
+
+    assert matches == []
     assert manager.last_snapshot is not None
     assert manager.last_snapshot.refreshed is True
 
