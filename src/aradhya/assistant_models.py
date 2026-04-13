@@ -119,7 +119,21 @@ class AssistantState:
 
     is_awake: bool = False
     debate_mode_enabled: bool = False
+    interaction_enabled: bool = False
+    advanced_next_request: bool = False
+    screen_context_active: bool = False
+    cloud_features_enabled: bool = False
     pending_plan: PlanAction | None = None
+
+
+@dataclass(frozen=True)
+class ShellStateSnapshot:
+    """Current shell-visible state for the user-facing floating controls."""
+
+    interaction_enabled: bool
+    advanced_next_request: bool
+    screen_context_active: bool
+    cloud_features_enabled: bool
 
 
 @dataclass(frozen=True)
@@ -179,7 +193,16 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
         user_roots=_build_default_user_roots(root),
         directory_index_path=root / "project_tree.txt",
         context_cache_dir=root / "data" / "processed" / "context",
-        confirmation_phrases=("yes proceed", "proceed", "confirm", "go ahead"),
+        confirmation_phrases=(
+            "yes",
+            "yes proceed",
+            "proceed",
+            "confirm",
+            "go ahead",
+            "ok",
+            "okay",
+            "do it",
+        ),
         security_blog_urls=DEFAULT_SECURITY_BLOGS,
         project_markers=(
             "pyproject.toml",

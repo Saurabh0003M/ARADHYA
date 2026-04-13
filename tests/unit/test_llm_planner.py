@@ -27,11 +27,21 @@ def build_test_preferences(tmp_path):
 
 
 class FakeModelProvider:
-    def __init__(self, response_text: str | None = None, error: Exception | None = None):
+    def __init__(
+        self,
+        response_text: str | None = None,
+        error: Exception | None = None,
+        *,
+        responses: list[str] | None = None,
+        errors: list[Exception | None] | None = None,
+    ):
         self.response_text = response_text or ""
         self.error = error
+        self.responses = list(responses or [])
+        self.errors = list(errors or [])
         self.last_prompt = None
         self.last_system_prompt = None
+        self.calls: list[tuple[str, str | None]] = []
 
     def health_check(self) -> ModelHealth:
         return ModelHealth(
@@ -46,10 +56,13 @@ class FakeModelProvider:
     def generate(self, prompt: str, *, system_prompt: str | None = None) -> ModelResult:
         self.last_prompt = prompt
         self.last_system_prompt = system_prompt
-        if self.error is not None:
-            raise self.error
+        self.calls.append((prompt, system_prompt))
+        current_error = self.errors.pop(0) if self.errors else self.error
+        if current_error is not None:
+            raise current_error
+        response_text = self.responses.pop(0) if self.responses else self.response_text
         return ModelResult(
-            text=self.response_text,
+            text=response_text,
             model="fake-model",
             provider="fake",
             raw={},
@@ -164,3 +177,57 @@ def test_llm_fallback_accepts_markdown_wrapped_json(tmp_path):
     assert response.plan is not None
     assert response.plan.kind == PlanKind.OPEN_PATH
     assert response.awaiting_confirmation is True
+
+
+def test_advanced_reasoning_uses_review_pass_once_and_resets_after_request(tmp_path):
+    target_dir = tmp_path / "Launchpad"
+    target_dir.mkdir()
+    model_provider = FakeModelProvider(
+        responses=[
+            (
+                '{"intent": "OPEN_PATH", "confidence": 0.91, '
+                '"reasoning": "User wants a local folder opened", '
+                '"target": "Launchpad", "enabled": null}'
+            ),
+            (
+                '{"intent": "OPEN_PATH", "confidence": 0.95, '
+                '"reasoning": "Reviewed and confirmed", '
+                '"target": "Launchpad", "enabled": null}'
+            ),
+        ]
+    )
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        model_provider=model_provider,
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+    assistant.arm_advanced_next_request()
+
+    response = assistant.handle_transcript("please launch the launchpad folder for me")
+
+    assert response.plan is not None
+    assert response.plan.kind == PlanKind.OPEN_PATH
+    assert response.plan.metadata["advanced_reasoning"] is True
+    assert assistant.state.advanced_next_request is False
+    assert len(model_provider.calls) == 2
+    assert model_provider.calls[0][1] is not None
+    assert "Advanced reasoning is enabled" in model_provider.calls[0][1]
+    assert "Review the initial classification" in model_provider.calls[1][0]
+
+
+def test_advanced_reasoning_resets_after_llm_failure(tmp_path):
+    model_provider = FakeModelProvider(error=RuntimeError("provider offline"))
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        model_provider=model_provider,
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+    assistant.arm_advanced_next_request()
+
+    response = assistant.handle_transcript("please figure this out for me")
+
+    assert response.plan is not None
+    assert response.plan.kind == PlanKind.UNKNOWN
+    assert assistant.state.advanced_next_request is False

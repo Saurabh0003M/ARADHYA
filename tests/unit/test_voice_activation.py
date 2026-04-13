@@ -4,7 +4,11 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.aradhya.runtime_profile import build_default_runtime_profile
-from src.aradhya.voice_activation import VoiceActivatedAradhya, describe_voice_activation_support
+from src.aradhya.voice_activation import (
+    VoiceActivatedAradhya,
+    describe_voice_activation_support,
+    describe_voice_capture_support,
+)
 from src.aradhya.voice_pipeline import VoiceJobResult
 
 
@@ -245,9 +249,39 @@ def test_voice_activation_disables_spoken_replies_after_runtime_tts_error(tmp_pa
     assert runtime.speech_synthesizer is None
 
 
+def test_voice_capture_once_routes_into_assistant_without_hotkey_listener(tmp_path):
+    runtime_profile = build_runtime_profile(tmp_path)
+    outputs: list[str] = []
+    assistant = FakeAssistant()
+
+    runtime = VoiceActivatedAradhya(
+        assistant=assistant,
+        voice_manager=FakeVoiceManager(runtime_profile.voice),
+        runtime_profile=runtime_profile,
+        output_handler=outputs.append,
+        microphone=FakeMicrophone(),
+        hotkey_listener=None,
+    )
+
+    runtime.capture_once()
+
+    assert assistant.wake_count == 1
+    assert assistant.last_transcript == "open notes"
+    assert any("Recording started" in line for line in outputs)
+    assert any("Heard > open notes" in line for line in outputs)
+
+
 def test_voice_activation_support_rejects_manual_transcript_provider(tmp_path):
     runtime_profile = build_default_runtime_profile(tmp_path)
     support = describe_voice_activation_support(runtime_profile)
+
+    assert support.available is False
+    assert "requires a self-transcribing voice provider" in support.message
+
+
+def test_voice_capture_support_rejects_manual_transcript_provider(tmp_path):
+    runtime_profile = build_default_runtime_profile(tmp_path)
+    support = describe_voice_capture_support(runtime_profile)
 
     assert support.available is False
     assert "requires a self-transcribing voice provider" in support.message

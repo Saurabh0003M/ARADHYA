@@ -15,6 +15,7 @@ from src.aradhya.assistant_models import (
     AssistantResponse,
     AssistantState,
     PlanKind,
+    ShellStateSnapshot,
     WakeSource,
     load_preferences,
 )
@@ -86,6 +87,40 @@ class AradhyaAssistant:
         logger.info("Aradhya returned to idle state")
         return AssistantResponse(spoken_response="Aradhya is going idle.")
 
+    def set_interaction_enabled(self, enabled: bool) -> ShellStateSnapshot:
+        """Toggle whether user-level machine interaction is unlocked."""
+
+        self.state.interaction_enabled = enabled
+        return self.shell_state_snapshot()
+
+    def arm_advanced_next_request(self) -> ShellStateSnapshot:
+        """Enable one-shot advanced reasoning for the next planning request."""
+
+        self.state.advanced_next_request = True
+        return self.shell_state_snapshot()
+
+    def set_screen_context_active(self, active: bool) -> ShellStateSnapshot:
+        """Toggle bounded screen-guidance mode for shell requests."""
+
+        self.state.screen_context_active = active
+        return self.shell_state_snapshot()
+
+    def set_cloud_features_enabled(self, enabled: bool) -> ShellStateSnapshot:
+        """Toggle future opt-in cloud features for the current session."""
+
+        self.state.cloud_features_enabled = enabled
+        return self.shell_state_snapshot()
+
+    def shell_state_snapshot(self) -> ShellStateSnapshot:
+        """Return the shell-visible state so UI code can render controls."""
+
+        return ShellStateSnapshot(
+            interaction_enabled=self.state.interaction_enabled,
+            advanced_next_request=self.state.advanced_next_request,
+            screen_context_active=self.state.screen_context_active,
+            cloud_features_enabled=self.state.cloud_features_enabled,
+        )
+
     def handle_transcript(self, transcript: str) -> AssistantResponse:
         logger.info("Handling transcript: {}", transcript)
         if not self.state.is_awake:
@@ -113,6 +148,38 @@ class AradhyaAssistant:
 
         if self.state.pending_plan and self._is_confirmation_phrase(normalized):
             plan = self.state.pending_plan
+            if self.toolbox.requires_admin_permission(plan):
+                logger.info(
+                    "Blocked confirmed plan {} because separate admin approval is required",
+                    plan.kind,
+                )
+                return AssistantResponse(
+                    spoken_response=(
+                        "This task still requires separate admin approval. "
+                        "Elevation is not wired in yet."
+                    ),
+                    transcript_echo=transcript,
+                    plan=plan,
+                    awaiting_confirmation=True,
+                    index_snapshot=self.index_manager.last_snapshot,
+                )
+
+            if self.toolbox.requires_interaction_permission(plan) and not self.state.interaction_enabled:
+                logger.info(
+                    "Blocked confirmed plan {} because interaction is locked",
+                    plan.kind,
+                )
+                return AssistantResponse(
+                    spoken_response=(
+                        "Interaction is locked. Turn on I to allow machine actions, "
+                        "then confirm again."
+                    ),
+                    transcript_echo=transcript,
+                    plan=plan,
+                    awaiting_confirmation=True,
+                    index_snapshot=self.index_manager.last_snapshot,
+                )
+
             self.state.pending_plan = None
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
@@ -126,7 +193,15 @@ class AradhyaAssistant:
             )
 
         replacing_pending = self.state.pending_plan is not None
-        plan = self.planner.build_plan(transcript, self.state)
+        advanced_reasoning = self.state.advanced_next_request
+        if advanced_reasoning:
+            self.state.advanced_next_request = False
+
+        plan = self.planner.build_plan(
+            transcript,
+            self.state,
+            advanced_reasoning=advanced_reasoning,
+        )
         self.state.pending_plan = None
 
         snapshot = None
@@ -151,10 +226,15 @@ class AradhyaAssistant:
             self.state.pending_plan = plan
             logger.info("Stored pending plan {} awaiting confirmation", plan.kind)
             prefix = "I replaced the earlier pending task. " if replacing_pending else ""
+            if self.toolbox.requires_admin_permission(plan):
+                guidance = "This task needs separate admin approval before it can run."
+            elif self.toolbox.requires_interaction_permission(plan) and not self.state.interaction_enabled:
+                guidance = "Interaction is locked. Turn on I, then say 'yes proceed' to execute it."
+            else:
+                guidance = "Say 'yes proceed' when you want me to execute it."
             return AssistantResponse(
                 spoken_response=(
-                    f"{prefix}{plan.summary} Say 'yes proceed' when you want me "
-                    "to execute it."
+                    f"{prefix}{plan.summary} {guidance}"
                 ),
                 transcript_echo=transcript,
                 plan=plan,
@@ -179,4 +259,14 @@ class AradhyaAssistant:
         return normalized in self._confirmation_phrases
 
     def _is_cancel_phrase(self, normalized: str) -> bool:
-        return normalized in {"cancel", "stop", "never mind", "nevermind", "no cancel"}
+        return normalized in {
+            "cancel",
+            "stop",
+            "never mind",
+            "nevermind",
+            "no",
+            "no thanks",
+            "dont do it",
+            "do not do it",
+            "no cancel",
+        }

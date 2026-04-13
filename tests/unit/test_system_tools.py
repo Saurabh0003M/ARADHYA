@@ -3,7 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.aradhya.assistant_models import AssistantPreferences, DirectoryIndexPolicy
+from src.aradhya.assistant_models import (
+    AssistantPreferences,
+    AssistantState,
+    DirectoryIndexPolicy,
+    PlanAction,
+    PlanKind,
+)
 from src.aradhya.assistant_system_tools import SystemToolbox
 
 
@@ -91,3 +97,40 @@ def test_plan_open_security_blogs_rejects_all_invalid_urls(tmp_path):
     assert plan.ready is False
     assert plan.requires_confirmation is False
     assert "nothing safe to open" in plan.summary
+
+
+def test_execute_blocks_interaction_required_action_when_locked(tmp_path):
+    toolbox = SystemToolbox(
+        build_test_preferences(
+            tmp_path,
+            user_roots=(tmp_path,),
+            security_blog_urls=("https://example.com/security",),
+        ),
+        MagicMock(),
+    )
+    plan = toolbox.plan_open_security_blogs()
+
+    result = toolbox.execute(plan, AssistantState(interaction_enabled=False))
+
+    assert result.success is False
+    assert "Interaction is locked" in result.message
+
+
+def test_execute_blocks_admin_required_action_even_when_interaction_is_enabled(tmp_path):
+    toolbox = SystemToolbox(
+        build_test_preferences(
+            tmp_path,
+            user_roots=(tmp_path,),
+        ),
+        MagicMock(),
+    )
+    plan = PlanAction(
+        kind=PlanKind.OPEN_PATH,
+        summary="I am ready to install updates.",
+        metadata={"target": str(tmp_path), "requires_admin": True},
+    )
+
+    result = toolbox.execute(plan, AssistantState(interaction_enabled=True))
+
+    assert result.success is False
+    assert "requires separate admin approval" in result.message

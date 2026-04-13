@@ -1,10 +1,10 @@
 # Aradhya
 
-Aradhya is a personal AI laptop assistant focused on system-level help, not just chat. The current codebase centers on a safe planner that wakes on demand, echoes the transcript, prepares a task, waits for an explicit confirmation phrase such as `yes proceed`, and only then executes.
+Aradhya is a personal AI laptop assistant focused on system-level help, not just chat. The current codebase now defaults to a floating shell with four end-user controls: `Mic`, `Screen`, `A`, and `I`. Under that shell, the assistant still uses a safe planner that wakes on demand, echoes the transcript, prepares a task, waits for an explicit confirmation phrase such as `yes proceed`, and only then executes.
 
 ## Current Foundation
 
-- Wake-aware assistant session model with `wake`, `ctrl+win`, and `sleep` flow in the CLI.
+- Floating-shell entrypoint with `Mic`, `Screen`, `A`, and `I`, plus a retained developer CLI behind `--cli`.
 - Strict confirmation for device-affecting system actions, with immediate execution for low-risk internal state changes.
 - Local directory-index refresh that creates or updates `project_tree.txt` on wake and local-data queries.
 - Heuristics for opening paths, finding the most `.txt`-dense folder, reopening yesterday's active project, opening preferred security blogs, and toggling Debate AI mode.
@@ -12,7 +12,7 @@ Aradhya is a personal AI laptop assistant focused on system-level help, not just
 - Safe dry-run execution by default so the assistant can be tested without launching apps unexpectedly.
 - A runtime profile that binds Aradhya to a configurable Ollama model instead of hard-coding Gemma into the code.
 - A voice inbox pipeline with explicit folders for dropped audio, processed files, and transcripts, plus an optional `faster_whisper` provider for real local transcription.
-- Optional live voice activation that can listen for a global hotkey, record from the microphone, and route the transcript through the same planner and confirmation gate.
+- One-tap mic capture from the shell for supported voice profiles, plus optional live voice activation through a global hotkey for developer testing.
 - Optional local spoken replies during live voice activation through a Windows-friendly `pyttsx3` output provider.
 
 If you want a hands-on walkthrough, open `docs/OPERATING_GUIDE.md`.
@@ -69,6 +69,7 @@ If you want the milestone order and implementation direction, open
 |   `-- aradhya/
 |       |-- assistant_core.py
 |       |-- assistant_indexer.py
+|       |-- floating_shell.py
 |       |-- llm_planner.py
 |       |-- logging_utils.py
 |       |-- json_extractor.py
@@ -131,13 +132,30 @@ If you already activated the environment, this also works:
 python -m core.agent.aradhya
 ```
 
+This now opens the floating shell by default.
+
+Use the older developer CLI only when you need it:
+
+```powershell
+python -m core.agent.aradhya --cli
+```
+
 To verify a new machine after cloning on `C:` or `D:`, run:
 
 ```powershell
 scripts\doctor.bat
 ```
 
-Inside the CLI:
+Inside the floating shell:
+
+- Use `Mic` for one-tap voice capture when a self-transcribing voice profile is configured.
+- Use `Screen` to attach bounded screenshot-guidance context.
+- Use `A` to arm higher-effort reasoning for the next request only.
+- Use `I` to unlock user-level machine actions for the current session.
+- Type a request in the input box and press `Send`.
+- Say or type `yes proceed` to execute a pending plan after reviewing it.
+
+Inside the developer CLI (`--cli`):
 
 - Type `wake` to simulate the floating icon.
 - Type `ctrl+win` to simulate the hotkey wake path.

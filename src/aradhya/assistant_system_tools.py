@@ -220,7 +220,35 @@ class SystemToolbox:
             metadata={"enabled": enabled},
         )
 
+    def requires_interaction_permission(self, plan: PlanAction) -> bool:
+        """Return whether executing this plan needs unlocked user interaction."""
+
+        return plan.kind in {
+            PlanKind.OPEN_PATH,
+            PlanKind.OPEN_SECURITY_BLOGS,
+            PlanKind.LOCATE_TXT_DENSE_FOLDER,
+            PlanKind.OPEN_YESTERDAYS_PROJECT,
+            PlanKind.OPEN_RECENT_GAME,
+        }
+
+    def requires_admin_permission(self, plan: PlanAction) -> bool:
+        """Return whether this plan requires a separate elevation step."""
+
+        return bool(plan.metadata.get("requires_admin", False))
+
     def execute(self, plan: PlanAction, state: AssistantState) -> ExecutionResult:
+        if self.requires_admin_permission(plan):
+            return ExecutionResult(
+                False,
+                "This task requires separate admin approval. Elevation is not wired in yet.",
+            )
+
+        if self.requires_interaction_permission(plan) and not state.interaction_enabled:
+            return ExecutionResult(
+                False,
+                "Interaction is locked. Turn on I to allow machine actions, then confirm again.",
+            )
+
         if plan.kind == PlanKind.TOGGLE_DEBATE:
             enabled = bool(plan.metadata.get("enabled"))
             state.debate_mode_enabled = enabled

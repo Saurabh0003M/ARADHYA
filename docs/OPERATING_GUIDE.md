@@ -65,12 +65,38 @@ venv\Scripts\python.exe -m core.agent.aradhya
 Why this works:
 
 - `core/agent/aradhya.py` is the compatibility launcher
-- it forwards to `src/aradhya/main.py`
-- `main.py` creates the assistant, loads config, prepares the voice folders, and starts the CLI loop
+- it now opens `src/aradhya/floating_shell.py` by default
+- `floating_shell.py` creates the assistant, loads config, prepares the voice folders, and starts the floating shell
+- `src/aradhya/main.py` is still available as the developer/debug CLI
+
+If you explicitly want the older CLI:
+
+```powershell
+venv\Scripts\python.exe -m core.agent.aradhya --cli
+```
 
 ## 4. First Commands To Try
 
-Once Aradhya starts, type these exactly:
+In the floating shell, try this first:
+
+```text
+Press I
+Type: open aradhya
+Type: yes proceed
+Press A
+Type: research the safest rollout for this change
+Press Screen
+Type: help me with what is on screen
+```
+
+What each shell control does:
+
+- `Mic`: starts one-tap microphone capture when the voice profile supports local transcription
+- `Screen`: turns on bounded screenshot-guidance mode for the current session
+- `A`: enables higher-effort reasoning for the next request only, then auto-resets
+- `I`: unlocks user-level machine actions for the current session, but does not grant admin actions
+
+If you start the developer CLI with `--cli`, type these exactly:
 
 ```text
 cache validate

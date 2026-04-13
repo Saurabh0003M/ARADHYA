@@ -56,7 +56,11 @@ class VoiceActivatedAradhya:
                 "'faster_whisper' or 'whisper_command'."
             )
 
-        if microphone is None or hotkey_listener is None:
+        if microphone is None:
+            support = describe_voice_capture_support(runtime_profile)
+            if not support.available:
+                raise RuntimeError(support.message)
+        if hotkey_listener is None and runtime_profile.voice_activation.hotkey_key:
             support = describe_voice_activation_support(runtime_profile)
             if not support.available:
                 raise RuntimeError(support.message)
@@ -69,24 +73,34 @@ class VoiceActivatedAradhya:
         self._running = False
         self._capture_counter = 0
         self._speech_output_warning: str | None = None
-        self.microphone = microphone or MicrophoneCapture(
-            config=AudioConfig(
-                sample_rate=runtime_profile.voice_activation.sample_rate,
-                channels=runtime_profile.voice_activation.channels,
-                chunk_size=runtime_profile.voice_activation.chunk_size,
-                silence_threshold=runtime_profile.voice_activation.silence_threshold,
-                silence_duration=runtime_profile.voice_activation.silence_duration,
-                max_recording_duration=runtime_profile.voice_activation.max_recording_duration,
-            ),
-            backend=get_available_backend(runtime_profile.voice_activation.preferred_backend),
-        )
-        self.hotkey_listener = hotkey_listener or HotkeyListener(
-            build_hotkey_config(
-                runtime_profile.voice_activation.hotkey_modifiers,
-                runtime_profile.voice_activation.hotkey_key,
-            ),
-            self._handle_hotkey_press,
-        )
+        microphone_backend = get_available_backend(runtime_profile.voice_activation.preferred_backend)
+        if microphone is None:
+            if microphone_backend is None:
+                raise RuntimeError(
+                    "No supported microphone backend is available. "
+                    "Install requirements-voice-activation.txt."
+                )
+            microphone = MicrophoneCapture(
+                config=AudioConfig(
+                    sample_rate=runtime_profile.voice_activation.sample_rate,
+                    channels=runtime_profile.voice_activation.channels,
+                    chunk_size=runtime_profile.voice_activation.chunk_size,
+                    silence_threshold=runtime_profile.voice_activation.silence_threshold,
+                    silence_duration=runtime_profile.voice_activation.silence_duration,
+                    max_recording_duration=runtime_profile.voice_activation.max_recording_duration,
+                ),
+                backend=microphone_backend,
+            )
+        self.microphone = microphone
+        self.hotkey_listener = hotkey_listener
+        if self.hotkey_listener is None and runtime_profile.voice_activation.hotkey_key:
+            self.hotkey_listener = HotkeyListener(
+                build_hotkey_config(
+                    runtime_profile.voice_activation.hotkey_modifiers,
+                    runtime_profile.voice_activation.hotkey_key,
+                ),
+                self._handle_hotkey_press,
+            )
         self.speech_synthesizer = speech_synthesizer
         if self.speech_synthesizer is None:
             try:
@@ -103,6 +117,11 @@ class VoiceActivatedAradhya:
         if self._running:
             self.output_handler("Voice > Live voice activation is already running.")
             return
+        if self.hotkey_listener is None:
+            raise RuntimeError(
+                "Live voice activation requires a configured hotkey. "
+                "Set voice_activation.hotkey_key in profile.json or use one-tap mic capture."
+            )
 
         self._running = True
         self.voice_manager.ensure_directories()
@@ -131,7 +150,8 @@ class VoiceActivatedAradhya:
             return
 
         self._running = False
-        self.hotkey_listener.stop()
+        if self.hotkey_listener is not None:
+            self.hotkey_listener.stop()
         if self.microphone.is_recording():
             self.microphone.cancel_recording()
         logger.info("Stopped live voice activation")
@@ -145,6 +165,11 @@ class VoiceActivatedAradhya:
     def _handle_hotkey_press(self) -> None:
         if not self._running:
             return
+        self.capture_once()
+
+    def capture_once(self) -> None:
+        """Capture a single utterance and route it into the assistant."""
+
         if not self._activation_lock.acquire(blocking=False):
             logger.info("Ignored overlapping hotkey press while live capture was active")
             return
@@ -256,6 +281,33 @@ def describe_voice_activation_support(runtime_profile: RuntimeProfile) -> VoiceA
     return VoiceActivationSupport(
         available=True,
         message="Live voice activation is available on this machine.",
+    )
+
+
+def describe_voice_capture_support(runtime_profile: RuntimeProfile) -> VoiceActivationSupport:
+    """Return whether one-tap microphone capture can run on the current machine."""
+
+    if runtime_profile.voice.provider not in {"faster_whisper", "whisper_command"}:
+        return VoiceActivationSupport(
+            available=False,
+            message=(
+                "Mic capture requires a self-transcribing voice provider. "
+                "Set voice.provider to 'faster_whisper' or 'whisper_command' in profile.json."
+            ),
+        )
+
+    if get_available_backend(runtime_profile.voice_activation.preferred_backend) is None:
+        return VoiceActivationSupport(
+            available=False,
+            message=(
+                "No supported microphone backend is available. Install "
+                "requirements-voice-activation.txt."
+            ),
+        )
+
+    return VoiceActivationSupport(
+        available=True,
+        message="One-tap microphone capture is available on this machine.",
     )
 
 

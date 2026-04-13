@@ -6,6 +6,7 @@ from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import (
     AssistantPreferences,
     DirectoryIndexPolicy,
+    PlanAction,
     PlanKind,
     WakeSource,
 )
@@ -51,6 +52,65 @@ def test_open_request_waits_for_explicit_confirmation(tmp_path):
     assert confirmation.result.success is True
     assert "Dry run" in confirmation.spoken_response
     assert assistant.state.pending_plan is None
+
+
+def test_open_request_stays_pending_until_interaction_is_unlocked(tmp_path):
+    target_dir = tmp_path / "Notes"
+    target_dir.mkdir()
+
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+
+    response = assistant.handle_transcript("open Notes")
+
+    assert response.awaiting_confirmation is True
+    assert response.plan is not None
+    assert response.plan.kind == PlanKind.OPEN_PATH
+    assert "Interaction is locked" in response.spoken_response
+    assert assistant.state.pending_plan is not None
+
+    blocked = assistant.handle_transcript("yes proceed")
+
+    assert blocked.awaiting_confirmation is True
+    assert blocked.result is None
+    assert blocked.plan is not None
+    assert blocked.plan.kind == PlanKind.OPEN_PATH
+    assert "Interaction is locked" in blocked.spoken_response
+    assert assistant.state.pending_plan is not None
+
+    assistant.set_interaction_enabled(True)
+    confirmation = assistant.handle_transcript("yes proceed")
+
+    assert confirmation.result is not None
+    assert confirmation.result.success is True
+    assert "Dry run" in confirmation.spoken_response
+    assert assistant.state.pending_plan is None
+
+
+def test_admin_required_task_stays_blocked_even_when_interaction_is_enabled(tmp_path):
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+    assistant.set_interaction_enabled(True)
+    assistant.state.pending_plan = PlanAction(
+        kind=PlanKind.OPEN_PATH,
+        summary="I am ready to install updates.",
+        metadata={"target": str(tmp_path), "requires_admin": True},
+    )
+
+    blocked = assistant.handle_transcript("yes proceed")
+
+    assert blocked.awaiting_confirmation is True
+    assert blocked.result is None
+    assert blocked.plan is not None
+    assert blocked.plan.metadata["requires_admin"] is True
+    assert "requires separate admin approval" in blocked.spoken_response
+    assert assistant.state.pending_plan is not None
 
 
 def test_local_query_refreshes_directory_index(tmp_path):

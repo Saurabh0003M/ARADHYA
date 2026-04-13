@@ -36,7 +36,13 @@ class IntentPlanner:
             else None
         )
 
-    def build_plan(self, transcript: str, state: AssistantState) -> PlanAction:
+    def build_plan(
+        self,
+        transcript: str,
+        state: AssistantState,
+        *,
+        advanced_reasoning: bool = False,
+    ) -> PlanAction:
         normalized = self._normalize_text(transcript)
         # Fast local matches stay first so exact commands remain responsive and
         # predictable even when the model is unavailable.
@@ -46,7 +52,11 @@ class IntentPlanner:
 
         if self.llm_planner is not None:
             logger.info("No rule matched transcript '{}'; using LLM fallback planner.", transcript)
-            return self.llm_planner.build_plan(transcript, state)
+            return self.llm_planner.build_plan(
+                transcript,
+                state,
+                advanced_reasoning=advanced_reasoning,
+            )
 
         return PlanAction(
             kind=PlanKind.UNKNOWN,

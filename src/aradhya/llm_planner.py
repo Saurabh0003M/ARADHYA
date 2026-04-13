@@ -48,13 +48,19 @@ class LLMIntentPlanner:
         self.model_provider = model_provider
         self.now_provider = now_provider
 
-    def build_plan(self, transcript: str, state: AssistantState) -> PlanAction:
+    def build_plan(
+        self,
+        transcript: str,
+        state: AssistantState,
+        *,
+        advanced_reasoning: bool = False,
+    ) -> PlanAction:
         try:
-            raw_response = self.model_provider.generate(
+            decision = self._request_decision(
                 transcript,
-                system_prompt=self._build_system_prompt(state),
+                state,
+                advanced_reasoning=advanced_reasoning,
             )
-            decision = self._parse_decision(raw_response.text)
         except Exception as error:
             logger.warning("LLM planner failed for transcript '{}': {}", transcript, error)
             return PlanAction(
@@ -87,6 +93,7 @@ class LLMIntentPlanner:
                     "llm_intent": decision.intent,
                     "llm_confidence": decision.confidence,
                     "llm_reasoning": decision.reasoning,
+                    "advanced_reasoning": advanced_reasoning,
                 },
             )
 
@@ -98,11 +105,65 @@ class LLMIntentPlanner:
                 "llm_intent": decision.intent,
                 "llm_confidence": decision.confidence,
                 "llm_reasoning": decision.reasoning,
+                "advanced_reasoning": advanced_reasoning,
             },
         )
 
-    def _build_system_prompt(self, state: AssistantState) -> str:
+    def _request_decision(
+        self,
+        transcript: str,
+        state: AssistantState,
+        *,
+        advanced_reasoning: bool,
+    ) -> LLMPlannerDecision:
+        raw_response = self.model_provider.generate(
+            transcript,
+            system_prompt=self._build_system_prompt(
+                state,
+                advanced_reasoning=advanced_reasoning,
+            ),
+        )
+        decision = self._parse_decision(raw_response.text)
+        if not advanced_reasoning:
+            return decision
+
+        review_prompt = (
+            "Review the initial classification for safety and accuracy.\n"
+            f"User transcript: {transcript}\n"
+            f"Initial JSON: {raw_response.text.strip()}\n"
+            "Return only valid JSON with the same schema. "
+            "If the initial classification is already correct, repeat it exactly. "
+            "If it is unsafe, unsupported, or too speculative, correct it."
+        )
+        try:
+            review_response = self.model_provider.generate(
+                review_prompt,
+                system_prompt=self._build_review_system_prompt(state),
+            )
+            return self._parse_decision(review_response.text)
+        except Exception as error:
+            logger.warning(
+                "Advanced review pass failed for transcript '{}': {}. Falling back to initial decision.",
+                transcript,
+                error,
+            )
+            return decision
+
+    def _build_system_prompt(
+        self,
+        state: AssistantState,
+        *,
+        advanced_reasoning: bool = False,
+    ) -> str:
         debate_state = "enabled" if state.debate_mode_enabled else "disabled"
+        screen_state = "active" if state.screen_context_active else "inactive"
+        advanced_suffix = (
+            " Advanced reasoning is enabled for this request. "
+            "Be extra conservative, reason carefully about ambiguity, and prefer UNKNOWN "
+            "over risky guesses. "
+            if advanced_reasoning
+            else ""
+        )
         return (
             "You are Aradhya's intent classifier. "
             "Return only valid JSON with these keys: "
@@ -115,7 +176,14 @@ class LLMIntentPlanner:
             "Use target only when the intent needs a path, app, or named thing. "
             "Use enabled only for TOGGLE_DEBATE. "
             "Be conservative: if you are unsure, return UNKNOWN or a confidence below 0.65. "
-            f"The user's Debate AI mode is currently {debate_state}."
+            f"The user's Debate AI mode is currently {debate_state}. "
+            f"Screen guidance mode is currently {screen_state}.{advanced_suffix}"
+        )
+
+    def _build_review_system_prompt(self, state: AssistantState) -> str:
+        return self._build_system_prompt(state, advanced_reasoning=True) + (
+            " You are reviewing an initial classifier output before execution planning. "
+            "Correct unsafe or weak classifications."
         )
 
     def _parse_decision(self, response_text: str) -> LLMPlannerDecision:

@@ -2,10 +2,14 @@
   "directory_index_path": "project_tree.txt",
   "context_cache_dir": "data/processed/context",
   "confirmation_phrases": [
+    "yes",
     "yes proceed",
     "proceed",
     "confirm",
-    "go ahead"
+    "go ahead",
+    "ok",
+    "okay",
+    "do it"
   ],
   "security_blog_urls": [
     "https://krebsonsecurity.com/",

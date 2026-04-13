@@ -94,6 +94,8 @@ def test_load_runtime_profile_reads_custom_model_and_voice_paths(tmp_path):
 def test_default_runtime_profile_disables_spoken_replies_by_default():
     profile = build_default_runtime_profile()
 
+    assert profile.model.provider == "ollama"
+    assert profile.model.base_url == "http://127.0.0.1:11434"
     assert profile.voice_output.enabled is False
     assert profile.voice_output.provider == "pyttsx3"
     assert profile.voice_output.voice_id == ""
