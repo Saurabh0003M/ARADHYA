@@ -42,6 +42,9 @@ Notes:
 - The backend now defaults its workspace path to the cloned repo root instead of `/app/aradhya_repo`.
 - MongoDB is optional for first-run exploration; if `MONGO_URL` is unset or unavailable, the backend uses an in-memory store for settings, chat history, and templates.
 - Chat generation works with Ollama by default. If you prefer cloud models, set `EMERGENT_LLM_KEY` and change the model in Settings.
+- `scripts\first_run_fullstack.bat` now asks whether you want an isolated backend venv or to use the current/system Python environment. The default choice is the isolated venv.
+- `scripts\run_fullstack.bat` starts the backend and frontend in separate terminal windows after setup.
+- By default Aradhya searches only the current user's home folder and the cloned repo root. It does not scan the whole main drive unless you add custom `user_roots` in `core\memory\preferences.json`.
 
 ## Current Foundation
 
@@ -240,9 +243,11 @@ Machine-specific overrides can live in `core/memory/profile.local.json`, which i
 ## Windows Helper Scripts
 
 - `scripts\first_run.bat`: finds a usable Python launcher, creates or repairs `venv`, installs the core dependencies, records a dependency stamp, and then runs the setup doctor.
+- `scripts\first_run_fullstack.bat`: checks Python and npm, asks whether to use an isolated backend venv or the current/system Python, installs `backend\requirements.txt`, installs frontend packages, and prepares `.env` files for the full-stack app.
 - `scripts\doctor.bat`: checks Python availability, verifies the local `venv`, confirms core dependencies, warns when `requirements*.txt` changed after the last install, and inspects Ollama plus the configured model.
 - `scripts\setup.bat`: compatibility wrapper that now delegates to `scripts\first_run.bat`.
 - `scripts\run_agent.bat`: launches Aradhya through the repo-local `venv`.
+- `scripts\run_fullstack.bat`: starts the FastAPI backend and React frontend for the review-branch web app.
 - `scripts\run_tests.bat`: runs the unit test suite through the repo-local `venv`.
 
 ## Voice Files
