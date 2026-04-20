@@ -1,12 +1,13 @@
-"""Aradhya Agentic Coding Assistant - FastAPI Backend"""
+"""Aradhya Agentic Coding Assistant - FastAPI Backend."""
 import os
 import re
-import uuid
-import subprocess
 import shutil
+import subprocess
+import uuid
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import Any, Optional
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -21,6 +22,11 @@ from bs4 import BeautifulSoup
 
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_WORKSPACE_PATH = os.environ.get("ARADHYA_WORKSPACE_PATH", str(REPO_ROOT))
+DEFAULT_MODEL_PROVIDER = os.environ.get("ARADHYA_MODEL_PROVIDER", "ollama")
+DEFAULT_MODEL_NAME = os.environ.get("ARADHYA_MODEL_NAME", "gemma4:e4b")
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME", "aradhya")
 LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
@@ -28,8 +34,11 @@ LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 app = FastAPI(title="Aradhya Agentic Assistant")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
+client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
+db = client[DB_NAME] if client is not None else None
+MEMORY_SETTINGS: dict[str, dict[str, Any]] = {}
+MEMORY_MESSAGES: list[dict[str, Any]] = []
+MEMORY_TEMPLATES: list[dict[str, Any]] = []
 
 # ============================================================
 # MODELS
@@ -121,30 +130,38 @@ async def get_config():
     defaults = {
         "key": "global",
         "voice_preset": "default-female",
-        "model_provider": "openai",
-        "model_name": "gpt-4.1",
+        "model_provider": DEFAULT_MODEL_PROVIDER,
+        "model_name": DEFAULT_MODEL_NAME,
         "security_filter": True,
         "sandbox_mode": True,
         "theme": "dark",
         "assistant_name": "Aradhya",
-        "workspace_path": "/app/aradhya_repo",
+        "workspace_path": DEFAULT_WORKSPACE_PATH,
     }
-    settings = await db.settings.find_one({"key": "global"}, {"_id": 0})
+    settings = await _find_one("settings", {"key": "global"})
     if not settings:
-        await db.settings.insert_one(dict(defaults))
+        await _insert_one("settings", dict(defaults))
         return dict(defaults)
-    # Merge defaults for any missing keys
     merged = {**defaults, **settings}
     return merged
 
 async def get_llm_response(message: str, session_id: str, system_prompt: str = None) -> str:
+    config = await get_config()
+    name = config.get("assistant_name", "Aradhya")
+    provider = config.get("model_provider", DEFAULT_MODEL_PROVIDER)
+    model_name = config.get("model_name", DEFAULT_MODEL_NAME)
+    final_prompt = (system_prompt or AGENTIC_SYSTEM_PROMPT).replace("{assistant_name}", name).replace("{workspace_context}", "")
+
+    if provider == "ollama":
+        return await _generate_with_ollama(message, final_prompt, model_name)
+
+    if not LLM_KEY:
+        logger.warning("Cloud model selected without EMERGENT_LLM_KEY; attempting Ollama fallback.")
+        return await _generate_with_ollama(message, final_prompt, DEFAULT_MODEL_NAME)
+
     try:
-        config = await get_config()
-        name = config.get("assistant_name", "Aradhya")
-        final_prompt = (system_prompt or AGENTIC_SYSTEM_PROMPT).replace("{assistant_name}", name).replace("{workspace_context}", "")
-        
         chat = LlmChat(api_key=LLM_KEY, session_id=session_id, system_message=final_prompt)
-        chat.with_model("openai", config.get("model_name", "gpt-4.1"))
+        chat.with_model(provider, model_name)
         response = await chat.send_message(UserMessage(text=message))
         return response
     except Exception as e:
@@ -157,6 +174,134 @@ async def generate_command(description: str, platform: str, level: str) -> str:
     prompt_sys = COMMAND_SYSTEM_PROMPT.replace("{assistant_name}", name).replace("{platform}", platform).replace("{level}", level)
     prompt = f"Generate a command/script for: {description}"
     return await get_llm_response(prompt, f"cmd-{uuid.uuid4().hex[:8]}", prompt_sys)
+
+
+def _memory_collection(name: str):
+    return {
+        "settings": MEMORY_SETTINGS,
+        "messages": MEMORY_MESSAGES,
+        "templates": MEMORY_TEMPLATES,
+    }[name]
+
+
+async def _find_one(collection: str, query: dict[str, Any]) -> dict[str, Any] | None:
+    if db is not None:
+        try:
+            return await getattr(db, collection).find_one(query, {"_id": 0})
+        except Exception as exc:
+            logger.warning(f"Falling back to in-memory {collection}: {exc}")
+
+    store = _memory_collection(collection)
+    if collection == "settings":
+        key = query.get("key")
+        doc = store.get(key)
+        return deepcopy(doc) if doc else None
+
+    for item in store:
+        if all(item.get(k) == v for k, v in query.items()):
+            return deepcopy(item)
+    return None
+
+
+async def _insert_one(collection: str, payload: dict[str, Any]) -> None:
+    if db is not None:
+        try:
+            await getattr(db, collection).insert_one(dict(payload))
+            return
+        except Exception as exc:
+            logger.warning(f"Falling back to in-memory {collection}: {exc}")
+
+    if collection == "settings":
+        MEMORY_SETTINGS[payload["key"]] = deepcopy(payload)
+        return
+
+    _memory_collection(collection).append(deepcopy(payload))
+
+
+async def _update_one(collection: str, query: dict[str, Any], update_fields: dict[str, Any], upsert: bool = False) -> None:
+    if db is not None:
+        try:
+            await getattr(db, collection).update_one(query, {"$set": update_fields}, upsert=upsert)
+            return
+        except Exception as exc:
+            logger.warning(f"Falling back to in-memory {collection}: {exc}")
+
+    if collection == "settings":
+        key = query.get("key")
+        current = deepcopy(MEMORY_SETTINGS.get(key, {}))
+        current.update(query)
+        current.update(update_fields)
+        MEMORY_SETTINGS[key] = current
+        return
+
+    store = _memory_collection(collection)
+    for item in store:
+        if all(item.get(k) == v for k, v in query.items()):
+            item.update(update_fields)
+            return
+    if upsert:
+        doc = deepcopy(query)
+        doc.update(update_fields)
+        store.append(doc)
+
+
+async def _find_many(collection: str, query: dict[str, Any] | None = None, sort_key: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    query = query or {}
+    if db is not None:
+        try:
+            cursor = getattr(db, collection).find(query, {"_id": 0})
+            if sort_key:
+                cursor = cursor.sort(sort_key, 1)
+            return await cursor.to_list(limit)
+        except Exception as exc:
+            logger.warning(f"Falling back to in-memory {collection}: {exc}")
+
+    items = [deepcopy(item) for item in _memory_collection(collection) if all(item.get(k) == v for k, v in query.items())]
+    if sort_key:
+        items.sort(key=lambda item: item.get(sort_key, ""))
+    return items[:limit]
+
+
+async def _delete_one(collection: str, query: dict[str, Any]) -> int:
+    if db is not None:
+        try:
+            result = await getattr(db, collection).delete_one(query)
+            return result.deleted_count
+        except Exception as exc:
+            logger.warning(f"Falling back to in-memory {collection}: {exc}")
+
+    store = _memory_collection(collection)
+    if isinstance(store, list):
+        for index, item in enumerate(store):
+            if all(item.get(k) == v for k, v in query.items()):
+                del store[index]
+                return 1
+    return 0
+
+
+async def _generate_with_ollama(message: str, system_prompt: str, model_name: str) -> str:
+    payload = {
+        "model": model_name,
+        "prompt": message,
+        "system": system_prompt,
+        "stream": False,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as http_client:
+            response = await http_client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
+            response.raise_for_status()
+            data = response.json()
+    except Exception as exc:
+        logger.error(f"Ollama error: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "No working LLM is configured. Start Ollama with a local model or "
+                "set EMERGENT_LLM_KEY for cloud providers."
+            ),
+        ) from exc
+
+    return data.get("response", "").strip()
 
 # ============================================================
 # SECURITY FILTER
@@ -224,14 +369,22 @@ VOICE_PRESETS = [
 @app.get("/api/health")
 async def health_check():
     config = await get_config()
-    return {"status": "healthy", "service": config.get("assistant_name", "Aradhya"), "version": "2.0.0", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {
+        "status": "healthy",
+        "service": config.get("assistant_name", "Aradhya"),
+        "version": "2.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "storage": "mongodb" if db is not None else "memory",
+        "workspace_path": config.get("workspace_path", DEFAULT_WORKSPACE_PATH),
+        "model_provider": config.get("model_provider", DEFAULT_MODEL_PROVIDER),
+    }
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     session_id = req.session_id or str(uuid.uuid4())
     config = await get_config()
     
-    await db.messages.insert_one({"session_id": session_id, "role": "user", "content": req.message, "mode": req.mode, "created_at": datetime.now(timezone.utc).isoformat()})
+    await _insert_one("messages", {"session_id": session_id, "role": "user", "content": req.message, "mode": req.mode, "created_at": datetime.now(timezone.utc).isoformat()})
 
     workspace_context = ""
     ws_path = req.workspace_path or config.get("workspace_path", "")
@@ -252,12 +405,12 @@ async def chat(req: ChatRequest):
         sys_prompt = AGENTIC_SYSTEM_PROMPT.replace("{workspace_context}", workspace_context)
         response_text = await get_llm_response(req.message, session_id, sys_prompt)
 
-    await db.messages.insert_one({"session_id": session_id, "role": "assistant", "content": response_text, "mode": req.mode, "created_at": datetime.now(timezone.utc).isoformat()})
+    await _insert_one("messages", {"session_id": session_id, "role": "assistant", "content": response_text, "mode": req.mode, "created_at": datetime.now(timezone.utc).isoformat()})
     return {"session_id": session_id, "response": response_text, "mode": req.mode}
 
 @app.get("/api/chat/history")
 async def get_chat_history(session_id: str):
-    messages = await db.messages.find({"session_id": session_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    messages = await _find_many("messages", {"session_id": session_id}, sort_key="created_at", limit=200)
     return {"session_id": session_id, "messages": messages}
 
 # ============================================================
@@ -346,7 +499,7 @@ async def shell_execute(req: ShellRequest):
     if config.get("sandbox_mode", True):
         raise HTTPException(status_code=403, detail="Sandbox mode is ON. Disable it in settings to run shell commands.")
     
-    cwd = req.cwd or config.get("workspace_path", "/app")
+    cwd = req.cwd or config.get("workspace_path", DEFAULT_WORKSPACE_PATH)
     try:
         result = subprocess.run(
             req.command, shell=True, capture_output=True, text=True,
@@ -382,7 +535,7 @@ def run_git(args: list, cwd: str) -> dict:
 @app.post("/api/git")
 async def git_action(req: GitRequest):
     config = await get_config()
-    cwd = req.cwd or config.get("workspace_path", "/app/aradhya_repo")
+    cwd = req.cwd or config.get("workspace_path", DEFAULT_WORKSPACE_PATH)
     args = req.args or {}
 
     if req.action == "status":
@@ -463,7 +616,7 @@ async def select_model(data: dict):
     provider = data.get("provider", "openai")
     if not model_name:
         raise HTTPException(status_code=400, detail="model_name required")
-    await db.settings.update_one({"key": "global"}, {"$set": {"model_name": model_name, "model_provider": provider}}, upsert=True)
+    await _update_one("settings", {"key": "global"}, {"model_name": model_name, "model_provider": provider}, upsert=True)
     return {"status": "ok", "model_name": model_name, "provider": provider}
 
 # ============================================================
@@ -471,7 +624,7 @@ async def select_model(data: dict):
 # ============================================================
 @app.get("/api/command/templates")
 async def get_command_templates():
-    custom = await db.templates.find({}, {"_id": 0}).to_list(100)
+    custom = await _find_many("templates", limit=100)
     return {"templates": BUILTIN_TEMPLATES + custom}
 
 @app.post("/api/command/templates")
@@ -486,14 +639,13 @@ async def create_template(req: TemplateCreate):
         "builtin": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.templates.insert_one(template)
-    template.pop("_id", None)
+    await _insert_one("templates", template)
     return template
 
 @app.delete("/api/command/templates/{template_id}")
 async def delete_template(template_id: str):
-    result = await db.templates.delete_one({"id": template_id, "builtin": {"$ne": True}})
-    if result.deleted_count == 0:
+    deleted_count = await _delete_one("templates", {"id": template_id})
+    if deleted_count == 0:
         raise HTTPException(status_code=404, detail="Template not found or is built-in")
     return {"status": "deleted"}
 
@@ -522,9 +674,9 @@ async def get_settings():
 
 @app.put("/api/settings")
 async def update_settings(req: SettingsUpdate):
-    update_data = {k: v for k, v in req.dict().items() if v is not None}
+    update_data = {k: v for k, v in req.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
-    await db.settings.update_one({"key": "global"}, {"$set": update_data}, upsert=True)
-    settings = await db.settings.find_one({"key": "global"}, {"_id": 0})
+    await _update_one("settings", {"key": "global"}, update_data, upsert=True)
+    settings = await _find_one("settings", {"key": "global"})
     return settings

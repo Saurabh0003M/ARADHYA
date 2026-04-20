@@ -15,8 +15,8 @@ export default function App() {
   const [voicePresets, setVoicePresets] = useState([]);
   const [settings, setSettings] = useState({
     voice_preset: 'default-female', security_filter: true, sandbox_mode: true,
-    theme: 'dark', assistant_name: 'Aradhya', workspace_path: '/app/aradhya_repo',
-    model_name: 'gpt-4.1', model_provider: 'openai',
+    theme: 'dark', assistant_name: 'Aradhya', workspace_path: '',
+    model_name: 'gemma4:e4b', model_provider: 'ollama',
   });
   const [panelView, setPanelView] = useState(null);
   const [ttsEnabled, setTtsEnabled] = useState(true);

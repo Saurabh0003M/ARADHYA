@@ -2,6 +2,47 @@
 
 Aradhya is a personal AI laptop assistant focused on system-level help, not just chat. The current codebase now defaults to a floating shell with four end-user controls: `Mic`, `Screen`, `A`, and `I`. Under that shell, the assistant still uses a safe planner that wakes on demand, echoes the transcript, prepares a task, waits for an explicit confirmation phrase such as `yes proceed`, and only then executes.
 
+## Full-Stack Review Branch
+
+This review branch also includes a generated web app:
+
+- `backend/`: FastAPI API for chat, git, workspace, settings, templates, and search
+- `frontend/`: React UI with the Air Command hub and terminal-style panels
+
+Quick start for a first-time user:
+
+```powershell
+git clone https://github.com/Saurabh0003M/ARADHYA.git
+cd ARADHYA
+git checkout codex-full-stack-ai-review
+```
+
+Backend:
+
+```powershell
+py -3.11 -m venv .venv-backend
+.venv-backend\Scripts\python.exe -m pip install --upgrade pip
+.venv-backend\Scripts\python.exe -m pip install -r backend\requirements.txt
+Copy-Item backend\.env.example backend\.env
+.venv-backend\Scripts\python.exe -m uvicorn backend.server:app --host 127.0.0.1 --port 8001 --reload
+```
+
+Frontend:
+
+```powershell
+cd frontend
+Copy-Item .env.example .env.local
+npm install
+npm start
+```
+
+Notes:
+
+- The frontend now defaults to `http://localhost:8001` if `REACT_APP_BACKEND_URL` is unset.
+- The backend now defaults its workspace path to the cloned repo root instead of `/app/aradhya_repo`.
+- MongoDB is optional for first-run exploration; if `MONGO_URL` is unset or unavailable, the backend uses an in-memory store for settings, chat history, and templates.
+- Chat generation works with Ollama by default. If you prefer cloud models, set `EMERGENT_LLM_KEY` and change the model in Settings.
+
 ## Current Foundation
 
 - Floating-shell entrypoint with `Mic`, `Screen`, `A`, and `I`, plus a retained developer CLI behind `--cli`.

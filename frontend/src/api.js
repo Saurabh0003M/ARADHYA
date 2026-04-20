@@ -1,4 +1,4 @@
-const API = process.env.REACT_APP_BACKEND_URL;
+const API = (process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001').replace(/\/$/, '');
 
 const f = async (url, opts = {}) => {
   const res = await fetch(`${API}${url}`, { headers: { 'Content-Type': 'application/json' }, ...opts });
