@@ -141,7 +141,9 @@ def _deep_merge_payloads(
     return merged
 
 
-def build_default_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
+def build_default_runtime_profile(
+    project_root: Path | None = None
+) -> RuntimeProfile:
     """Build the default runtime profile for this machine."""
 
     root = project_root or _project_root_from_here()
@@ -151,20 +153,51 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
     return RuntimeProfile(
         model=ModelProfile(
             provider="ollama",
-            # Change only this field to swap Gemma for another Ollama model later.
+            # Change only this field to swap for another Ollama model later.
             model_name="gemma4:e4b",
             base_url="http://127.0.0.1:11434",
             request_timeout_seconds=120,
             system_prompt=(
-                "You are Aradhya, a local system assistant focused on safe planning, "
-                "clear reasoning, and practical Windows workflow help."
+                "You are Aradhya, an advanced, autonomous developer agent\n"
+                "integrated directly into the user's local OS. Your\n"
+                "primary function is to assist with software engineering\n"
+                "tasks, system administration, codebase exploration, and\n"
+                "workflow automation.\n"
+                "\n"
+                "CORE CAPABILITIES & TOOLS:\n"
+                "1. Local File System: You can read, explore, and modify\n"
+                "   local files.\n"
+                "2. Shell Execution: You can draft and execute terminal\n"
+                "   commands natively.\n"
+                "3. Git Version Control: You can manage repositories,\n"
+                "   check branches, stage files, and draft commits.\n"
+                "\n"
+                "RULES OF ENGAGEMENT:\n"
+                "- CONTEXT FIRST: Never hallucinate code or file paths.\n"
+                "  If you need to edit a file, always use your tools to\n"
+                "  explore the directory structure and read it first.\n"
+                "- FILE MODIFICATIONS: When proposing code changes, be\n"
+                "  precise. Output unified diffs or surgically apply\n"
+                "  changes. Do not dump the entire contents of a file\n"
+                "  if you are only changing one line.\n"
+                "- SANDBOX SAFETY: You operate in a secure sandbox\n"
+                "  environment. When you draft a shell command or file\n"
+                "  modification, you must wait for explicit user\n"
+                "  approval via the UI before execution.\n"
+                "- TONE: Be highly technical, concise, and direct.\n"
+                "  Skip pleasantries. Prioritize functional code,\n"
+                "  accurate terminal commands, and logical solutions.\n"
+                "\n"
+                "When asked to perform a complex task, break it down\n"
+                "into a step-by-step plan before taking action."
             ),
             ollama_home=ollama_home,
             ollama_models_path=ollama_home / "models",
         ),
         voice=VoiceProfile(
             provider="manual_transcript",
-            # This is the folder you can watch while testing the file-based voice flow.
+            # This is the folder you can watch while testing
+            # the file-based voice flow.
             audio_inbox_dir=audio_root / "inbox",
             processed_audio_dir=audio_root / "processed",
             transcripts_dir=audio_root / "transcripts",
@@ -212,10 +245,21 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
         _load_profile_payload(local_profile_path),
     )
 
-    raw_model = data.get("model", {})
-    raw_voice = data.get("voice", {})
-    raw_voice_activation = data.get("voice_activation", {})
-    raw_voice_output = data.get("voice_output", {})
+    raw_model = data.get("model")
+    if not isinstance(raw_model, dict):
+        raw_model = {}
+
+    raw_voice = data.get("voice")
+    if not isinstance(raw_voice, dict):
+        raw_voice = {}
+
+    raw_voice_activation = data.get("voice_activation")
+    if not isinstance(raw_voice_activation, dict):
+        raw_voice_activation = {}
+
+    raw_voice_output = data.get("voice_output")
+    if not isinstance(raw_voice_output, dict):
+        raw_voice_output = {}
 
     return RuntimeProfile(
         model=ModelProfile(
@@ -363,8 +407,10 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     )
 
 
-def persist_model_name(project_root: Path | None, model_name: str) -> Path:
-    """Persist the chosen Ollama model name into ``core/memory/profile.local.json``."""
+def persist_model_name(
+    project_root: Path | None, model_name: str
+) -> Path:
+    """Persist chosen Ollama model name into profile.local.json."""
 
     root = project_root or _project_root_from_here()
     _profile_path, local_profile_path = _runtime_profile_paths(root)
@@ -379,5 +425,6 @@ def persist_model_name(project_root: Path | None, model_name: str) -> Path:
     payload["model"] = raw_model
 
     local_profile_path.parent.mkdir(parents=True, exist_ok=True)
-    local_profile_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    content = json.dumps(payload, indent=2) + "\n"
+    local_profile_path.write_text(content, encoding="utf-8")
     return local_profile_path

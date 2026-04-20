@@ -1,79 +1,19 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-dist/
-*.egg-info/
-.eggs/
-*.egg
-
-# Virtual Environment
-venv/
-env/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-.DS_Store
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-pytest_tmp/
-pytest_basetemp*/
-
-# Generated runtime artifacts
-project_tree.txt
-.tmp/
-python_temp*/
-python_temp_cli_*/
-python_temp_debug_*/
-
-# Logs
-*.log
-core/logs/*.log
-!core/logs/.gitkeep
-
-# Environment
+# Environment and credential files
 .env
-.env.local
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
+
+# Enforced Ignores
+*.exe
+*.log
+__pycache__/
+pytest_basetemp*
+.pytest_tmp*
+data/processed/test-fixtures/
+audio/
+.tmp/
 .python313/
-python-*-amd64.exe
-core/memory/*.local.json
-
-# Data
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
-
-# Voice runtime files
-audio/inbox/*
-audio/processed/*
-audio/transcripts/*
-audio/manual_transcripts/*
-!audio/inbox/.gitkeep
-!audio/processed/.gitkeep
-!audio/transcripts/.gitkeep
-!audio/manual_transcripts/.gitkeep
-!audio/README.md
-
-# Models
-models/*.pkl
-models/*.h5
-models/*.pt
-models/*.pth
-
-# Windows
-Thumbs.db
-desktop.ini
-
-# Experiments
-experiments/*.tmp
-experiments/*.cache

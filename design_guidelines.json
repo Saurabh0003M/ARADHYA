@@ -1,0 +1,101 @@
+{
+  "theme_archetype": {
+    "name": "Swiss & High-Contrast (Archetype 4) + Retro-Futurism Terminal Blocks",
+    "mode": "Light",
+    "rationale": "Developer tools and system-level control panels demand authority, clarity, and function-first design. We utilize a stark, objective light mode for the core UI (reducing clinical coldness), juxtaposed with 'Retro-Futurism' dark terminal blocks specifically for generated PowerShell/Bash commands to signal actionable code."
+  },
+  "colors": {
+    "background": "#F4F4F5",
+    "surface": "#FFFFFF",
+    "surface_glass": "rgba(255, 255, 255, 0.7)",
+    "text_primary": "#09090B",
+    "text_secondary": "#52525B",
+    "primary": "#18181B",
+    "primary_foreground": "#FAFAFA",
+    "terminal": {
+      "background": "#000000",
+      "text": "#F8FAFC",
+      "command": "#4ADE80",
+      "border": "rgba(255, 255, 255, 0.15)",
+      "comment": "#A1A1AA"
+    },
+    "accent_alert": "#EF4444",
+    "accent_active": "#2563EB",
+    "border": "rgba(0, 0, 0, 0.1)"
+  },
+  "typography": {
+    "families": {
+      "heading": "'Chivo', sans-serif",
+      "body": "'IBM Plex Sans', sans-serif",
+      "mono": "'JetBrains Mono', monospace"
+    },
+    "rules": {
+      "h1": "text-3xl sm:text-4xl font-black tracking-tighter text-text_primary",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-text_primary",
+      "h3": "text-xl font-semibold tracking-tight text-text_primary",
+      "body": "text-base leading-relaxed text-text_secondary",
+      "code": "text-sm font-mono tracking-tight text-terminal_text leading-relaxed",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-text_secondary"
+    }
+  },
+  "spacing_layout": {
+    "strategy": "The 'Control Room' Grid",
+    "container": "h-screen w-full flex overflow-hidden bg-background font-body",
+    "sidebar": "w-72 lg:w-80 border-r border-border bg-surface flex-shrink-0 h-full hidden md:flex flex-col",
+    "main_area": "flex-1 flex flex-col relative h-full",
+    "header": "h-16 border-b border-border bg-surface/50 backdrop-blur-md flex items-center justify-between px-6 z-10",
+    "chat_area": "flex-1 overflow-y-auto p-4 md:p-8 space-y-8 pb-40 scroll-smooth",
+    "floating_bar_container": "absolute bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-2xl z-50",
+    "padding_scale": "Use generous p-6 or p-8 inside cards to avoid text collision with borders."
+  },
+  "surfaces": {
+    "floating_bar": "backdrop-blur-2xl bg-white/75 border border-black/10 shadow-[0_16px_40px_rgba(0,0,0,0.1)] rounded-2xl flex items-center p-2 gap-2 transition-all",
+    "terminal_block": "bg-terminal-background border border-terminal-border rounded-xl shadow-2xl overflow-hidden my-4 relative group",
+    "terminal_header": "bg-white/10 px-4 py-2 flex justify-between items-center border-b border-white/10 text-xs text-white/50 font-mono",
+    "chat_bubble_user": "bg-gray-100 text-text_primary rounded-2xl rounded-tr-sm px-5 py-3.5 max-w-[80%] shadow-sm border border-black/5 ml-auto",
+    "chat_bubble_ai": "bg-surface border border-border shadow-sm rounded-2xl rounded-tl-sm px-5 py-4 max-w-[85%]"
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary_foreground hover:bg-primary/90 rounded-lg px-5 py-2.5 font-medium transition-transform active:scale-95 text-sm",
+      "floating_icon": "h-12 w-12 rounded-xl flex flex-col items-center justify-center bg-transparent hover:bg-black/5 text-text_secondary transition-all data-[active=true]:bg-black/10 data-[active=true]:text-primary data-[active=true]:shadow-inner",
+      "copy": "absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white/10 hover:bg-white/20 text-white rounded p-1.5"
+    },
+    "inputs": {
+      "chat": "flex-1 bg-transparent border-none focus:ring-0 text-base placeholder:text-gray-400 py-3 px-4 outline-none font-body"
+    },
+    "select": "Use Shadcn Select for Voice Presets. Customize to have border-black/10, square-ish radius (rounded-md), and Chivo font.",
+    "switch": "Use Shadcn Switch for Security Filter toggle. Active state should be pure black (bg-primary)."
+  },
+  "motion": {
+    "hover": "transition-all duration-200 ease-out",
+    "chat_entrance": "framer-motion: initial={opacity: 0, y: 15} animate={opacity: 1, y: 0} transition={duration: 0.4, ease: [0.16, 1, 0.3, 1]}",
+    "floating_bar": "framer-motion: initial={y: 50, opacity: 0} animate={y: 0, opacity: 1} transition={type: 'spring', damping: 20, stiffness: 300}"
+  },
+  "media": {
+    "ai_avatar": "https://static.prod-images.emergentagent.com/jobs/705898cf-9bcf-4e96-bf29-2ad7fa8e7d91/images/bdd0acceffeaa877f8337151b8ea0f0a7a43911f32fe8e49106382894ddb3f73.png"
+  },
+  "icons": {
+    "library": "lucide-react",
+    "mapping": {
+      "mic": "Mic",
+      "screen": "Monitor",
+      "assistant": "Sparkles",
+      "internet": "Globe",
+      "copy": "Copy",
+      "play": "Play",
+      "settings": "Settings",
+      "keyboard": "Keyboard"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. PRE-REQUISITES: Ensure 'Chivo', 'IBM Plex Sans', and 'JetBrains Mono' are loaded via Google Fonts in index.html or layout.",
+    "2. LAYOUT: Implement a 'Control Room' grid layout. A fixed left sidebar (hidden on mobile, width w-80) for Settings, Voice Presets, and Command Templates. The right side is the main Chat Area.",
+    "3. FLOATING ACTION BAR: The core input method is a sticky, glassmorphic floating bar at the bottom (`surfaces.floating_bar`). It must contain the text input and the four critical floating buttons (Mic, Screen, A, I). Use `data-[active=true]` styling for active toggles.",
+    "4. COMMAND GENERATOR: When Aradhya AI returns a PowerShell/Bash/CMD script, render it inside the `surfaces.terminal_block`. It must be pure black (#000000) with JetBrains Mono green text (#4ADE80) to contrast sharply against the light theme. Include a copy button.",
+    "5. KEYBOARD SHORTCUTS: Render keyboard shortcuts using `<kbd>` tags formatted cleanly (e.g., border, shadow-sm, text-xs, rounded-md, bg-gray-50, px-1.5, py-0.5) inside the sidebar or header.",
+    "6. VOICE PRESETS: Place the Female/Baby voice selector in the sidebar or top header using a custom Shadcn Select.",
+    "7. SECURITY FILTER: Include a toggle switch for 'Web Search Security Filter'. When the Internet ('I') button in the floating bar is active, a small indicator should show if the filter is on.",
+    "8. ACCESSIBILITY & TESTING: Every interactive element MUST include a `data-testid` attribute using kebab-case role-based naming (e.g., `data-testid='mic-toggle-button'`, `data-testid='copy-command-button'`)."
+  ]
+}
