@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
+import threading
+import time
 
 from loguru import logger
 
@@ -21,8 +25,10 @@ from src.aradhya.voice_activation import (
     describe_voice_activation_support,
 )
 from src.aradhya.voice_pipeline import VoiceInboxManager
+from src.aradhya.wake_word_listener import WakeWordListener
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
 MAX_DIRECT_MODEL_PROMPT_CHARS = 4000
 
 
@@ -162,6 +168,8 @@ def main() -> None:
     )
     voice_manager = VoiceInboxManager(runtime_profile.voice)
     live_voice_runtime: VoiceActivatedAradhya | None = None
+    floating_icon_process: subprocess.Popen | None = None
+    wake_word_listener: WakeWordListener | None = None
     # Create the voice folders on startup so the testing workflow is visible in
     # VS Code even before the first audio file is dropped.
     voice_manager.ensure_directories()
@@ -178,6 +186,8 @@ def main() -> None:
     print("Type 'voice status', 'voice process', 'voice activate', or 'voice stop'.")
     print("Type 'cache validate' to benchmark the current context cache.")
     print("Type 'model ping' or 'model ask <prompt>' for the configured local model.")
+    print("Type 'icon enable' or 'icon disable' to toggle the floating wake icon.")
+    print("Type 'wake word enable' or 'wake word disable' to toggle background listening.")
     print("Type 'sleep' to send Aradhya idle, or 'exit' to quit.")
     print(f"Configured model > {runtime_profile.model.model_name}")
     print(f"Voice inbox > {runtime_profile.voice.audio_inbox_dir}")
@@ -196,6 +206,44 @@ def main() -> None:
         except Exception as error:
             print(f"Voice > Live activation auto-start failed: {error}")
             print()
+
+    ipc_thread_running = True
+
+    def ipc_watcher():
+        nonlocal live_voice_runtime
+        while ipc_thread_running:
+            if IPC_FILE.exists():
+                try:
+                    cmd = IPC_FILE.read_text(encoding="utf-8").strip()
+                    IPC_FILE.unlink()
+                    if cmd == "wake":
+                        print()
+                        _render_response(assistant.handle_wake(WakeSource.FLOATING_ICON))
+                        print("You > ", end="", flush=True)
+                    elif cmd == "sleep":
+                        print()
+                        _render_response(assistant.go_idle())
+                        print("You > ", end="", flush=True)
+                    elif cmd == "voice_toggle":
+                        print()
+                        if live_voice_runtime and live_voice_runtime.is_running():
+                            live_voice_runtime.stop()
+                        else:
+                            if live_voice_runtime is None:
+                                live_voice_runtime = VoiceActivatedAradhya(
+                                    assistant=assistant,
+                                    voice_manager=voice_manager,
+                                    runtime_profile=runtime_profile,
+                                    output_handler=print,
+                                )
+                            live_voice_runtime.start()
+                        print("\nYou > ", end="", flush=True)
+                except Exception:
+                    pass
+            time.sleep(0.5)
+
+    ipc_thread = threading.Thread(target=ipc_watcher, daemon=True)
+    ipc_thread.start()
 
     try:
         while True:
@@ -247,8 +295,48 @@ def main() -> None:
                     print()
                 continue
 
+            if normalized == "wake word enable":
+                if wake_word_listener is None:
+                    wake_word_listener = WakeWordListener(assistant=assistant, voice_manager=voice_manager)
+                wake_word_listener.start()
+                print("Voice > Wake word detection enabled (listening for 'wakeup').")
+                print()
+                continue
+                
+            if normalized == "wake word disable":
+                if wake_word_listener:
+                    wake_word_listener.stop()
+                print("Voice > Wake word detection disabled.")
+                print()
+                continue
+
             if normalized == "model ping":
                 _render_model_health(model_provider)
+                continue
+
+            if normalized == "icon enable":
+                if floating_icon_process is None or floating_icon_process.poll() is not None:
+                    try:
+                        floating_icon_process = subprocess.Popen(
+                            [sys.executable, "-m", "src.aradhya.floating_icon"],
+                            cwd=str(PROJECT_ROOT)
+                        )
+                        print("Icon > Floating icon enabled.")
+                    except Exception as error:
+                        print(f"Icon > Failed to start floating icon: {error}")
+                else:
+                    print("Icon > Floating icon is already running.")
+                print()
+                continue
+
+            if normalized == "icon disable":
+                if floating_icon_process and floating_icon_process.poll() is None:
+                    floating_icon_process.terminate()
+                    floating_icon_process = None
+                    print("Icon > Floating icon disabled.")
+                else:
+                    print("Icon > Floating icon is not running.")
+                print()
                 continue
 
             if normalized == "cache validate":
@@ -295,7 +383,12 @@ def main() -> None:
 
             _render_response(assistant.handle_transcript(command))
     finally:
+        ipc_thread_running = False
+        if wake_word_listener:
+            wake_word_listener.stop()
         _stop_live_voice_runtime(live_voice_runtime)
+        if floating_icon_process and floating_icon_process.poll() is None:
+            floating_icon_process.terminate()
         logger.info("Aradhya CLI stopped")
 
 

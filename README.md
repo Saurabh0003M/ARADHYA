@@ -131,6 +131,12 @@ If you already activated the environment, this also works:
 python -m core.agent.aradhya
 ```
 
+Or you can use the convenient global shortcut from the root folder anytime:
+
+```powershell
+.\aradhya
+```
+
 To verify a new machine after cloning on `C:` or `D:`, run:
 
 ```powershell
@@ -139,7 +145,7 @@ scripts\doctor.bat
 
 Inside the CLI:
 
-- Type `wake` to simulate the floating icon.
+- Type `wake` to trigger a manual wake sequence.
 - Type `ctrl+win` to simulate the hotkey wake path.
 - Type a spoken request as plain text.
 - Type `yes proceed` to execute the pending plan.
@@ -148,6 +154,10 @@ Inside the CLI:
 - Type `voice process` to process dropped audio files.
 - Type `voice activate` to start background hotkey-based microphone capture.
 - Type `voice stop` to stop the background hotkey listener.
+- Type `icon enable` to launch the expandable floating menu on your screen.
+- Type `icon disable` to close the floating menu.
+- Type `wake word enable` to start the continuous background wake word engine (listens for "wakeup" or "arise").
+- Type `wake word disable` to stop the wake word engine.
 - Type `model ping` to check the configured Ollama model.
 - Type `model ask <prompt>` to send a direct prompt to the configured local model.
 - Type `sleep` to return Aradhya to idle.

@@ -62,6 +62,12 @@ Run:
 venv\Scripts\python.exe -m core.agent.aradhya
 ```
 
+Or simply use the global shortcut from the project root:
+
+```powershell
+.\aradhya
+```
+
 Why this works:
 
 - `core/agent/aradhya.py` is the compatibility launcher
@@ -81,6 +87,9 @@ wake
 open aradhya
 yes proceed
 voice stop
+voice stop
+icon enable
+wake word enable
 find the folder with the highest concentration of .txt files
 yes proceed
 sleep
@@ -97,6 +106,8 @@ What each command does:
 - `open aradhya`: creates a plan to open the best-matching path
 - `yes proceed`: executes the pending plan
 - `voice stop`: stops live microphone capture mode
+- `icon enable`: launches an always-on-top draggable menu that expands on click
+- `wake word enable`: starts the continuous background wake word engine (say "wakeup" or "arise")
 - `.txt` query: triggers a local-data search and refreshes the tree again
 - `sleep`: clears pending work and puts Aradhya idle
 - `exit`: closes the CLI
@@ -166,7 +177,7 @@ These features are real in the current code:
 
 These features are only partially present or still planned:
 
-- ambient or wake-word-based listening without push-to-talk
+- ambient or wake-word-based listening without push-to-talk (partially available via `wake word enable`)
 - screen reading and UI control
 - Google Meet button interaction
 - full Debate AI multi-model reasoning loop
