@@ -51,15 +51,29 @@ class TaskScheduler:
 
     The scheduler runs in a daemon thread and checks for due tasks
     every 60 seconds.
+
+    Parameters
+    ----------
+    schedules_file
+        Path to the JSON file that persists task definitions.
+    on_message
+        Callback for ``"message"`` actions.
+    on_agent_think
+        Callback for ``"agent_think"`` actions.  Receives the task
+        payload and should route it through the full planning pipeline.
+        This is the heartbeat mechanism — equivalent to OpenClaw's cron
+        heartbeat that spawns an isolated agent session.
     """
 
     def __init__(
         self,
         schedules_file: Path | None = None,
         on_message: Callable[[str], None] | None = None,
+        on_agent_think: Callable[[str], None] | None = None,
     ) -> None:
         self.schedules_file = schedules_file or DEFAULT_SCHEDULES_FILE
         self.on_message = on_message
+        self.on_agent_think = on_agent_think
         self._tasks: dict[str, ScheduledTask] = {}
         self._running = False
         self._thread: threading.Thread | None = None
@@ -195,6 +209,13 @@ class TaskScheduler:
 
             elif task.action == "message" and self.on_message:
                 self.on_message(task.payload)
+
+            elif task.action == "agent_think" and self.on_agent_think:
+                # Heartbeat mechanism: route the payload through the full
+                # AgentLoop so the assistant can think, call tools, and act
+                # autonomously.  This mirrors OpenClaw's cron heartbeat
+                # that spawns an isolated agent session.
+                self.on_agent_think(task.payload)
 
             elif task.action == "refresh":
                 logger.info("Task '{}': refresh signal sent", task.id)
