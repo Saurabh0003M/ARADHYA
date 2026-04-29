@@ -114,19 +114,19 @@ exit /b 0
 :detect_python
 where py >nul 2>nul
 if not errorlevel 1 (
+    py -3.12 -c "import sys" >nul 2>nul
+    if not errorlevel 1 (
+        set "BASE_PYTHON_EXE=py"
+        set "BASE_PYTHON_ARGS=-3.12"
+        set "BASE_PYTHON_LABEL=py -3.12"
+        goto :detect_python_done
+    )
+
     py -3.11 -c "import sys" >nul 2>nul
     if not errorlevel 1 (
         set "BASE_PYTHON_EXE=py"
         set "BASE_PYTHON_ARGS=-3.11"
         set "BASE_PYTHON_LABEL=py -3.11"
-        goto :detect_python_done
-    )
-
-    py -3.10 -c "import sys" >nul 2>nul
-    if not errorlevel 1 (
-        set "BASE_PYTHON_EXE=py"
-        set "BASE_PYTHON_ARGS=-3.10"
-        set "BASE_PYTHON_LABEL=py -3.10"
         goto :detect_python_done
     )
 
@@ -150,7 +150,7 @@ if not errorlevel 1 (
 )
 
 echo ERROR: I could not find a working Python launcher on PATH.
-echo Install Python 3.10 or newer, then reopen the terminal and rerun this script.
+echo Install Python 3.11 or newer, then reopen the terminal and rerun this script.
 exit /b 1
 
 :detect_python_done
@@ -171,16 +171,16 @@ exit /b 0
 set "ARADHYA_TMP_FILE=%TEMP%\aradhya_fullstack_python_version.txt"
 if defined BASE_PYTHON_ARGS (
     "%BASE_PYTHON_EXE%" %BASE_PYTHON_ARGS% -c "import sys; print('.'.join(str(part) for part in sys.version_info[:3]))" > "%ARADHYA_TMP_FILE%"
-    "%BASE_PYTHON_EXE%" %BASE_PYTHON_ARGS% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul
+    "%BASE_PYTHON_EXE%" %BASE_PYTHON_ARGS% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
 ) else (
     "%BASE_PYTHON_EXE%" -c "import sys; print('.'.join(str(part) for part in sys.version_info[:3]))" > "%ARADHYA_TMP_FILE%"
-    "%BASE_PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>nul
+    "%BASE_PYTHON_EXE%" -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
 )
 set /p BASE_PYTHON_VERSION=<"%ARADHYA_TMP_FILE%"
 del "%ARADHYA_TMP_FILE%" >nul 2>nul
 
 if errorlevel 1 (
-    echo ERROR: Aradhya expects Python 3.10 or newer. Detected !BASE_PYTHON_VERSION!.
+    echo ERROR: Aradhya expects Python 3.11 or newer. Detected !BASE_PYTHON_VERSION!.
     exit /b 1
 )
 

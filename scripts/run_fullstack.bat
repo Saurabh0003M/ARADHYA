@@ -72,17 +72,17 @@ exit /b 1
 :detect_python
 where py >nul 2>nul
 if not errorlevel 1 (
+    py -3.12 -c "import sys" >nul 2>nul
+    if not errorlevel 1 (
+        set "BASE_PYTHON_EXE=py"
+        set "BASE_PYTHON_ARGS=-3.12"
+        exit /b 0
+    )
+
     py -3.11 -c "import sys" >nul 2>nul
     if not errorlevel 1 (
         set "BASE_PYTHON_EXE=py"
         set "BASE_PYTHON_ARGS=-3.11"
-        exit /b 0
-    )
-
-    py -3.10 -c "import sys" >nul 2>nul
-    if not errorlevel 1 (
-        set "BASE_PYTHON_EXE=py"
-        set "BASE_PYTHON_ARGS=-3.10"
         exit /b 0
     )
 
@@ -105,5 +105,5 @@ if not errorlevel 1 (
 )
 
 echo ERROR: No usable Python launcher was found on PATH.
-echo Run scripts\first_run_fullstack.bat after installing Python 3.10 or newer.
+echo Run scripts\first_run_fullstack.bat after installing Python 3.11 or newer.
 exit /b 1

@@ -20,7 +20,11 @@ from loguru import logger
 import httpx
 from bs4 import BeautifulSoup
 
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+except ImportError:
+    LlmChat = None
+    UserMessage = None
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_WORKSPACE_PATH = os.environ.get("ARADHYA_WORKSPACE_PATH", str(REPO_ROOT))
@@ -34,7 +38,7 @@ LLM_KEY = os.environ.get("EMERGENT_LLM_KEY")
 app = FastAPI(title="Aradhya Agentic Assistant")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-client = AsyncIOMotorClient(MONGO_URL) if MONGO_URL else None
+client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=500) if MONGO_URL else None
 db = client[DB_NAME] if client is not None else None
 MEMORY_SETTINGS: dict[str, dict[str, Any]] = {}
 MEMORY_MESSAGES: list[dict[str, Any]] = []
@@ -154,6 +158,10 @@ async def get_llm_response(message: str, session_id: str, system_prompt: str = N
 
     if provider == "ollama":
         return await _generate_with_ollama(message, final_prompt, model_name)
+
+    if LlmChat is None or UserMessage is None:
+        logger.warning("Cloud LLM integration package unavailable; attempting Ollama fallback.")
+        return await _generate_with_ollama(message, final_prompt, DEFAULT_MODEL_NAME)
 
     if not LLM_KEY:
         logger.warning("Cloud model selected without EMERGENT_LLM_KEY; attempting Ollama fallback.")
@@ -287,7 +295,7 @@ async def _generate_with_ollama(message: str, system_prompt: str, model_name: st
         "stream": False,
     }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as http_client:
+        async with httpx.AsyncClient(timeout=180.0) as http_client:
             response = await http_client.post(f"{OLLAMA_BASE_URL}/api/generate", json=payload)
             response.raise_for_status()
             data = response.json()
