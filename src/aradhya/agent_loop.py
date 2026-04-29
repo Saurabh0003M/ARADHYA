@@ -18,6 +18,12 @@ from typing import Any, Callable, Protocol
 
 from loguru import logger
 
+from src.aradhya.json_extractor import (
+    JSONExtractionError,
+    extract_json_from_llm_response,
+)
+from src.aradhya.model_provider import ModelChatResult, ModelResult, ModelToolCall
+
 
 class ThinkingLevel(Enum):
     """Controls how much reasoning the model should expose."""
@@ -60,7 +66,7 @@ class AgentTurn:
 class ToolExecutor(Protocol):
     """Protocol for executing tool calls."""
     def execute_tool(
-        self, name: str, arguments: dict[str, Any]
+        self, name: str, arguments: dict[str, Any], tool_call_id: str = ""
     ) -> ToolResult: ...
 
     def list_tools(self) -> list[dict[str, Any]]: ...
@@ -89,11 +95,13 @@ class AgentLoop:
         tool_executor: ToolExecutor | None = None,
         confirmation_gate: Callable[[str, dict[str, Any]], bool] | None = None,
         max_iterations: int = 10,
+        max_repeated_tool_calls: int = 3,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
         self.confirmation_gate = confirmation_gate
         self.max_iterations = max_iterations
+        self.max_repeated_tool_calls = max_repeated_tool_calls
 
     def run(
         self,
@@ -144,6 +152,18 @@ class AgentLoop:
 
             # Execute tool calls
             for tool_call in tool_calls:
+                if self._is_repeated_tool_call(turn.tool_calls_made, tool_call):
+                    turn.final_response = (
+                        "[Agent loop stopped because the model repeated the same "
+                        f"tool call too many times: {tool_call.name}]"
+                    )
+                    logger.warning(
+                        "Agent loop stopped on repeated tool call {} with args {}",
+                        tool_call.name,
+                        tool_call.arguments,
+                    )
+                    return turn
+
                 turn.tool_calls_made.append(tool_call)
 
                 if self.tool_executor is None:
@@ -186,84 +206,169 @@ class AgentLoop:
         return turn
 
     def _call_model(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
-        """Call the model provider with the current message list.
+        """Call the model provider with messages and available tools."""
 
-        This is a thin wrapper that delegates to the model provider's
-        completion method.  For now it uses a simple prompt-based call;
-        full function-calling support will be added when providers
-        implement the OpenAI-compatible function calling API.
-        """
+        tools = self._tool_definitions()
 
-        # Build a flat prompt from messages for providers that only support
-        # simple text completion (like the current Ollama provider).
+        if hasattr(self.model_provider, "chat"):
+            result = self.model_provider.chat(messages, tools=tools)
+            if isinstance(result, ModelChatResult):
+                return {
+                    "text": result.text,
+                    "tool_calls": [
+                        self._model_tool_call_to_raw(tool_call)
+                        for tool_call in result.tool_calls
+                    ],
+                }
+            return self._coerce_chat_result(result)
+
+        prompt = self._build_text_completion_prompt(messages, tools)
+        if hasattr(self.model_provider, "generate"):
+            result = self.model_provider.generate(prompt)
+        elif hasattr(self.model_provider, "query"):
+            result = self.model_provider.query(prompt)
+        else:
+            result = str(self.model_provider)
+
+        if isinstance(result, ModelResult):
+            response_text = result.text
+        else:
+            response_text = str(result)
+
+        return {"text": response_text, "tool_calls": []}
+
+    def _build_text_completion_prompt(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+    ) -> str:
         prompt_parts: list[str] = []
+        if tools:
+            prompt_parts.append(
+                "Available tools are provided as JSON Schema definitions below. "
+                "To call one tool, reply only with JSON like "
+                '{"name":"tool_name","arguments":{...}}. '
+                "To call multiple tools, reply only with JSON like "
+                '{"tool_calls":[{"name":"tool_name","arguments":{...}}]}. '
+                "After tool results are returned, reply with final text.\n"
+                + json.dumps(tools, indent=2)
+            )
+
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")
             if content:
                 prompt_parts.append(f"[{role}] {content}")
 
-        full_prompt = "\n\n".join(prompt_parts)
+        return "\n\n".join(prompt_parts)
 
-        # Use the model provider's generate method
-        if hasattr(self.model_provider, "generate"):
-            response_text = self.model_provider.generate(full_prompt)
-        elif hasattr(self.model_provider, "query"):
-            response_text = self.model_provider.query(full_prompt)
+    def _coerce_chat_result(self, result: Any) -> dict[str, Any]:
+        text = getattr(result, "text", "")
+        raw_tool_calls = getattr(result, "tool_calls", ())
+        return {
+            "text": str(text or ""),
+            "tool_calls": [
+                self._model_tool_call_to_raw(tool_call)
+                for tool_call in raw_tool_calls
+            ],
+        }
+
+    def _model_tool_call_to_raw(self, tool_call: Any) -> dict[str, Any]:
+        if isinstance(tool_call, ModelToolCall):
+            name = tool_call.name
+            arguments = tool_call.arguments
+            call_id = tool_call.id
         else:
-            response_text = str(self.model_provider)
+            name = getattr(tool_call, "name", "")
+            arguments = getattr(tool_call, "arguments", {})
+            call_id = getattr(tool_call, "id", "")
 
-        return {"text": response_text, "tool_calls": []}
+        return {
+            "id": call_id or f"tc_{time.time_ns()}",
+            "type": "function",
+            "function": {
+                "name": name,
+                "arguments": json.dumps(arguments or {}),
+            },
+        }
 
     def _extract_tool_calls(self, response: dict[str, Any]) -> list[ToolCall]:
-        """Extract tool calls from a model response.
+        """Extract native or JSON-encoded tool calls from a model response."""
 
-        When providers support native function calling, this will parse
-        the structured tool_calls array.  For now, we also attempt to
-        detect JSON-encoded tool calls in the response text.
-        """
-
-        # Native tool calls from the response
         raw_calls = response.get("tool_calls", [])
         if raw_calls:
             return [
                 ToolCall(
-                    name=tc.get("function", {}).get("name", ""),
-                    arguments=json.loads(
-                        tc.get("function", {}).get("arguments", "{}")
+                    name=str(tc.get("function", {}).get("name", "") or ""),
+                    arguments=self._parse_arguments(
+                        tc.get("function", {}).get("arguments", {})
                     ),
-                    id=tc.get("id", f"tc_{time.time_ns()}"),
+                    id=str(tc.get("id", "") or f"tc_{time.time_ns()}"),
                 )
                 for tc in raw_calls
             ]
 
-        # Attempt to detect tool calls embedded in text
-        text = response.get("text", "")
-        try:
-            if '"tool_call"' in text or '"name"' in text:
-                parsed = json.loads(text)
-                if isinstance(parsed, dict) and "name" in parsed:
-                    return [
-                        ToolCall(
-                            name=parsed["name"],
-                            arguments=parsed.get("arguments", {}),
-                            id=f"tc_{time.time_ns()}",
-                        )
-                    ]
-        except (json.JSONDecodeError, TypeError):
-            pass
+        text = str(response.get("text", "") or "")
+        payload = self._extract_json_payload(text)
+        if payload is None:
+            return []
+
+        if isinstance(payload, dict) and "tool_calls" in payload:
+            calls = payload.get("tool_calls", [])
+            if isinstance(calls, list):
+                return [
+                    self._json_payload_to_tool_call(call)
+                    for call in calls
+                    if isinstance(call, dict)
+                ]
+
+        if isinstance(payload, dict) and "tool_call" in payload:
+            call = payload.get("tool_call")
+            if isinstance(call, dict):
+                return [self._json_payload_to_tool_call(call)]
+
+        if isinstance(payload, dict) and "name" in payload:
+            return [self._json_payload_to_tool_call(payload)]
 
         return []
 
+    def _extract_json_payload(self, text: str) -> Any | None:
+        if '"tool_call"' not in text and '"tool_calls"' not in text and '"name"' not in text:
+            return None
+        try:
+            return json.loads(text)
+        except (json.JSONDecodeError, TypeError):
+            try:
+                return extract_json_from_llm_response(text)
+            except JSONExtractionError:
+                return None
+
+    def _json_payload_to_tool_call(self, payload: dict[str, Any]) -> ToolCall:
+        return ToolCall(
+            name=str(payload.get("name", "") or ""),
+            arguments=self._parse_arguments(payload.get("arguments", {})),
+            id=str(payload.get("id", "") or f"tc_{time.time_ns()}"),
+        )
+
+    def _parse_arguments(self, raw_arguments: Any) -> dict[str, Any]:
+        if isinstance(raw_arguments, dict):
+            return raw_arguments
+        if isinstance(raw_arguments, str):
+            try:
+                parsed = json.loads(raw_arguments)
+            except (json.JSONDecodeError, TypeError):
+                return {}
+            return parsed if isinstance(parsed, dict) else {}
+        return {}
+
     def _extract_text(self, response: dict[str, Any]) -> str:
         """Extract the final text content from a model response."""
-        return response.get("text", "").strip()
+        return str(response.get("text", "") or "").strip()
 
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call, applying the confirmation gate if needed."""
         assert self.tool_executor is not None
 
-        # Check if this tool requires confirmation
         dangerous_tools = {
             "run_command",
             "write_file",
@@ -272,6 +377,9 @@ class AgentLoop:
             "browser_click",
             "browser_type",
             "browser_submit",
+            "open_path",
+            "open_url",
+            "clipboard_write",
         }
 
         if tool_call.name in dangerous_tools and self.confirmation_gate:
@@ -287,7 +395,7 @@ class AgentLoop:
 
         try:
             return self.tool_executor.execute_tool(
-                tool_call.name, tool_call.arguments
+                tool_call.name, tool_call.arguments, tool_call.id
             )
         except Exception as error:
             logger.error(
@@ -299,3 +407,28 @@ class AgentLoop:
                 output=f"[Error executing '{tool_call.name}': {error}]",
                 success=False,
             )
+
+    def _tool_definitions(self) -> list[dict[str, Any]]:
+        if self.tool_executor is None:
+            return []
+        try:
+            return self.tool_executor.list_tools()
+        except Exception as error:
+            logger.warning("Could not list agent tools: {}", error)
+            return []
+
+    def _is_repeated_tool_call(
+        self,
+        existing_calls: list[ToolCall],
+        candidate: ToolCall,
+    ) -> bool:
+        key = self._tool_call_key(candidate)
+        seen_count = sum(1 for call in existing_calls if self._tool_call_key(call) == key)
+        return seen_count >= self.max_repeated_tool_calls
+
+    def _tool_call_key(self, tool_call: ToolCall) -> str:
+        return json.dumps(
+            {"name": tool_call.name, "arguments": tool_call.arguments},
+            sort_keys=True,
+            default=str,
+        )

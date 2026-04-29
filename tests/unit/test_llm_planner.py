@@ -102,11 +102,12 @@ def test_llm_fallback_rejects_low_confidence_results(tmp_path):
 
     response = assistant.handle_transcript("launch something maybe called notes")
 
-    assert response.awaiting_confirmation is False
+    assert response.awaiting_confirmation is True
     assert response.plan is not None
-    assert response.plan.kind == PlanKind.UNKNOWN
-    assert assistant.state.pending_plan is None
-    assert "not confident enough" in response.spoken_response
+    assert response.plan.kind == PlanKind.AGENT_TASK
+    assert assistant.state.pending_plan is not None
+    assert "model-driven agent task" in response.spoken_response
+    assert "not confident enough" in response.plan.metadata["route_reason"]
 
 
 def test_llm_fallback_handles_invalid_json_without_execution(tmp_path):
@@ -121,9 +122,10 @@ def test_llm_fallback_handles_invalid_json_without_execution(tmp_path):
     response = assistant.handle_transcript("do something ambiguous")
 
     assert response.plan is not None
-    assert response.plan.kind == PlanKind.UNKNOWN
-    assert assistant.state.pending_plan is None
-    assert "could not safely classify" in response.spoken_response
+    assert response.plan.kind == PlanKind.AGENT_TASK
+    assert response.awaiting_confirmation is True
+    assert assistant.state.pending_plan is not None
+    assert "could not safely classify" in response.plan.metadata["route_reason"]
 
 
 def test_llm_fallback_handles_provider_errors(tmp_path):
@@ -138,8 +140,9 @@ def test_llm_fallback_handles_provider_errors(tmp_path):
     response = assistant.handle_transcript("please figure this out for me")
 
     assert response.plan is not None
-    assert response.plan.kind == PlanKind.UNKNOWN
-    assert "provider offline" in response.spoken_response
+    assert response.plan.kind == PlanKind.AGENT_TASK
+    assert response.awaiting_confirmation is True
+    assert "provider offline" in response.plan.metadata["route_reason"]
 
 
 def test_llm_fallback_accepts_markdown_wrapped_json(tmp_path):

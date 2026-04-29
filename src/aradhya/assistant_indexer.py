@@ -597,18 +597,20 @@ class DirectoryIndexManager:
         marker_names = {marker.lower() for marker in self.preferences.project_markers}
 
         for current_root, dirnames, filenames in self._walk_tree(root):
+            current_path = Path(current_root)
             dirnames[:] = [
                 dirname
                 for dirname in sorted(dirnames)
                 if not self._should_ignore_name(dirname)
+                and not self._should_ignore_path(current_path / dirname)
             ]
             visible_files = [
                 filename
                 for filename in sorted(filenames)
                 if not self._should_ignore_name(filename)
+                and not self._should_ignore_path(current_path / filename)
             ]
 
-            current_path = Path(current_root)
             depth = self._depth_from_root(current_path, root)
             accumulator.directory_count += 1
             self._store_name_candidate(
@@ -666,6 +668,7 @@ class DirectoryIndexManager:
                 dirname
                 for dirname in sorted(dirnames)
                 if not self._should_ignore_name(dirname)
+                and not self._should_ignore_path(Path(current_root) / dirname)
             ]
             current_path = Path(current_root)
             depth = self._depth_from_root(current_path, root)
@@ -673,6 +676,8 @@ class DirectoryIndexManager:
             for filename in sorted(filenames):
                 lowered_name = filename.lower()
                 if self._should_ignore_name(filename):
+                    continue
+                if self._should_ignore_path(current_path / filename):
                     continue
                 if not lowered_name.endswith((".exe", ".lnk")):
                     continue
@@ -1336,6 +1341,8 @@ class DirectoryIndexManager:
             for entry in entries:
                 if self._should_ignore_name(entry.name):
                     continue
+                if self._should_ignore_path(entry):
+                    continue
 
                 try:
                     entry_stat = entry.stat()
@@ -1374,3 +1381,16 @@ class DirectoryIndexManager:
 
     def _should_ignore_name(self, name: str) -> bool:
         return name.lower() in self._ignored_names
+
+    def _should_ignore_path(self, path: Path) -> bool:
+        resolved = path.resolve()
+        context_dir = self.preferences.context_cache_dir.resolve()
+        directory_index_path = self.preferences.directory_index_path.resolve()
+
+        if resolved == directory_index_path:
+            return True
+        try:
+            resolved.relative_to(context_dir)
+            return True
+        except ValueError:
+            return False

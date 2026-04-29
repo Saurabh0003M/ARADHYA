@@ -25,6 +25,7 @@ ENV/
 .pytest_cache/
 .coverage
 htmlcov/
+pytest-cache-files-*/
 pytest_tmp/
 pytest_basetemp*/
 

@@ -52,7 +52,13 @@ class IntentPlanner:
 
         if self.llm_planner is not None:
             logger.info("No rule matched transcript '{}'; using LLM fallback planner.", transcript)
-            return self.llm_planner.build_plan(transcript, state)
+            llm_plan = self.llm_planner.build_plan(transcript, state)
+            if llm_plan.kind != PlanKind.UNKNOWN and llm_plan.ready:
+                return llm_plan
+            return self._build_agent_task_plan(
+                transcript,
+                route_reason=llm_plan.summary,
+            )
 
         return PlanAction(
             kind=PlanKind.UNKNOWN,
@@ -63,6 +69,26 @@ class IntentPlanner:
             ),
             requires_confirmation=False,
             ready=False,
+        )
+
+    def _build_agent_task_plan(
+        self,
+        transcript: str,
+        *,
+        route_reason: str = "",
+    ) -> PlanAction:
+        return PlanAction(
+            kind=PlanKind.AGENT_TASK,
+            summary=(
+                "I can work on this as a model-driven agent task. I will let the "
+                "backend model choose read/search tools, inspect results, and stop "
+                "with a final answer. Machine-changing tools stay policy-gated."
+            ),
+            requires_confirmation=True,
+            metadata={
+                "request": transcript,
+                "route_reason": route_reason,
+            },
         )
 
     def _build_rule_based_plan(

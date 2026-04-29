@@ -33,6 +33,26 @@ class ModelResult:
     raw: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class ModelToolCall:
+    """Structured tool call requested by the model provider."""
+
+    name: str
+    arguments: dict[str, Any]
+    id: str = ""
+
+
+@dataclass(frozen=True)
+class ModelChatResult:
+    """Chat response with optional provider-native tool calls."""
+
+    text: str
+    model: str
+    provider: str
+    raw: dict[str, Any]
+    tool_calls: tuple[ModelToolCall, ...] = ()
+
+
 class TextModelProvider(Protocol):
     """Minimal protocol for swappable text model providers."""
 
@@ -46,6 +66,15 @@ class TextModelProvider(Protocol):
         system_prompt: str | None = None,
     ) -> ModelResult:
         """Generate a response for the given prompt."""
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> ModelChatResult:
+        """Generate a chat response, optionally with structured tool calls."""
 
 
 class OllamaTextModelProvider:
@@ -136,6 +165,74 @@ class OllamaTextModelProvider:
             model=raw.get("model", self.profile.model_name),
             provider=self.profile.provider,
             raw=raw,
+        )
+
+    def chat(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        tools: list[dict[str, Any]] | None = None,
+        system_prompt: str | None = None,
+    ) -> ModelChatResult:
+        logger.debug(
+            "Sending chat request to Ollama model {} with {} tool(s)",
+            self.profile.model_name,
+            len(tools or ()),
+        )
+
+        chat_messages = list(messages)
+        if system_prompt:
+            chat_messages = [{"role": "system", "content": system_prompt}] + chat_messages
+
+        payload: dict[str, Any] = {
+            "model": self.profile.model_name,
+            "messages": chat_messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+
+        response = self.session.post(
+            f"{self.profile.base_url}/api/chat",
+            json=payload,
+            timeout=self.profile.request_timeout_seconds,
+        )
+        response.raise_for_status()
+        raw = response.json()
+        message = raw.get("message", {}) or {}
+
+        tool_calls = tuple(
+            self._parse_tool_call(raw_call)
+            for raw_call in message.get("tool_calls", []) or []
+        )
+
+        return ModelChatResult(
+            text=str(message.get("content", "") or "").strip(),
+            model=raw.get("model", self.profile.model_name),
+            provider=self.profile.provider,
+            raw=raw,
+            tool_calls=tool_calls,
+        )
+
+    def _parse_tool_call(self, raw_call: dict[str, Any]) -> ModelToolCall:
+        function = raw_call.get("function", {}) or {}
+        raw_arguments = function.get("arguments", {})
+        if isinstance(raw_arguments, str):
+            try:
+                import json
+
+                arguments = json.loads(raw_arguments)
+            except (TypeError, ValueError):
+                arguments = {}
+        elif isinstance(raw_arguments, dict):
+            arguments = raw_arguments
+        else:
+            arguments = {}
+
+        return ModelToolCall(
+            name=str(function.get("name", "") or ""),
+            arguments=arguments,
+            id=str(raw_call.get("id", "") or ""),
         )
 
 

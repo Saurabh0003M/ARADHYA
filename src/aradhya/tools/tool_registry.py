@@ -13,6 +13,7 @@ from typing import Any, Callable
 from loguru import logger
 
 from src.aradhya.agent_loop import ToolResult
+from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 
 
 @dataclass
@@ -50,8 +51,9 @@ class ToolRegistry:
     Implements the ``ToolExecutor`` protocol expected by ``AgentLoop``.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, policy: ToolRuntimePolicy | None = None) -> None:
         self._tools: dict[str, ToolDefinition] = {}
+        self.policy = policy
 
     def register(self, tool_def: ToolDefinition) -> None:
         """Register a tool definition."""
@@ -68,22 +70,37 @@ class ToolRegistry:
         self.register(tool_def)
 
     def execute_tool(
-        self, name: str, arguments: dict[str, Any]
+        self, name: str, arguments: dict[str, Any], tool_call_id: str = ""
     ) -> ToolResult:
         """Execute a tool by name with the given arguments."""
         tool_def = self._tools.get(name)
         if tool_def is None:
             return ToolResult(
-                tool_call_id="",
+                tool_call_id=tool_call_id,
                 name=name,
                 output=f"Unknown tool: {name}",
                 success=False,
             )
 
+        if self.policy is not None:
+            decision = self.policy.check(
+                name,
+                arguments,
+                requires_confirmation=tool_def.requires_confirmation,
+            )
+            if not decision.allowed:
+                return ToolResult(
+                    tool_call_id=tool_call_id,
+                    name=name,
+                    output=decision.message,
+                    success=False,
+                    requires_confirmation=decision.requires_confirmation,
+                )
+
         try:
             output = tool_def.handler(**arguments)
             return ToolResult(
-                tool_call_id="",
+                tool_call_id=tool_call_id,
                 name=name,
                 output=str(output),
                 success=True,
@@ -91,7 +108,7 @@ class ToolRegistry:
             )
         except Exception as error:
             return ToolResult(
-                tool_call_id="",
+                tool_call_id=tool_call_id,
                 name=name,
                 output=f"Error: {error}",
                 success=False,

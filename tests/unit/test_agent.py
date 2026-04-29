@@ -9,6 +9,7 @@ from src.aradhya.assistant_models import (
     PlanKind,
     WakeSource,
 )
+from src.aradhya.model_provider import ModelHealth, ModelResult
 
 
 def build_test_preferences(tmp_path, *, refresh_interval_seconds: int = 60):
@@ -26,6 +27,32 @@ def build_test_preferences(tmp_path, *, refresh_interval_seconds: int = 60):
             refresh_interval_seconds=refresh_interval_seconds,
         ),
     )
+
+
+class SequenceModelProvider:
+    def __init__(self, responses: list[str]):
+        self.responses = responses
+        self.prompts: list[str] = []
+
+    def health_check(self) -> ModelHealth:
+        return ModelHealth(
+            reachable=True,
+            ready=True,
+            provider="fake",
+            configured_model="fake",
+            available_models=("fake",),
+            message="ready",
+        )
+
+    def generate(self, prompt: str, *, system_prompt: str | None = None) -> ModelResult:
+        self.prompts.append(prompt)
+        index = min(len(self.prompts) - 1, len(self.responses) - 1)
+        return ModelResult(
+            text=self.responses[index],
+            model="fake",
+            provider="fake",
+            raw={},
+        )
 
 
 def test_open_request_waits_for_explicit_confirmation(tmp_path):
@@ -158,3 +185,34 @@ def test_local_query_rebuilds_cache_after_refresh_window_expires(tmp_path):
     assert first_wake.index_snapshot.refreshed is True
     assert response.index_snapshot is not None
     assert response.index_snapshot.refreshed is True
+
+
+def test_complex_unknown_request_routes_to_confirmed_agent_task(tmp_path):
+    model_provider = SequenceModelProvider(
+        [
+            "not valid classifier json",
+            "I inspected what I could and here is the answer.",
+        ]
+    )
+    assistant = AradhyaAssistant(
+        build_test_preferences(tmp_path),
+        model_provider=model_provider,
+        now_provider=lambda: datetime(2026, 4, 5, 10, 0, 0),
+        project_root=tmp_path,
+    )
+    assistant.handle_wake(WakeSource.FLOATING_ICON)
+
+    response = assistant.handle_transcript("review this project and tell me the risks")
+
+    assert response.awaiting_confirmation is True
+    assert response.plan is not None
+    assert response.plan.kind == PlanKind.AGENT_TASK
+    assert assistant.state.pending_plan is not None
+
+    confirmation = assistant.handle_transcript("yes proceed")
+
+    assert confirmation.result is not None
+    assert confirmation.result.success is True
+    assert confirmation.spoken_response == "I inspected what I could and here is the answer."
+    assert assistant.session_manager.active_session is not None
+    assert assistant.session_manager.active_session.message_count >= 2
