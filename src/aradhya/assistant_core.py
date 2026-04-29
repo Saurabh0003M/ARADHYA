@@ -21,6 +21,7 @@ from src.aradhya.assistant_models import (
 from src.aradhya.assistant_planner import IntentPlanner
 from src.aradhya.model_provider import TextModelProvider
 from src.aradhya.assistant_system_tools import SystemToolbox
+from src.aradhya.skills.skill_models import SkillRegistry
 
 
 class AradhyaAssistant:
@@ -31,10 +32,12 @@ class AradhyaAssistant:
         preferences: AssistantPreferences,
         model_provider: TextModelProvider | None = None,
         now_provider: Callable[[], datetime] | None = None,
+        skill_registry: SkillRegistry | None = None,
     ):
         self.preferences = preferences
         self.now_provider = now_provider or datetime.now
         self.state = AssistantState()
+        self.skill_registry = skill_registry
         self.index_manager = DirectoryIndexManager(
             preferences,
             now_provider=self.now_provider,
@@ -44,6 +47,7 @@ class AradhyaAssistant:
             self.toolbox,
             self.now_provider,
             model_provider=model_provider,
+            skill_registry=skill_registry,
         )
         self._confirmation_phrases = {
             self._normalize_phrase(phrase)
@@ -55,8 +59,13 @@ class AradhyaAssistant:
         cls,
         project_root: Path | None = None,
         model_provider: TextModelProvider | None = None,
+        skill_registry: SkillRegistry | None = None,
     ) -> "AradhyaAssistant":
-        return cls(load_preferences(project_root), model_provider=model_provider)
+        return cls(
+            load_preferences(project_root),
+            model_provider=model_provider,
+            skill_registry=skill_registry,
+        )
 
     def handle_wake(self, source: WakeSource) -> AssistantResponse:
         self.state.is_awake = True

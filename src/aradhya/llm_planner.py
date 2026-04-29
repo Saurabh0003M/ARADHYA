@@ -15,6 +15,7 @@ from src.aradhya.json_extractor import (
 )
 from src.aradhya.assistant_system_tools import SystemToolbox
 from src.aradhya.model_provider import TextModelProvider
+from src.aradhya.skills.skill_models import SkillRegistry
 
 LLM_CONFIDENCE_THRESHOLD = 0.65
 
@@ -43,10 +44,12 @@ class LLMIntentPlanner:
         toolbox: SystemToolbox,
         model_provider: TextModelProvider,
         now_provider: Callable[[], Any],
+        skill_registry: SkillRegistry | None = None,
     ):
         self.toolbox = toolbox
         self.model_provider = model_provider
         self.now_provider = now_provider
+        self.skill_registry = skill_registry
 
     def build_plan(self, transcript: str, state: AssistantState) -> PlanAction:
         try:
@@ -103,19 +106,35 @@ class LLMIntentPlanner:
 
     def _build_system_prompt(self, state: AssistantState) -> str:
         debate_state = "enabled" if state.debate_mode_enabled else "disabled"
+        base_intents = (
+            "OPEN_PATH, OPEN_SECURITY_BLOGS, "
+            "LOCATE_TXT_DENSE_FOLDER, OPEN_YESTERDAYS_PROJECT, OPEN_RECENT_GAME, "
+            "SCREEN_CONTROL, EXTERNAL_DOCUMENT_HANDOFF, DEBATE_RESEARCH, "
+            "TOGGLE_DEBATE, UNKNOWN"
+        )
+        skill_intents_str = ""
+        skill_instructions_block = ""
+        if self.skill_registry is not None:
+            extra_intents = self.skill_registry.active_intents()
+            if extra_intents:
+                skill_intents_str = ", " + ", ".join(sorted(extra_intents))
+            instructions = self.skill_registry.active_instructions()
+            if instructions:
+                skill_instructions_block = (
+                    " The following skills are active and describe additional "
+                    f"capabilities: {instructions}"
+                )
         return (
             "You are Aradhya's intent classifier. "
             "Return only valid JSON with these keys: "
             '"intent", "confidence", "reasoning", "target", "enabled". '
             "Do not return Markdown, code fences, shell commands, or extra text. "
-            "Allowed intent values are: OPEN_PATH, OPEN_SECURITY_BLOGS, "
-            "LOCATE_TXT_DENSE_FOLDER, OPEN_YESTERDAYS_PROJECT, OPEN_RECENT_GAME, "
-            "SCREEN_CONTROL, EXTERNAL_DOCUMENT_HANDOFF, DEBATE_RESEARCH, "
-            "TOGGLE_DEBATE, UNKNOWN. "
+            f"Allowed intent values are: {base_intents}{skill_intents_str}. "
             "Use target only when the intent needs a path, app, or named thing. "
             "Use enabled only for TOGGLE_DEBATE. "
             "Be conservative: if you are unsure, return UNKNOWN or a confidence below 0.65. "
             f"The user's Debate AI mode is currently {debate_state}."
+            f"{skill_instructions_block}"
         )
 
     def _parse_decision(self, response_text: str) -> LLMPlannerDecision:

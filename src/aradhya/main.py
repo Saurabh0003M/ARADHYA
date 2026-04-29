@@ -20,6 +20,7 @@ from src.aradhya.logging_utils import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
+from src.aradhya.skills import load_skills
 from src.aradhya.voice_activation import (
     VoiceActivatedAradhya,
     describe_voice_activation_support,
@@ -162,9 +163,11 @@ def main() -> None:
     log_path = configure_logging(PROJECT_ROOT)
     runtime_profile = bootstrap_runtime_profile(runtime_profile, PROJECT_ROOT)
     model_provider = build_text_model_provider(runtime_profile.model)
+    skill_registry = load_skills(PROJECT_ROOT)
     assistant = AradhyaAssistant.from_project_root(
         PROJECT_ROOT,
         model_provider=model_provider,
+        skill_registry=skill_registry,
     )
     voice_manager = VoiceInboxManager(runtime_profile.voice)
     live_voice_runtime: VoiceActivatedAradhya | None = None
@@ -188,9 +191,14 @@ def main() -> None:
     print("Type 'model ping' or 'model ask <prompt>' for the configured local model.")
     print("Type 'icon enable' or 'icon disable' to toggle the floating wake icon.")
     print("Type 'wake word enable' or 'wake word disable' to toggle background listening.")
+    print("Type 'skills list', 'skills enable <name>', or 'skills disable <name>'.")
     print("Type 'sleep' to send Aradhya idle, or 'exit' to quit.")
     print(f"Configured model > {runtime_profile.model.model_name}")
     print(f"Voice inbox > {runtime_profile.voice.audio_inbox_dir}")
+    print(
+        f"Skills > {skill_registry.active_count} active / "
+        f"{skill_registry.count} loaded"
+    )
     print(f"Log file > {log_path}")
     print()
 
@@ -270,6 +278,36 @@ def main() -> None:
 
             if normalized == "voice process":
                 _process_voice_inbox(assistant, voice_manager)
+                continue
+
+            if normalized == "skills list":
+                all_skills = skill_registry.all_skills()
+                if not all_skills:
+                    print("Skills > No skills loaded.")
+                else:
+                    print(f"Skills > {len(all_skills)} skill(s) loaded:")
+                    for skill in all_skills:
+                        status = "enabled" if skill.enabled else "disabled"
+                        print(f"  [{status}] {skill.name} — {skill.description}")
+                print()
+                continue
+
+            if normalized.startswith("skills enable "):
+                skill_name = command[len("skills enable "):].strip()
+                if skill_registry.enable(skill_name):
+                    print(f"Skills > Enabled '{skill_name}'.")
+                else:
+                    print(f"Skills > Skill '{skill_name}' not found.")
+                print()
+                continue
+
+            if normalized.startswith("skills disable "):
+                skill_name = command[len("skills disable "):].strip()
+                if skill_registry.disable(skill_name):
+                    print(f"Skills > Disabled '{skill_name}'.")
+                else:
+                    print(f"Skills > Skill '{skill_name}' not found.")
+                print()
                 continue
 
             if normalized == "voice activate":

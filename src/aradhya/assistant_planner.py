@@ -11,6 +11,7 @@ from src.aradhya.assistant_models import AssistantState, PlanAction, PlanKind
 from src.aradhya.assistant_system_tools import SystemToolbox
 from src.aradhya.llm_planner import LLMIntentPlanner
 from src.aradhya.model_provider import TextModelProvider
+from src.aradhya.skills.skill_models import SkillRegistry
 
 
 class IntentPlanner:
@@ -27,11 +28,16 @@ class IntentPlanner:
         toolbox: SystemToolbox,
         now_provider: Callable,
         model_provider: TextModelProvider | None = None,
+        skill_registry: SkillRegistry | None = None,
     ):
         self.toolbox = toolbox
         self.now_provider = now_provider
+        self.skill_registry = skill_registry
         self.llm_planner = (
-            LLMIntentPlanner(toolbox, model_provider, now_provider)
+            LLMIntentPlanner(
+                toolbox, model_provider, now_provider,
+                skill_registry=skill_registry,
+            )
             if model_provider is not None
             else None
         )
