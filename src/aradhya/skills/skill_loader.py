@@ -125,6 +125,9 @@ def _parse_skill_file(
         python_packages=tuple(raw_requires.get("python_packages", [])),
     )
 
+    tool_module_raw = frontmatter.get("tool_module", None)
+    tool_module = str(tool_module_raw) if tool_module_raw else None
+
     return SkillDefinition(
         name=str(name),
         description=str(description),
@@ -134,6 +137,7 @@ def _parse_skill_file(
         requires=requirements,
         intents=tuple(str(i) for i in raw_intents),
         metadata=metadata if isinstance(metadata, dict) else {},
+        tool_module=tool_module,
     )
 
 

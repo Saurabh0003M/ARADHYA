@@ -26,13 +26,18 @@ from src.aradhya.model_provider import TextModelProvider
 from src.aradhya.session_manager import Session, SessionManager
 from src.aradhya.assistant_system_tools import SystemToolbox
 from src.aradhya.skills.skill_models import SkillRegistry
+from src.aradhya.tools.browser_tools import ALL_BROWSER_TOOLS
 from src.aradhya.tools.file_tools import ALL_FILE_TOOLS
+from src.aradhya.tools.power_tools import ALL_POWER_TOOLS
 from src.aradhya.tools.session_tools import ALL_SESSION_TOOLS
 from src.aradhya.tools.shell_tools import ALL_SHELL_TOOLS
 from src.aradhya.tools.system_tools import ALL_SYSTEM_TOOLS
 from src.aradhya.tools.tool_registry import ToolRegistry
 from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
+from src.aradhya.tools.vision_tools import ALL_VISION_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS
+from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
+from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 20
@@ -292,6 +297,11 @@ class AradhyaAssistant:
             *ALL_SYSTEM_TOOLS,
             *ALL_SESSION_TOOLS,
             *ALL_WEB_TOOLS,
+            *ALL_POWER_TOOLS,
+            *ALL_BROWSER_TOOLS,
+            *ALL_VISION_TOOLS,
+            *ALL_SKILL_INSTALLER_TOOLS,
+            *ALL_LEARNINGS_TOOLS,
         ):
             registry.register_function(tool)
         return registry

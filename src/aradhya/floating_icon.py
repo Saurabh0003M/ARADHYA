@@ -1,4 +1,8 @@
-"""Standalone draggable floating icon with an expandable menu."""
+"""Standalone draggable floating icon with an expandable menu.
+
+The icon lives in the system tray area and sends IPC commands to the
+main Aradhya process (or the daemon) via a simple file-based protocol.
+"""
 
 import sys
 import tkinter as tk
@@ -7,6 +11,7 @@ from pathlib import Path
 # We use a simple IPC file in the project root to send commands to main.py
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
+
 
 class FloatingIcon:
     def __init__(self, root):
@@ -18,12 +23,12 @@ class FloatingIcon:
         screen_height = self.root.winfo_screenheight()
         self.root.geometry(f"50x50+{screen_width - 100}+{screen_height - 150}")
 
-        self.root.configure(bg="#2D2D2D")
+        self.root.configure(bg="#1a1a2e")
         self.label = tk.Label(
             self.root,
             text="A",
-            fg="white",
-            bg="#2D2D2D",
+            fg="#00d4aa",
+            bg="#1a1a2e",
             font=("Segoe UI", 20, "bold"),
             cursor="hand2"
         )
@@ -33,24 +38,99 @@ class FloatingIcon:
         self._offset_y = 0
         self._is_dragging = False
 
+        # Toggle states
+        self._screen_watch = False
+        self._browser_active = False
+
         self.label.bind("<ButtonPress-1>", self.on_press)
         self.label.bind("<B1-Motion>", self.on_drag)
         self.label.bind("<ButtonRelease-1>", self.on_release)
 
         # Create the popup menu
-        self.menu = tk.Menu(self.root, tearoff=0, bg="#333333", fg="white", activebackground="#555555")
-        self.menu.add_command(label="Wake Aradhya", command=lambda: self.send_command("wake"))
-        self.menu.add_command(label="Sleep Aradhya", command=lambda: self.send_command("sleep"))
-        self.menu.add_command(label="Toggle Voice Listen", command=lambda: self.send_command("voice_toggle"))
+        self.menu = tk.Menu(
+            self.root, tearoff=0,
+            bg="#16213e", fg="#e0e0e0",
+            activebackground="#0f3460", activeforeground="#00d4aa",
+            font=("Segoe UI", 10),
+            relief="flat", bd=0,
+        )
+        self._build_menu()
+
+    def _build_menu(self):
+        """Build the right-click context menu with all controls."""
+        self.menu.delete(0, "end")
+
+        # ─── Core controls ───
+        self.menu.add_command(
+            label="⚡ Wake Aradhya",
+            command=lambda: self.send_command("wake"),
+        )
+        self.menu.add_command(
+            label="😴 Sleep Aradhya",
+            command=lambda: self.send_command("sleep"),
+        )
         self.menu.add_separator()
-        self.menu.add_command(label="Close Icon", command=lambda: self.send_command("exit_icon"))
+
+        # ─── Voice ───
+        self.menu.add_command(
+            label="🎙️ Toggle Voice Listen",
+            command=lambda: self.send_command("voice_toggle"),
+        )
+        self.menu.add_separator()
+
+        # ─── Screen & Browser toggles ───
+        screen_label = "📷 Screen Watch: ON" if self._screen_watch else "📷 Screen Watch: OFF"
+        self.menu.add_command(
+            label=screen_label,
+            command=self._toggle_screen_watch,
+        )
+
+        browser_label = "🌐 Browser: ACTIVE" if self._browser_active else "🌐 Browser: OFF"
+        self.menu.add_command(
+            label=browser_label,
+            command=self._toggle_browser,
+        )
+
+        self.menu.add_separator()
+
+        # ─── Power controls ───
+        self.menu.add_command(
+            label="🔒 Lock Screen",
+            command=lambda: self.send_command("lock_screen"),
+        )
+        self.menu.add_command(
+            label="☕ Keep Awake",
+            command=lambda: self.send_command("prevent_sleep"),
+        )
+        self.menu.add_separator()
+
+        # ─── Exit ───
+        self.menu.add_command(
+            label="❌ Close Icon",
+            command=lambda: self.send_command("exit_icon"),
+        )
+
+    def _toggle_screen_watch(self):
+        self._screen_watch = not self._screen_watch
+        self.send_command("screen_watch_toggle")
+        self._build_menu()  # Rebuild to update label
+        # Visual indicator: change icon color when screen watch is active
+        if self._screen_watch:
+            self.label.configure(fg="#ff6b6b")  # Red = watching
+        else:
+            self.label.configure(fg="#00d4aa")  # Teal = normal
+
+    def _toggle_browser(self):
+        self._browser_active = not self._browser_active
+        self.send_command("browser_toggle")
+        self._build_menu()
 
     def send_command(self, cmd: str):
         try:
             IPC_FILE.write_text(cmd, encoding="utf-8")
         except Exception as e:
             print(f"Failed to send command {cmd}: {e}")
-            
+
         if cmd == "exit_icon":
             self.root.destroy()
 

@@ -22,7 +22,14 @@ class SkillRequirements:
 
 @dataclass
 class SkillDefinition:
-    """A single loaded skill definition parsed from a SKILL.md file."""
+    """A single loaded skill definition parsed from a SKILL.md file.
+
+    If ``tool_module`` is set (e.g. ``"tools.py"``), the loader will
+    attempt to dynamically import that Python file from the skill's
+    ``base_dir`` and register any ``@tool_definition`` functions it finds
+    into the agent's ``ToolRegistry``.  The skill must be in the trusted
+    list (``~/.aradhya/trusted_skills.json``) for code execution.
+    """
 
     name: str
     description: str
@@ -32,6 +39,7 @@ class SkillDefinition:
     requires: SkillRequirements = field(default_factory=SkillRequirements)
     intents: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    tool_module: str | None = None
 
     @property
     def skill_file(self) -> Path:
