@@ -2,6 +2,12 @@
 
 The icon lives in the system tray area and sends IPC commands to the
 main Aradhya process (or the daemon) via a simple file-based protocol.
+
+Enhanced with quick-access buttons for:
+  - Microphone (toggle voice capture)
+  - Camera (toggle screen watch)
+  - Screen Share (toggle browser/screen capture)
+  - 'A' Debate AI activation toggle
 """
 
 import sys
@@ -12,55 +18,154 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
 
+# ── Color palette ─────────────────────────────────────────────────────
+BG_DARK = "#0d1117"
+BG_PANEL = "#161b22"
+BG_BUTTON = "#21262d"
+BG_HOVER = "#30363d"
+FG_TEAL = "#00d4aa"
+FG_TEXT = "#c9d1d9"
+FG_DIM = "#7f848e"
+FG_RED = "#f85149"
+FG_AMBER = "#d29922"
+FG_BLUE = "#58a6ff"
+FG_PURPLE = "#bc8cff"
+
 
 class FloatingIcon:
-    def __init__(self, root):
+    def __init__(self, root: tk.Tk):
         self.root = root
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
+        self.root.attributes("-alpha", 0.95)
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
-        self.root.geometry(f"50x50+{screen_width - 100}+{screen_height - 150}")
 
-        self.root.configure(bg="#1a1a2e")
-        self.label = tk.Label(
-            self.root,
-            text="A",
-            fg="#00d4aa",
-            bg="#1a1a2e",
-            font=("Segoe UI", 20, "bold"),
-            cursor="hand2"
+        # Panel dimensions (compact vertical strip)
+        self.panel_width = 54
+        self.panel_height = 290
+        self.root.geometry(
+            f"{self.panel_width}x{self.panel_height}"
+            f"+{screen_width - 80}+{screen_height - self.panel_height - 80}"
         )
-        self.label.pack(expand=True, fill="both")
+        self.root.configure(bg=BG_DARK)
 
+        # ── Drag state ────────────────────────────────────────────────
         self._offset_x = 0
         self._offset_y = 0
         self._is_dragging = False
 
-        # Toggle states
-        self._screen_watch = False
-        self._browser_active = False
+        # ── Toggle states ─────────────────────────────────────────────
+        self._mic_active = False
+        self._camera_active = False
+        self._screenshare_active = False
+        self._debate_active = False
+        self._is_awake = True
 
-        self.label.bind("<ButtonPress-1>", self.on_press)
-        self.label.bind("<B1-Motion>", self.on_drag)
-        self.label.bind("<ButtonRelease-1>", self.on_release)
+        # ── Build UI ──────────────────────────────────────────────────
+        self._build_panel()
 
-        # Create the popup menu
+        # Context menu for additional options
         self.menu = tk.Menu(
             self.root, tearoff=0,
-            bg="#16213e", fg="#e0e0e0",
-            activebackground="#0f3460", activeforeground="#00d4aa",
+            bg=BG_PANEL, fg=FG_TEXT,
+            activebackground=BG_HOVER, activeforeground=FG_TEAL,
             font=("Segoe UI", 10),
             relief="flat", bd=0,
         )
-        self._build_menu()
+        self._build_context_menu()
 
-    def _build_menu(self):
-        """Build the right-click context menu with all controls."""
+    def _make_button(self, parent, text, color, command, tooltip=""):
+        """Create a styled circular-ish button."""
+        btn = tk.Label(
+            parent,
+            text=text,
+            fg=color,
+            bg=BG_BUTTON,
+            font=("Segoe UI", 14),
+            width=3,
+            height=1,
+            cursor="hand2",
+            relief="flat",
+        )
+        btn.pack(pady=3, padx=4)
+        btn.bind("<Enter>", lambda e: btn.configure(bg=BG_HOVER))
+        btn.bind("<Leave>", lambda e: btn.configure(
+            bg=self._active_bg(btn) if hasattr(btn, "_active") and btn._active else BG_BUTTON
+        ))
+        btn.bind("<ButtonRelease-1>", lambda e: command())
+        btn._active = False
+        return btn
+
+    def _active_bg(self, btn):
+        return BG_HOVER if getattr(btn, "_active", False) else BG_BUTTON
+
+    def _build_panel(self):
+        """Build the vertical button strip."""
+        # Main logo / drag handle at top
+        self.logo = tk.Label(
+            self.root,
+            text="A",
+            fg=FG_TEAL,
+            bg=BG_DARK,
+            font=("Segoe UI", 18, "bold"),
+            cursor="fleur",  # move cursor
+        )
+        self.logo.pack(pady=(8, 4))
+        self.logo.bind("<ButtonPress-1>", self.on_press)
+        self.logo.bind("<B1-Motion>", self.on_drag)
+        self.logo.bind("<ButtonRelease-1>", self.on_release)
+
+        # Separator
+        sep = tk.Frame(self.root, bg=BG_HOVER, height=1)
+        sep.pack(fill="x", padx=8, pady=2)
+
+        # ── Quick-access buttons ──────────────────────────────────────
+
+        # 🎤 Microphone toggle
+        self.btn_mic = self._make_button(
+            self.root, "🎤", FG_DIM, self._toggle_mic,
+            tooltip="Toggle microphone",
+        )
+
+        # 📷 Camera / Screen Watch toggle
+        self.btn_camera = self._make_button(
+            self.root, "📷", FG_DIM, self._toggle_camera,
+            tooltip="Toggle screen watch",
+        )
+
+        # 🖥️ Screen Share toggle
+        self.btn_screen = self._make_button(
+            self.root, "🖥", FG_DIM, self._toggle_screenshare,
+            tooltip="Toggle screen share",
+        )
+
+        # Separator
+        sep2 = tk.Frame(self.root, bg=BG_HOVER, height=1)
+        sep2.pack(fill="x", padx=8, pady=2)
+
+        # 🅰️ Debate AI toggle
+        self.btn_debate = self._make_button(
+            self.root, "A", FG_DIM, self._toggle_debate,
+            tooltip="Toggle Debate AI",
+        )
+        self.btn_debate.configure(font=("Segoe UI", 14, "bold"))
+
+        # Separator
+        sep3 = tk.Frame(self.root, bg=BG_HOVER, height=1)
+        sep3.pack(fill="x", padx=8, pady=2)
+
+        # ⋮ More options (right-click menu)
+        self.btn_more = self._make_button(
+            self.root, "⋮", FG_DIM, self._show_menu,
+            tooltip="More options",
+        )
+
+    def _build_context_menu(self):
+        """Build the expanded context menu."""
         self.menu.delete(0, "end")
 
-        # ─── Core controls ───
         self.menu.add_command(
             label="⚡ Wake Aradhya",
             command=lambda: self.send_command("wake"),
@@ -70,30 +175,6 @@ class FloatingIcon:
             command=lambda: self.send_command("sleep"),
         )
         self.menu.add_separator()
-
-        # ─── Voice ───
-        self.menu.add_command(
-            label="🎙️ Toggle Voice Listen",
-            command=lambda: self.send_command("voice_toggle"),
-        )
-        self.menu.add_separator()
-
-        # ─── Screen & Browser toggles ───
-        screen_label = "📷 Screen Watch: ON" if self._screen_watch else "📷 Screen Watch: OFF"
-        self.menu.add_command(
-            label=screen_label,
-            command=self._toggle_screen_watch,
-        )
-
-        browser_label = "🌐 Browser: ACTIVE" if self._browser_active else "🌐 Browser: OFF"
-        self.menu.add_command(
-            label=browser_label,
-            command=self._toggle_browser,
-        )
-
-        self.menu.add_separator()
-
-        # ─── Power controls ───
         self.menu.add_command(
             label="🔒 Lock Screen",
             command=lambda: self.send_command("lock_screen"),
@@ -103,27 +184,64 @@ class FloatingIcon:
             command=lambda: self.send_command("prevent_sleep"),
         )
         self.menu.add_separator()
-
-        # ─── Exit ───
         self.menu.add_command(
             label="❌ Close Icon",
             command=lambda: self.send_command("exit_icon"),
         )
 
-    def _toggle_screen_watch(self):
-        self._screen_watch = not self._screen_watch
-        self.send_command("screen_watch_toggle")
-        self._build_menu()  # Rebuild to update label
-        # Visual indicator: change icon color when screen watch is active
-        if self._screen_watch:
-            self.label.configure(fg="#ff6b6b")  # Red = watching
-        else:
-            self.label.configure(fg="#00d4aa")  # Teal = normal
+    # ── Toggle handlers ───────────────────────────────────────────────
 
-    def _toggle_browser(self):
-        self._browser_active = not self._browser_active
+    def _toggle_mic(self):
+        self._mic_active = not self._mic_active
+        if self._mic_active:
+            self.btn_mic.configure(fg=FG_RED, bg=BG_HOVER)
+            self.btn_mic._active = True
+        else:
+            self.btn_mic.configure(fg=FG_DIM, bg=BG_BUTTON)
+            self.btn_mic._active = False
+        self.send_command("voice_toggle")
+
+    def _toggle_camera(self):
+        self._camera_active = not self._camera_active
+        if self._camera_active:
+            self.btn_camera.configure(fg=FG_RED, bg=BG_HOVER)
+            self.btn_camera._active = True
+        else:
+            self.btn_camera.configure(fg=FG_DIM, bg=BG_BUTTON)
+            self.btn_camera._active = False
+        self.send_command("screen_watch_toggle")
+
+    def _toggle_screenshare(self):
+        self._screenshare_active = not self._screenshare_active
+        if self._screenshare_active:
+            self.btn_screen.configure(fg=FG_BLUE, bg=BG_HOVER)
+            self.btn_screen._active = True
+        else:
+            self.btn_screen.configure(fg=FG_DIM, bg=BG_BUTTON)
+            self.btn_screen._active = False
         self.send_command("browser_toggle")
-        self._build_menu()
+
+    def _toggle_debate(self):
+        self._debate_active = not self._debate_active
+        if self._debate_active:
+            self.btn_debate.configure(fg=FG_PURPLE, bg=BG_HOVER)
+            self.btn_debate._active = True
+            # Change main logo to indicate Debate mode
+            self.logo.configure(fg=FG_PURPLE)
+        else:
+            self.btn_debate.configure(fg=FG_DIM, bg=BG_BUTTON)
+            self.btn_debate._active = False
+            self.logo.configure(fg=FG_TEAL)
+        self.send_command("debate_toggle")
+
+    # ── Menu ──────────────────────────────────────────────────────────
+
+    def _show_menu(self):
+        x = self.root.winfo_x() - 150
+        y = self.root.winfo_y()
+        self.menu.tk_popup(x, y)
+
+    # ── IPC ───────────────────────────────────────────────────────────
 
     def send_command(self, cmd: str):
         try:
@@ -133,6 +251,8 @@ class FloatingIcon:
 
         if cmd == "exit_icon":
             self.root.destroy()
+
+    # ── Drag handling ─────────────────────────────────────────────────
 
     def on_press(self, event):
         self._offset_x = event.x
@@ -147,16 +267,24 @@ class FloatingIcon:
 
     def on_release(self, event):
         if not self._is_dragging:
-            # It was a click, show menu
-            try:
-                self.menu.tk_popup(event.x_root, event.y_root)
-            finally:
-                self.menu.grab_release()
+            # Click on logo = toggle wake/sleep
+            self._is_awake = not self._is_awake
+            if self._is_awake:
+                self.logo.configure(
+                    fg=FG_PURPLE if self._debate_active else FG_TEAL,
+                )
+                self.send_command("wake")
+            else:
+                self.logo.configure(fg=FG_AMBER)
+                self.send_command("sleep")
+
 
 def main():
     root = tk.Tk()
+    root.title("Aradhya")
     app = FloatingIcon(root)
     root.mainloop()
+
 
 if __name__ == "__main__":
     main()

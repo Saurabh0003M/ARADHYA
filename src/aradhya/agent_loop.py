@@ -18,6 +18,8 @@ from typing import Any, Callable, Protocol
 
 from loguru import logger
 
+from src.aradhya.audit_logger import get_audit_logger
+
 from src.aradhya.json_extractor import (
     JSONExtractionError,
     extract_json_from_llm_response,
@@ -368,6 +370,7 @@ class AgentLoop:
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call, applying the confirmation gate if needed."""
         assert self.tool_executor is not None
+        audit = get_audit_logger()
 
         dangerous_tools = {
             "run_command",
@@ -385,6 +388,11 @@ class AgentLoop:
         if tool_call.name in dangerous_tools and self.confirmation_gate:
             approved = self.confirmation_gate(tool_call.name, tool_call.arguments)
             if not approved:
+                audit.log_security_event(
+                    "tool_denied",
+                    f"User denied tool '{tool_call.name}'",
+                    severity="warning",
+                )
                 return ToolResult(
                     tool_call_id=tool_call.id,
                     name=tool_call.name,
@@ -394,12 +402,25 @@ class AgentLoop:
                 )
 
         try:
-            return self.tool_executor.execute_tool(
+            result = self.tool_executor.execute_tool(
                 tool_call.name, tool_call.arguments, tool_call.id
             )
+            audit.log_tool_call(
+                tool_call.name,
+                arguments=tool_call.arguments,
+                success=result.success,
+                output_preview=result.output[:200] if result.output else "",
+            )
+            return result
         except Exception as error:
             logger.error(
                 "Tool execution failed for '{}': {}", tool_call.name, error
+            )
+            audit.log_tool_call(
+                tool_call.name,
+                arguments=tool_call.arguments,
+                success=False,
+                output_preview=str(error)[:200],
             )
             return ToolResult(
                 tool_call_id=tool_call.id,

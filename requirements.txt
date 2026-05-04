@@ -7,6 +7,9 @@ pyyaml>=6.0
 loguru>=0.7.0
 colorama>=0.4.6  # For colored terminal output on Windows
 
+# Rich CLI experience
+rich>=13.7.0
+
 # Data processing
 pandas>=2.0.0
 numpy>=1.24.0
