@@ -30,6 +30,7 @@ from src.aradhya.ui.cli import (
     render_voice_status,
     render_warning,
     prompt_input,
+    render_stream,
 )
 from src.aradhya.utils.logging import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
@@ -631,13 +632,16 @@ def main() -> None:
 
             # ── Natural language input ────────────────────────────────
             # Everything that isn't a command goes to the assistant planner.
-            with console.status("[dim]Thinking...[/]", spinner="dots"):
-                resp = assistant.handle_transcript(command)
-            render_response(
-                resp.spoken_response,
-                transcript_echo=resp.transcript_echo,
-                awaiting=resp.awaiting_confirmation,
-            )
+            resp = assistant.handle_transcript(command, stream_handler=render_stream)
+            
+            # For streaming, the text is already rendered live, so we only need to
+            # render the transcript echo or awaiting confirmation if applicable.
+            if resp.transcript_echo or resp.awaiting_confirmation:
+                render_response(
+                    resp.spoken_response if resp.awaiting_confirmation else "",
+                    transcript_echo=resp.transcript_echo,
+                    awaiting=resp.awaiting_confirmation,
+                )
 
     finally:
         ctx["ipc_running"] = False

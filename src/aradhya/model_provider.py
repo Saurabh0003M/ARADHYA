@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 from loguru import logger
 import requests
@@ -67,6 +67,14 @@ class TextModelProvider(Protocol):
     ) -> ModelResult:
         """Generate a response for the given prompt."""
 
+    def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+    ) -> Iterator[str]:
+        """Stream a response for the given prompt, yielding text chunks."""
+
     def chat(
         self,
         messages: list[dict[str, Any]],
@@ -75,6 +83,14 @@ class TextModelProvider(Protocol):
         system_prompt: str | None = None,
     ) -> ModelChatResult:
         """Generate a chat response, optionally with structured tool calls."""
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system_prompt: str | None = None,
+    ) -> Iterator[str]:
+        """Stream a chat response, yielding text chunks."""
 
 
 class OllamaTextModelProvider:
@@ -167,6 +183,38 @@ class OllamaTextModelProvider:
             raw=raw,
         )
 
+    def generate_stream(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+    ) -> Iterator[str]:
+        logger.debug(
+            "Streaming prompt to Ollama model {} with system prompt override={}",
+            self.profile.model_name,
+            system_prompt is not None,
+        )
+        payload = {
+            "model": self.profile.model_name,
+            "prompt": prompt,
+            "system": system_prompt or self.profile.system_prompt,
+            "stream": True,
+        }
+        response = self.session.post(
+            f"{self.profile.base_url}/api/generate",
+            json=payload,
+            timeout=self.profile.request_timeout_seconds,
+            stream=True,
+        )
+        response.raise_for_status()
+
+        import json
+        for line in response.iter_lines():
+            if line:
+                chunk = json.loads(line)
+                if "response" in chunk:
+                    yield chunk["response"]
+
     def chat(
         self,
         messages: list[dict[str, Any]],
@@ -213,6 +261,39 @@ class OllamaTextModelProvider:
             raw=raw,
             tool_calls=tool_calls,
         )
+
+    def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        *,
+        system_prompt: str | None = None,
+    ) -> Iterator[str]:
+        logger.debug("Streaming chat request to Ollama model {}", self.profile.model_name)
+        chat_messages = list(messages)
+        if system_prompt:
+            chat_messages = [{"role": "system", "content": system_prompt}] + chat_messages
+
+        payload: dict[str, Any] = {
+            "model": self.profile.model_name,
+            "messages": chat_messages,
+            "stream": True,
+        }
+
+        response = self.session.post(
+            f"{self.profile.base_url}/api/chat",
+            json=payload,
+            timeout=self.profile.request_timeout_seconds,
+            stream=True,
+        )
+        response.raise_for_status()
+
+        import json
+        for line in response.iter_lines():
+            if line:
+                chunk = json.loads(line)
+                message = chunk.get("message", {}) or {}
+                if "content" in message:
+                    yield message["content"]
 
     def _parse_tool_call(self, raw_call: dict[str, Any]) -> ModelToolCall:
         function = raw_call.get("function", {}) or {}

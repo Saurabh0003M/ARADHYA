@@ -126,6 +126,32 @@ class TelegramAPI:
                 parse_mode=None,
             )
 
+    def edit_message_text(
+        self,
+        chat_id: int,
+        message_id: int,
+        text: str,
+        parse_mode: str = "Markdown",
+    ) -> dict:
+        if len(text) > 4000:
+            text = text[:3997] + "..."
+        try:
+            return self._call(
+                "editMessageText",
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode=parse_mode,
+            )
+        except Exception:
+            return self._call(
+                "editMessageText",
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                parse_mode=None,
+            )
+
     def send_typing(self, chat_id: int) -> None:
         try:
             self._call("sendChatAction", chat_id=chat_id, action="typing")
@@ -255,8 +281,7 @@ class AradhyaTelegramBot:
 
         # Route through assistant
         self.api.send_typing(chat_id)
-        response = self._process_message(text)
-        self.api.send_message(chat_id, response)
+        self._process_message(chat_id, text)
 
     def _is_allowed(self, user_id: int, user_name: str, chat_id: int) -> bool:
         """Check if user is in the allow list. Auto-register first user if empty."""
@@ -289,13 +314,14 @@ class AradhyaTelegramBot:
         )
         return False
 
-    def _process_message(self, text: str) -> str:
-        """Route a message through the Aradhya assistant."""
+    def _process_message(self, chat_id: int, text: str) -> None:
+        """Route a message through the Aradhya assistant with live streaming."""
         if self.assistant is None:
-            return (
-                "Aradhya assistant is not connected. "
-                "Start the bot via the main CLI for full functionality."
+            self.api.send_message(
+                chat_id,
+                "Aradhya assistant is not connected. Start the bot via the main CLI."
             )
+            return
 
         try:
             # Ensure assistant is awake
@@ -303,23 +329,65 @@ class AradhyaTelegramBot:
                 from src.aradhya.assistant_models import WakeSource
                 self.assistant.handle_wake(WakeSource.FLOATING_ICON)
 
-            response = self.assistant.handle_transcript(text)
+            # Send a placeholder message
+            placeholder = self.api.send_message(chat_id, "🤔 *Thinking...*")
+            msg_id = placeholder.get("message_id")
+
+            accumulated_text = ""
+            last_edit_time = 0.0
+            edit_interval = 1.5  # Prevent Telegram rate limits (1 edit per sec max)
+
+            def stream_handler(chunk: str):
+                nonlocal accumulated_text, last_edit_time
+                accumulated_text += chunk
+                
+                now = time.time()
+                if now - last_edit_time > edit_interval and msg_id:
+                    try:
+                        self.api.edit_message_text(
+                            chat_id=chat_id,
+                            message_id=msg_id,
+                            text=accumulated_text + " ⏳",
+                        )
+                        last_edit_time = now
+                    except Exception as e:
+                        logger.debug("Telegram stream edit failed: {}", e)
+
+            response = self.assistant.handle_transcript(text, stream_handler=stream_handler)
 
             parts = []
             if response.transcript_echo:
                 parts.append(f"_Heard: {response.transcript_echo}_")
-            parts.append(response.spoken_response)
+            
+            # The full response might have formatting stripped or clean tags, use it over raw accumulation
+            if response.spoken_response:
+                parts.append(response.spoken_response)
+            elif accumulated_text:
+                parts.append(accumulated_text)
 
             if response.awaiting_confirmation:
                 parts.append(
                     "\n-- Reply 'yes proceed' to execute, or 'cancel' to discard."
                 )
 
-            return "\n".join(parts)
+            final_text = "\n".join(parts)
+            
+            # Final replacement
+            if msg_id:
+                try:
+                    self.api.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=msg_id,
+                        text=final_text,
+                    )
+                except Exception:
+                    self.api.send_message(chat_id, final_text)
+            else:
+                self.api.send_message(chat_id, final_text)
 
         except Exception as error:
             logger.error("Telegram message processing failed: {}", error)
-            return f"Error processing your request: {error}"
+            self.api.send_message(chat_id, f"Error processing your request: {error}")
 
     def _send_status(self, chat_id: int) -> None:
         """Send system status."""

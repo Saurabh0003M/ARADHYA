@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 from loguru import logger
 
@@ -85,6 +85,10 @@ class AradhyaAssistant:
             self._normalize_phrase(phrase)
             for phrase in self.preferences.confirmation_phrases
         }
+        
+        from src.aradhya.mcp_client import MCPManager
+        self.mcp_manager = MCPManager()
+        self.mcp_manager.load_from_profile(self.project_root / "core" / "memory" / "profile.json")
 
     @classmethod
     def from_project_root(
@@ -131,7 +135,9 @@ class AradhyaAssistant:
         logger.info("Aradhya returned to idle state")
         return AssistantResponse(spoken_response="Aradhya is going idle.")
 
-    def handle_transcript(self, transcript: str) -> AssistantResponse:
+    def handle_transcript(
+        self, transcript: str, stream_handler: Callable[..., str] | None = None
+    ) -> AssistantResponse:
         logger.info("Handling transcript: {}", transcript)
         if not self.state.is_awake:
             return AssistantResponse(
@@ -161,7 +167,7 @@ class AradhyaAssistant:
             self.state.pending_plan = None
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
-            result = self._execute_plan(plan)
+            result = self._execute_plan(plan, stream_handler=stream_handler)
             logger.info("Executed confirmed plan {} with success={}", plan.kind, result.success)
             return AssistantResponse(
                 spoken_response=result.message,
@@ -207,7 +213,7 @@ class AradhyaAssistant:
                 index_snapshot=snapshot,
             )
 
-        result = self._execute_plan(plan)
+        result = self._execute_plan(plan, stream_handler=stream_handler)
         logger.info("Executed immediate plan {} with success={}", plan.kind, result.success)
         return AssistantResponse(
             spoken_response=result.message,
@@ -226,14 +232,18 @@ class AradhyaAssistant:
     def _is_cancel_phrase(self, normalized: str) -> bool:
         return normalized in {"cancel", "stop", "never mind", "nevermind", "no cancel"}
 
-    def _execute_plan(self, plan) -> ExecutionResult:
+    def _execute_plan(
+        self, plan, stream_handler: Callable[..., str] | None = None
+    ) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
-            return self._execute_agent_task(plan)
+            return self._execute_agent_task(plan, stream_handler=stream_handler)
         if plan.kind == PlanKind.GENERAL_CHAT:
-            return self._execute_general_chat(plan)
+            return self._execute_general_chat(plan, stream_handler=stream_handler)
         return self.toolbox.execute(plan, self.state)
 
-    def _execute_general_chat(self, plan) -> ExecutionResult:
+    def _execute_general_chat(
+        self, plan, stream_handler: Callable[..., str] | None = None
+    ) -> ExecutionResult:
         if self.model_provider is None:
             return ExecutionResult(False, "No model provider configured.")
             
@@ -254,12 +264,19 @@ class AradhyaAssistant:
                 "Answer the user directly without using any system tools."
             )
             
-            chat_result = self.model_provider.chat(
-                messages=messages,
-                system_prompt=system_prompt,
-                tools=None,  # No tools injected!
-            )
-            response_text = chat_result.text
+            if stream_handler is not None and hasattr(self.model_provider, "chat_stream"):
+                stream = self.model_provider.chat_stream(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                )
+                response_text = stream_handler(stream)
+            else:
+                chat_result = self.model_provider.chat(
+                    messages=messages,
+                    system_prompt=system_prompt,
+                    tools=None,  # No tools injected!
+                )
+                response_text = chat_result.text
             
             session.add_message("user", request, plan_kind=PlanKind.GENERAL_CHAT.value)
             session.add_message("assistant", response_text, plan_kind=PlanKind.GENERAL_CHAT.value)
@@ -270,7 +287,9 @@ class AradhyaAssistant:
         except Exception as e:
             return ExecutionResult(False, f"[Chat Error: {e}]")
 
-    def _execute_agent_task(self, plan) -> ExecutionResult:
+    def _execute_agent_task(
+        self, plan, stream_handler: Callable[..., str] | None = None
+    ) -> ExecutionResult:
         if self.model_provider is None:
             return ExecutionResult(
                 False,
@@ -292,7 +311,7 @@ class AradhyaAssistant:
             max_repeated_tool_calls=3,
         )
 
-        turn = loop.run(request, system_prompt, history=history)
+        turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         session.add_message(
@@ -343,6 +362,9 @@ class AradhyaAssistant:
             *ALL_LEARNINGS_TOOLS,
         ):
             registry.register_function(tool)
+            
+        self.mcp_manager.connect_and_register_tools(registry)
+        
         return registry
 
     def _build_agent_system_prompt(self, session: Session | None) -> str:

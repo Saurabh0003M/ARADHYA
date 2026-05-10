@@ -14,7 +14,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Iterator, Protocol
 
 from loguru import logger
 
@@ -111,6 +111,7 @@ class AgentLoop:
         system_prompt: str,
         history: list[dict[str, Any]] | None = None,
         thinking: ThinkingLevel = ThinkingLevel.MEDIUM,
+        stream_handler: Callable[..., str] | None = None,
     ) -> AgentTurn:
         """Execute a full agent turn.
 
@@ -138,7 +139,7 @@ class AgentLoop:
             turn.iterations = iteration + 1
 
             try:
-                response = self._call_model(messages)
+                response = self._call_model(messages, stream_handler=stream_handler)
             except Exception as error:
                 logger.error("Agent loop model call failed: {}", error)
                 turn.final_response = f"[Error calling model: {error}]"
@@ -207,10 +208,32 @@ class AgentLoop:
 
         return turn
 
-    def _call_model(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
+    def _call_model(
+        self,
+        messages: list[dict[str, Any]],
+        stream_handler: Callable[..., str] | None = None,
+    ) -> dict[str, Any]:
         """Call the model provider with messages and available tools."""
 
         tools = self._tool_definitions()
+
+        if stream_handler and hasattr(self.model_provider, "chat_stream"):
+            system_prompt = ""
+            if tools:
+                system_prompt = (
+                    "Available tools are provided as JSON Schema definitions below. "
+                    "You MUST wrap any internal thoughts or reasoning in <thought> tags before calling a tool. "
+                    "To call a tool, reply with JSON like "
+                    '{"name":"tool_name","arguments":{...}} outside the thought tags.\n'
+                    + json.dumps(tools, indent=2)
+                )
+            stream = self.model_provider.chat_stream(
+                messages=messages,
+                system_prompt=system_prompt,
+            )
+            # Pass style="dim" to stream handler for thoughts
+            response_text = stream_handler(stream, "dim")
+            return {"text": response_text, "tool_calls": []}
 
         if hasattr(self.model_provider, "chat"):
             result = self.model_provider.chat(messages, tools=tools)

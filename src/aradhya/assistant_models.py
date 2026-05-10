@@ -75,6 +75,7 @@ class AssistantPreferences:
     project_markers: tuple[str, ...]
     game_library_roots: tuple[Path, ...]
     allow_live_execution: bool = False
+    use_docker_sandbox: bool = False
     directory_index_policy: DirectoryIndexPolicy = field(
         default_factory=DirectoryIndexPolicy
     )
@@ -192,6 +193,7 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
         ),
         game_library_roots=tuple(),
         allow_live_execution=False,
+        use_docker_sandbox=False,
         directory_index_policy=DirectoryIndexPolicy(),
     )
 
@@ -288,6 +290,9 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         ),
         allow_live_execution=data.get(
             "allow_live_execution", defaults.allow_live_execution
+        ),
+        use_docker_sandbox=data.get(
+            "use_docker_sandbox", defaults.use_docker_sandbox
         ),
         directory_index_policy=policy,
     )

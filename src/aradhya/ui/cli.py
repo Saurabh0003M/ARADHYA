@@ -10,7 +10,7 @@ from __future__ import annotations
 import io
 import os
 import sys
-from typing import Any
+from typing import Any, Iterator
 
 # Force UTF-8 on Windows terminals before Rich initializes.
 if sys.platform == "win32":
@@ -30,6 +30,7 @@ from rich.text import Text
 from rich.theme import Theme
 from rich.columns import Columns
 from rich.markdown import Markdown
+from rich.live import Live
 from rich import box
 
 # ── Global theme ──────────────────────────────────────────────────────
@@ -370,3 +371,26 @@ def get_prompt() -> str:
 def prompt_input() -> str:
     """Read user input with a styled prompt."""
     return console.input(get_prompt())
+
+def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = "") -> str:
+    """Render a live stream of text chunks.
+    
+    Returns the complete text after the stream finishes.
+    """
+    full_text = ""
+    # Use a generic Text renderable so we can prepend the prefix on the first line
+    # and update smoothly without markdown parsing jumps.
+    text_renderable = Text.from_markup(prefix)
+    
+    with Live(text_renderable, console=console, refresh_per_second=15, transient=False) as live:
+        for chunk in stream:
+            full_text += chunk
+            # Append chunk (unmarked) to the rich Text object
+            if style:
+                text_renderable.append(chunk, style=style)
+            else:
+                text_renderable.append(chunk)
+            live.update(text_renderable)
+            
+    console.print()
+    return full_text

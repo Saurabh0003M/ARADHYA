@@ -42,12 +42,29 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         return f"Error: Working directory does not exist: {work_dir}"
 
     try:
+        from src.aradhya.assistant_models import load_preferences
+        prefs = load_preferences()
+        
+        final_command = command
+        # Sandboxing support (ZeroClaw feature)
+        if getattr(prefs, "use_docker_sandbox", False):
+            try:
+                # Check if docker is available
+                subprocess.run("docker --version", shell=True, capture_output=True, check=True)
+                import shlex
+                escaped_cmd = shlex.quote(command)
+                # Mount the working directory to /workspace and run the command securely
+                final_command = f'docker run --rm -v "{work_dir}:/workspace" -w /workspace python:3.10-slim bash -c {escaped_cmd}'
+            except subprocess.CalledProcessError:
+                # Docker not installed/running, gracefully fallback to local execution
+                pass
+
         result = subprocess.run(
-            command,
+            final_command,
             shell=True,
             capture_output=True,
             text=True,
-            cwd=str(work_dir),
+            cwd=str(work_dir) if final_command == command else None,
             timeout=timeout,
         )
 
