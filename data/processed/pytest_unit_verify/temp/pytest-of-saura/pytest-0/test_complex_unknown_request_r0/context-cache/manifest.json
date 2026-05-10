@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-04-05T10:00:00",
+  "refresh_interval_seconds": 60,
+  "indexed_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_complex_unknown_request_r0"
+  ],
+  "game_roots": [],
+  "root_signatures": {
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_complex_unknown_request_r0": "2612ce56ed7d8c0b2a22add3c87d4011455821d69a0fd1c6f490e6fac6f4dc0c"
+  },
+  "shards": {
+    "F": "drive_F.json"
+  },
+  "total_indexed_nodes": 1,
+  "summary_node_count": 3,
+  "summary_truncated": false
+}

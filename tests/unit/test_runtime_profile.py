@@ -12,7 +12,7 @@ from src.aradhya.runtime_profile import (
     load_runtime_profile,
     persist_model_name,
 )
-from src.aradhya.voice_pipeline import VoiceInboxManager
+from src.aradhya.voice.pipeline import VoiceInboxManager
 
 
 class DummyResponse:

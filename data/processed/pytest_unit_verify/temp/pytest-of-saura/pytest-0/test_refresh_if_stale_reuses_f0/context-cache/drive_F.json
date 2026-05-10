@@ -1,0 +1,35 @@
+{
+  "drive_key": "F",
+  "user_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_refresh_if_stale_reuses_f0\\user"
+  ],
+  "game_roots": [],
+  "name_candidates": {
+    "docs": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_refresh_if_stale_reuses_f0\\user\\docs",
+        "is_dir": true,
+        "depth": 1,
+        "mtime": 1777489701.8391685
+      }
+    ],
+    "user": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_refresh_if_stale_reuses_f0\\user",
+        "is_dir": true,
+        "depth": 0,
+        "mtime": 1777489701.8391685
+      }
+    ]
+  },
+  "txt_folders": [],
+  "projects": [],
+  "games": [],
+  "shallow_outline": {
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_refresh_if_stale_reuses_f0\\user": [
+      "    [D] docs"
+    ]
+  },
+  "directory_count": 2,
+  "file_count": 0
+}

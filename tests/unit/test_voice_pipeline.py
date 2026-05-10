@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from src.aradhya.runtime_profile import VoiceProfile
-from src.aradhya.voice_pipeline import VoiceInboxManager
-from src.aradhya.voice_transcriber import FileTranscription
+from src.aradhya.voice.pipeline import VoiceInboxManager
+from src.aradhya.voice.transcriber import FileTranscription
 
 
 class FakeProcessedTranscriber:

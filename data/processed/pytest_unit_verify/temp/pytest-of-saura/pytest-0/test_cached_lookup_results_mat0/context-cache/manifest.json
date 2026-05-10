@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "generated_at": "2026-04-05T10:00:00",
+  "refresh_interval_seconds": 60,
+  "indexed_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cached_lookup_results_mat0\\user"
+  ],
+  "game_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cached_lookup_results_mat0\\games"
+  ],
+  "root_signatures": {
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cached_lookup_results_mat0\\user": "4552ec2291b620087beb635a98c139f9c8bbcd239b822a2901d80a608ec3a61f",
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cached_lookup_results_mat0\\games": "93f6b9676365ab20f5ced2f29a40fb76075dee6261155c4fc09bf92915aaeba3"
+  },
+  "shards": {
+    "F": "drive_F.json"
+  },
+  "total_indexed_nodes": 7,
+  "summary_node_count": 5,
+  "summary_truncated": false
+}

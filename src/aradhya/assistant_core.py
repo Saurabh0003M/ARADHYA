@@ -229,7 +229,46 @@ class AradhyaAssistant:
     def _execute_plan(self, plan) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
             return self._execute_agent_task(plan)
+        if plan.kind == PlanKind.GENERAL_CHAT:
+            return self._execute_general_chat(plan)
         return self.toolbox.execute(plan, self.state)
+
+    def _execute_general_chat(self, plan) -> ExecutionResult:
+        if self.model_provider is None:
+            return ExecutionResult(False, "No model provider configured.")
+            
+        request = str(plan.metadata.get("request") or "").strip()
+        if not request:
+            return ExecutionResult(False, "Chat plan missing request.")
+
+        session = self.session_manager.active_session or self.session_manager.load_or_create("main")
+        history = self._build_agent_history(session)
+        
+        try:
+            # Bypass tool registry completely for fast response
+            messages = list(history)
+            messages.append({"role": "user", "content": request})
+            
+            system_prompt = (
+                "You are Aradhya, a concise local assistant. "
+                "Answer the user directly without using any system tools."
+            )
+            
+            chat_result = self.model_provider.chat(
+                messages=messages,
+                system_prompt=system_prompt,
+                tools=None,  # No tools injected!
+            )
+            response_text = chat_result.text
+            
+            session.add_message("user", request, plan_kind=PlanKind.GENERAL_CHAT.value)
+            session.add_message("assistant", response_text, plan_kind=PlanKind.GENERAL_CHAT.value)
+            self.session_manager.save(session)
+            
+            return ExecutionResult(True, response_text)
+            
+        except Exception as e:
+            return ExecutionResult(False, f"[Chat Error: {e}]")
 
     def _execute_agent_task(self, plan) -> ExecutionResult:
         if self.model_provider is None:

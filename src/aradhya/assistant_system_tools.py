@@ -220,6 +220,14 @@ class SystemToolbox:
             metadata={"enabled": enabled},
         )
 
+    def plan_general_chat(self, transcript: str) -> PlanAction:
+        return PlanAction(
+            kind=PlanKind.GENERAL_CHAT,
+            summary="I will just answer that directly without using my system tools.",
+            requires_confirmation=False,
+            metadata={"request": transcript},
+        )
+
     def execute(self, plan: PlanAction, state: AssistantState) -> ExecutionResult:
         if plan.kind == PlanKind.TOGGLE_DEBATE:
             enabled = bool(plan.metadata.get("enabled"))

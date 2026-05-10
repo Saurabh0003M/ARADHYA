@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.aradhya.json_extractor import (
+from src.aradhya.utils.json_extractor import (
     JSONExtractionError,
     extract_json_from_llm_response,
     validate_json_structure,

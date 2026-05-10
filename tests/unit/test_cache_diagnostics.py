@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from src.aradhya.assistant_models import AssistantPreferences, DirectoryIndexPolicy
-from src.aradhya.cache_diagnostics import (
+from src.aradhya.utils.cache_diagnostics import (
     format_cache_validation_report,
     run_cache_validation,
 )

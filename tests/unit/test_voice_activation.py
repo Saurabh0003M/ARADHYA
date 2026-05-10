@@ -4,8 +4,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from src.aradhya.runtime_profile import build_default_runtime_profile
-from src.aradhya.voice_activation import VoiceActivatedAradhya, describe_voice_activation_support
-from src.aradhya.voice_pipeline import VoiceJobResult
+from src.aradhya.voice.activation import VoiceActivatedAradhya, describe_voice_activation_support
+from src.aradhya.voice.pipeline import VoiceJobResult
 
 
 class FakeAssistant:

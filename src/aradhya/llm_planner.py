@@ -8,7 +8,7 @@ from typing import Any, Callable
 from loguru import logger
 
 from src.aradhya.assistant_models import AssistantState, PlanAction, PlanKind
-from src.aradhya.json_extractor import (
+from src.aradhya.utils.json_extractor import (
     JSONExtractionError,
     extract_json_from_llm_response,
     validate_json_structure,
@@ -110,7 +110,7 @@ class LLMIntentPlanner:
             "OPEN_PATH, OPEN_SECURITY_BLOGS, "
             "LOCATE_TXT_DENSE_FOLDER, OPEN_YESTERDAYS_PROJECT, OPEN_RECENT_GAME, "
             "SCREEN_CONTROL, EXTERNAL_DOCUMENT_HANDOFF, DEBATE_RESEARCH, "
-            "TOGGLE_DEBATE, UNKNOWN"
+            "TOGGLE_DEBATE, GENERAL_CHAT, UNKNOWN"
         )
         skill_intents_str = ""
         skill_instructions_block = ""
@@ -211,6 +211,9 @@ class LLMIntentPlanner:
             if decision.enabled is None:
                 return self._unknown_missing_field("TOGGLE_DEBATE", "enabled")
             return self.toolbox.plan_toggle_debate(decision.enabled)
+
+        if decision.intent == "GENERAL_CHAT":
+            return self.toolbox.plan_general_chat(transcript)
 
         return PlanAction(
             kind=PlanKind.UNKNOWN,

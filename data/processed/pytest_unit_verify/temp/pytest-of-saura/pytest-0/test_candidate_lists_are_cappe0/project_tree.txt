@@ -1,0 +1,49 @@
+# Aradhya directory index summary
+generated_at=2026-04-05T10:00:00
+reason=wake
+refreshed=true
+context_cache_manifest=F:\ARADHYA\data\processed\pytest_unit_verify\temp\pytest-of-saura\pytest-0\test_candidate_lists_are_cappe0\context-cache\manifest.json
+
+[DRIVE] F
+  user_roots=1 indexed_names=42 projects=0 games=0 txt_dense_dirs=40
+  [ROOT] F:\ARADHYA\data\processed\pytest_unit_verify\temp\pytest-of-saura\pytest-0\test_candidate_lists_are_cappe0\user
+    [D] folder-0
+    [D] folder-1
+    [D] folder-10
+    [D] folder-11
+    [D] folder-12
+    [D] folder-13
+    [D] folder-14
+    [D] folder-15
+    [D] folder-16
+    [D] folder-17
+    [D] folder-18
+    [D] folder-19
+    [D] folder-2
+    [D] folder-20
+    [D] folder-21
+    [D] folder-22
+    [D] folder-23
+    [D] folder-24
+    [D] folder-25
+    [D] folder-26
+    [D] folder-27
+    [D] folder-28
+    [D] folder-29
+    [D] folder-3
+    [D] folder-30
+    [D] folder-31
+    [D] folder-32
+    [D] folder-33
+    [D] folder-34
+    [D] folder-35
+    [D] folder-36
+    [D] folder-37
+    [D] folder-38
+    [D] folder-39
+    [D] folder-4
+    [D] folder-5
+    [D] folder-6
+    [D] folder-7
+    [D] folder-8
+    [D] folder-9

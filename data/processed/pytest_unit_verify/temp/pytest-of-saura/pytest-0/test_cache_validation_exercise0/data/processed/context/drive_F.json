@@ -1,0 +1,85 @@
+{
+  "drive_key": "F",
+  "user_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0"
+  ],
+  "game_roots": [],
+  "name_candidates": {
+    "cache validation": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\data\\processed\\cache_validation",
+        "is_dir": true,
+        "depth": 3,
+        "mtime": 1777489702.2111707
+      }
+    ],
+    "data": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\data",
+        "is_dir": true,
+        "depth": 1,
+        "mtime": 1777489702.1728816
+      }
+    ],
+    "docs": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\docs",
+        "is_dir": true,
+        "depth": 1,
+        "mtime": 1777489702.1679926
+      }
+    ],
+    "notes txt": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\docs\\notes.txt",
+        "is_dir": false,
+        "depth": 2,
+        "mtime": 1777489702.1679926
+      }
+    ],
+    "processed": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\data\\processed",
+        "is_dir": true,
+        "depth": 2,
+        "mtime": 1777489702.2111707
+      }
+    ],
+    "test cache validation exercise0": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0",
+        "is_dir": true,
+        "depth": 0,
+        "mtime": 1777489702.1728816
+      }
+    ],
+    "zzqvprobecacgaedaaadiccbghjjc": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\data\\processed\\cache_validation\\zzqvprobecacgaedaaadiccbghjjc",
+        "is_dir": true,
+        "depth": 4,
+        "mtime": 1777489702.2111707
+      }
+    ]
+  },
+  "txt_folders": [
+    {
+      "path": "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0\\docs",
+      "txt_count": 1,
+      "visible_file_count": 1,
+      "density": 1.0,
+      "depth": 1
+    }
+  ],
+  "projects": [],
+  "games": [],
+  "shallow_outline": {
+    "F:\\ARADHYA\\data\\processed\\pytest_unit_verify\\temp\\pytest-of-saura\\pytest-0\\test_cache_validation_exercise0": [
+      "    [D] data",
+      "      [D] data/processed",
+      "    [D] docs"
+    ]
+  },
+  "directory_count": 6,
+  "file_count": 1
+}

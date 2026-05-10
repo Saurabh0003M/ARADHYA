@@ -20,7 +20,7 @@ from loguru import logger
 
 from src.aradhya.audit_logger import get_audit_logger
 
-from src.aradhya.json_extractor import (
+from src.aradhya.utils.json_extractor import (
     JSONExtractionError,
     extract_json_from_llm_response,
 )

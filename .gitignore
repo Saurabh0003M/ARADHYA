@@ -26,15 +26,13 @@ ENV/
 .coverage
 htmlcov/
 pytest-cache-files-*/
-pytest_tmp/
+pytest_tmp*/
 pytest_basetemp*/
+.pytest_*/
 
 # Generated runtime artifacts
-project_tree.txt
 .tmp/
 python_temp*/
-python_temp_cli_*/
-python_temp_debug_*/
 
 # Logs
 *.log
@@ -46,13 +44,13 @@ core/logs/*.log
 .env.local
 .python313/
 python-*-amd64.exe
-core/memory/*.local.json
+core/config/*.local.json
 
-# Data
-data/raw/*
-data/processed/*
-!data/raw/.gitkeep
-!data/processed/.gitkeep
+# Audit (runtime data)
+core/audit/
+
+# Session data (runtime)
+core/sessions/
 
 # Voice runtime files
 audio/inbox/*
@@ -65,16 +63,6 @@ audio/manual_transcripts/*
 !audio/manual_transcripts/.gitkeep
 !audio/README.md
 
-# Models
-models/*.pkl
-models/*.h5
-models/*.pt
-models/*.pth
-
 # Windows
 Thumbs.db
 desktop.ini
-
-# Experiments
-experiments/*.tmp
-experiments/*.cache

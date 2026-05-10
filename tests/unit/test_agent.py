@@ -187,7 +187,7 @@ def test_local_query_rebuilds_cache_after_refresh_window_expires(tmp_path):
     assert response.index_snapshot.refreshed is True
 
 
-def test_complex_unknown_request_routes_to_confirmed_agent_task(tmp_path):
+def test_complex_unknown_request_auto_executes_agent_task(tmp_path):
     model_provider = SequenceModelProvider(
         [
             "not valid classifier json",
@@ -204,15 +204,11 @@ def test_complex_unknown_request_routes_to_confirmed_agent_task(tmp_path):
 
     response = assistant.handle_transcript("review this project and tell me the risks")
 
-    assert response.awaiting_confirmation is True
-    assert response.plan is not None
-    assert response.plan.kind == PlanKind.AGENT_TASK
-    assert assistant.state.pending_plan is not None
-
-    confirmation = assistant.handle_transcript("yes proceed")
-
-    assert confirmation.result is not None
-    assert confirmation.result.success is True
-    assert confirmation.spoken_response == "I inspected what I could and here is the answer."
+    # Agent tasks now auto-execute without confirmation (Fast Chat Mode)
+    assert response.awaiting_confirmation is False
+    assert response.result is not None
+    assert response.result.success is True
+    assert response.spoken_response == "I inspected what I could and here is the answer."
     assert assistant.session_manager.active_session is not None
     assert assistant.session_manager.active_session.message_count >= 2
+

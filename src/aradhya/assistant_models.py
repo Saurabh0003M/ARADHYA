@@ -36,6 +36,7 @@ class PlanKind(str, Enum):
     EXTERNAL_DOCUMENT_HANDOFF = "external_document_handoff"
     DEBATE_RESEARCH = "debate_research"
     TOGGLE_DEBATE = "toggle_debate"
+    GENERAL_CHAT = "general_chat"
     UNKNOWN = "unknown"
 
 
@@ -180,7 +181,7 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
         user_roots=_build_default_user_roots(root),
         directory_index_path=root / "project_tree.txt",
         context_cache_dir=root / "data" / "processed" / "context",
-        confirmation_phrases=("yes proceed", "proceed", "confirm", "go ahead"),
+        confirmation_phrases=("yes proceed", "proceed", "confirm", "go ahead", "y", "yes"),
         security_blog_urls=DEFAULT_SECURITY_BLOGS,
         project_markers=(
             "pyproject.toml",
@@ -200,7 +201,10 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
 
     root = project_root or _project_root_from_here()
     defaults = build_default_preferences(root)
-    preferences_path = root / "core" / "memory" / "preferences.json"
+    preferences_path = root / "core" / "config" / "preferences.json"
+    if not preferences_path.exists():
+        # Fallback to legacy path for existing installs
+        preferences_path = root / "core" / "memory" / "preferences.json"
 
     if not preferences_path.exists():
         return defaults

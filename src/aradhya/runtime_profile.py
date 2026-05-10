@@ -93,8 +93,11 @@ def _project_root_from_here() -> Path:
 
 
 def _runtime_profile_paths(project_root: Path) -> tuple[Path, Path]:
-    memory_dir = project_root / "core" / "memory"
-    return memory_dir / PROFILE_FILENAME, memory_dir / PROFILE_LOCAL_FILENAME
+    config_dir = project_root / "core" / "config"
+    # Fallback to legacy path for existing installs
+    if not config_dir.exists():
+        config_dir = project_root / "core" / "memory"
+    return config_dir / PROFILE_FILENAME, config_dir / PROFILE_LOCAL_FILENAME
 
 
 def _resolve_path(
@@ -154,7 +157,7 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
             # Change only this field to swap Gemma for another Ollama model later.
             model_name="gemma4:e4b",
             base_url="http://127.0.0.1:11434",
-            request_timeout_seconds=120,
+            request_timeout_seconds=300,
             system_prompt=(
                 "You are Aradhya, a local system assistant focused on safe planning, "
                 "clear reasoning, and practical Windows workflow help."
@@ -364,7 +367,7 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
 
 
 def persist_model_name(project_root: Path | None, model_name: str) -> Path:
-    """Persist the chosen Ollama model name into ``core/memory/profile.local.json``."""
+    """Persist the chosen Ollama model name into ``core/config/profile.local.json``."""
 
     root = project_root or _project_root_from_here()
     _profile_path, local_profile_path = _runtime_profile_paths(root)

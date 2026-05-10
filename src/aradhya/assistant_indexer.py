@@ -583,7 +583,7 @@ class DirectoryIndexManager:
 
         def handle_error(error: OSError) -> None:
             location = error.filename or str(root)
-            logger.warning(
+            logger.debug(
                 "Skipping inaccessible path during directory scan at {}: {}",
                 location,
                 error,

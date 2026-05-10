@@ -1,0 +1,11 @@
+# Aradhya directory index summary
+generated_at=2026-04-05T10:00:00
+reason=wake
+refreshed=true
+context_cache_manifest=F:\ARADHYA\data\processed\pytest_agent_verify\temp\pytest-of-saura\pytest-0\test_toggle_debate_executes_im0\context-cache\manifest.json
+
+[DRIVE] F
+  user_roots=1 indexed_names=4 projects=0 games=0 txt_dense_dirs=0
+  [ROOT] F:\ARADHYA\data\processed\pytest_agent_verify\temp\pytest-of-saura\pytest-0\test_toggle_debate_executes_im0
+    [D] context-cache
+      [D] context-cache/sessions

@@ -12,11 +12,11 @@ from loguru import logger
 
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import WakeSource
-from src.aradhya.cache_diagnostics import (
+from src.aradhya.utils.cache_diagnostics import (
     format_cache_validation_report,
     run_cache_validation,
 )
-from src.aradhya.cli_ui import (
+from src.aradhya.ui.cli import (
     console,
     render_banner,
     render_error,
@@ -31,17 +31,17 @@ from src.aradhya.cli_ui import (
     render_warning,
     prompt_input,
 )
-from src.aradhya.logging_utils import configure_logging
+from src.aradhya.utils.logging import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
 from src.aradhya.skills import load_skills
-from src.aradhya.voice_activation import (
+from src.aradhya.voice.activation import (
     VoiceActivatedAradhya,
     describe_voice_activation_support,
 )
-from src.aradhya.voice_pipeline import VoiceInboxManager
-from src.aradhya.wake_word_listener import WakeWordListener
+from src.aradhya.voice.pipeline import VoiceInboxManager
+from src.aradhya.voice.wake_word import WakeWordListener
 from src.aradhya.audit_logger import get_audit_logger
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -78,8 +78,12 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
         checks.append(("Ollama", False, f"Error — {exc}"))
 
     # 3. Config files
-    prefs_path = PROJECT_ROOT / "core" / "memory" / "preferences.json"
-    profile_path = PROJECT_ROOT / "core" / "memory" / "profile.json"
+    prefs_path = PROJECT_ROOT / "core" / "config" / "preferences.json"
+    if not prefs_path.is_file():
+        prefs_path = PROJECT_ROOT / "core" / "memory" / "preferences.json"
+    profile_path = PROJECT_ROOT / "core" / "config" / "profile.json"
+    if not profile_path.is_file():
+        profile_path = PROJECT_ROOT / "core" / "memory" / "profile.json"
     checks.append((
         "Preferences",
         prefs_path.is_file(),
@@ -294,7 +298,7 @@ def _handle_telegram_start(*, assistant, ctx, **_) -> None:
         render_info("Telegram bot is already running.")
         return
     try:
-        from src.aradhya.telegram_bot import AradhyaTelegramBot, _load_telegram_config
+        from src.aradhya.channels.telegram import AradhyaTelegramBot, _load_telegram_config
         config = _load_telegram_config()
         if not config["bot_token"]:
             render_error(
@@ -627,7 +631,8 @@ def main() -> None:
 
             # ── Natural language input ────────────────────────────────
             # Everything that isn't a command goes to the assistant planner.
-            resp = assistant.handle_transcript(command)
+            with console.status("[dim]Thinking...[/]", spinner="dots"):
+                resp = assistant.handle_transcript(command)
             render_response(
                 resp.spoken_response,
                 transcript_echo=resp.transcript_echo,

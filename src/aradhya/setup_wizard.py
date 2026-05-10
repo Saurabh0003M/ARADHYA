@@ -23,8 +23,10 @@ from rich import box
 console = Console()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PROFILE_PATH = PROJECT_ROOT / "core" / "memory" / "profile.json"
-PREFERENCES_PATH = PROJECT_ROOT / "core" / "memory" / "preferences.json"
+_CONFIG_DIR = PROJECT_ROOT / "core" / "config"
+_LEGACY_DIR = PROJECT_ROOT / "core" / "memory"
+PROFILE_PATH = _CONFIG_DIR / "profile.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "profile.json"
+PREFERENCES_PATH = _CONFIG_DIR / "preferences.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "preferences.json"
 USER_RULES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "rules.md"
 USER_NOTES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "notes.md"
 
@@ -110,7 +112,7 @@ def step_model(profile: dict) -> dict:
             console.print(f"  [dim]Found {len(models)} model(s):[/]")
             table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
             table.add_column("#", style="bold cyan", width=4)
-            table.add_column("Model", style="accent")
+            table.add_column("Model", style="cyan")
             for i, m in enumerate(models, 1):
                 table.add_row(str(i), m)
             console.print(table)
@@ -143,12 +145,12 @@ def step_model(profile: dict) -> dict:
 
     # Base URL
     base_url = _prompt(
-        "Ollama API URL",
+        "Ollama API URL (Press ENTER if running locally)",
         default=profile.get("model", {}).get("base_url", "http://127.0.0.1:11434"),
     )
     profile["model"]["base_url"] = base_url
     profile["model"].setdefault("provider", "ollama")
-    profile["model"].setdefault("request_timeout_seconds", 120)
+    profile["model"].setdefault("request_timeout_seconds", 300)
     profile["model"].setdefault(
         "system_prompt",
         "You are Aradhya, a local system assistant focused on safe planning, "
@@ -204,6 +206,14 @@ def step_user_context() -> None:
     console.print("[heading]Step 3: About You[/]")
     console.print()
 
+    if USER_NOTES_PATH.is_file():
+        existing_notes = USER_NOTES_PATH.read_text(encoding="utf-8").strip()
+        console.print(Panel(existing_notes, title="Current Profile", border_style="dim"))
+        if not _confirm("Do you want to overwrite this profile?", default=False):
+            console.print("  [success]✓[/] Kept existing user context.")
+            console.print()
+            return
+
     name = _prompt("Your name (Aradhya will remember you)", default="")
     if name:
         USER_NOTES_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -240,17 +250,17 @@ def step_execution(preferences: dict) -> dict:
 
     console.print(
         "  Aradhya can execute system commands (open files, run scripts,\n"
-        "  manage power). By default, it runs in [warning]dry-run mode[/]\n"
-        "  — it plans but doesn't execute.\n"
+        "  manage power). By default, it runs in [bold cyan]careful mode[/]\n"
+        "  — read-only commands run instantly, but state-changing actions require confirmation.\n"
     )
 
-    allow = _confirm("Enable live execution? (Aradhya will ask before anything dangerous)", default=False)
-    preferences["allow_live_execution"] = allow
+    allow = _confirm("Enable careful mode? (No means dry-run only)", default=True)
+    preferences["execution_policy"] = "careful" if allow else "dry_run"
 
     if allow:
-        console.print("  [success]✓[/] Live execution enabled. Aradhya will still ask for confirmation before risky actions.")
+        console.print("  [success]✓[/] Careful mode enabled. Aradhya will ask for confirmation before risky actions.")
     else:
-        console.print("  [dim]Dry-run mode active. Change anytime with the allow_live_execution setting.[/]")
+        console.print("  [dim]Dry-run mode active. Aradhya will only plan, never execute.[/]")
 
     console.print()
     return preferences
@@ -265,10 +275,10 @@ def step_finish(profile: dict, preferences: dict) -> None:
         "[bold #00d4aa]Setup Complete![/]\n\n"
         f"  🧠 Model: [highlight]{profile.get('model', {}).get('model_name', '?')}[/]\n"
         f"  🎤 Voice: [highlight]{profile.get('voice', {}).get('provider', 'manual_transcript')}[/]\n"
-        f"  🔒 Execution: [highlight]{'Live' if preferences.get('allow_live_execution') else 'Dry-run'}[/]\n\n"
+        f"  🔒 Execution: [highlight]{preferences.get('execution_policy', 'careful')}[/]\n\n"
         "Start Aradhya with:\n\n"
         "  [dim]python -m src.aradhya.main[/]\n\n"
-        "Type [accent]/help[/accent] to see all commands,\n"
+        "Type [cyan]/help[/cyan] to see all commands,\n"
         "or just type naturally — Aradhya understands plain English.",
         border_style="#00d4aa",
         padding=(1, 4),

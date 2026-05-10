@@ -87,7 +87,7 @@ class AradhyaDaemon:
         from src.aradhya.assistant_core import AradhyaAssistant
         from src.aradhya.assistant_models import WakeSource
         from src.aradhya.daemon_api import DaemonAPIServer
-        from src.aradhya.logging_utils import configure_logging
+        from src.aradhya.utils.logging import configure_logging
         from src.aradhya.model_provider import build_text_model_provider
         from src.aradhya.model_setup import bootstrap_runtime_profile
         from src.aradhya.runtime_profile import load_runtime_profile

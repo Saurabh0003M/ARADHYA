@@ -1,0 +1,35 @@
+{
+  "drive_key": "F",
+  "user_roots": [
+    "F:\\ARADHYA\\data\\processed\\pytest_agent_verify2\\temp\\pytest-of-saura\\pytest-0\\test_llm_fallback_accepts_mark0"
+  ],
+  "game_roots": [],
+  "name_candidates": {
+    "notes": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_agent_verify2\\temp\\pytest-of-saura\\pytest-0\\test_llm_fallback_accepts_mark0\\Notes",
+        "is_dir": true,
+        "depth": 1,
+        "mtime": 1777489466.2697155
+      }
+    ],
+    "test llm fallback accepts mark0": [
+      {
+        "path": "F:\\ARADHYA\\data\\processed\\pytest_agent_verify2\\temp\\pytest-of-saura\\pytest-0\\test_llm_fallback_accepts_mark0",
+        "is_dir": true,
+        "depth": 0,
+        "mtime": 1777489466.270717
+      }
+    ]
+  },
+  "txt_folders": [],
+  "projects": [],
+  "games": [],
+  "shallow_outline": {
+    "F:\\ARADHYA\\data\\processed\\pytest_agent_verify2\\temp\\pytest-of-saura\\pytest-0\\test_llm_fallback_accepts_mark0": [
+      "    [D] Notes"
+    ]
+  },
+  "directory_count": 2,
+  "file_count": 0
+}

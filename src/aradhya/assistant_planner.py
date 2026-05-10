@@ -84,7 +84,7 @@ class IntentPlanner:
                 "backend model choose read/search tools, inspect results, and stop "
                 "with a final answer. Machine-changing tools stay policy-gated."
             ),
-            requires_confirmation=True,
+            requires_confirmation=False,
             metadata={
                 "request": transcript,
                 "route_reason": route_reason,
