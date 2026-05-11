@@ -49,7 +49,7 @@ class MCPServer:
     async def fetch_tools(self) -> list[ToolDefinition]:
         if not self.session:
             return []
-        
+
         try:
             response = await self.session.list_tools()
             tools = []
@@ -69,7 +69,7 @@ class MCPServer:
     async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> str:
         if not self.session:
             return "Error: MCP session is not connected."
-        
+
         # Strip the prefix to get the original tool name
         original_name = tool_name.split("__", 1)[-1]
         try:
@@ -120,13 +120,13 @@ class MCPManager:
             async def close_all():
                 for server in self.servers.values():
                     await server.close()
-            
+
             future = asyncio.run_coroutine_threadsafe(close_all(), self.loop)
             try:
                 future.result(timeout=5)
             except Exception as e:
                 logger.error(f"Error while stopping MCP servers: {e}")
-            
+
             self.loop.call_soon_threadsafe(self.loop.stop)
             self._thread.join(timeout=5)
             self._running = False
@@ -162,7 +162,7 @@ class MCPManager:
         """Connects to all configured servers and registers their tools synchronously."""
         if not self.servers:
             return
-            
+
         if not self._running:
             self.start()
 
@@ -186,10 +186,10 @@ class MCPManager:
         try:
             future = asyncio.run_coroutine_threadsafe(_connect_and_fetch(), self.loop)
             tools_with_server = future.result(timeout=10) # 10s timeout for MCP boot
-            
+
             for server, tool in tools_with_server:
                 self._register_server_tools(server, [tool], tool_registry)
-                
+
             self._connected = True
         except Exception as e:
             logger.error(f"Failed to connect and register MCP tools: {e}")
@@ -203,14 +203,14 @@ class MCPManager:
                         return fut.result(timeout=60) # 60s timeout for tool execution
                     except Exception as e:
                         return f"MCP tool execution failed: {e}"
-                
+
                 # Make it look like a normal function with a docstring
                 tool_func.__name__ = t_name
                 tool_func.__doc__ = f"Executes {t_name} via MCP."
                 return tool_func
 
             bound_func = make_callable(server, tool.name)
-            
+
             tool_def = ToolDefinition(
                 name=tool.name,
                 description=tool.description,

@@ -461,7 +461,6 @@ def _dispatch_command(command: str, **kwargs) -> bool:
 
 def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
     """Background thread that reads commands from the floating icon."""
-    running = True
 
     def watcher():
         while ctx.get("ipc_running", True):
@@ -633,7 +632,7 @@ def main() -> None:
             # ── Natural language input ────────────────────────────────
             # Everything that isn't a command goes to the assistant planner.
             resp = assistant.handle_transcript(command, stream_handler=render_stream)
-            
+
             # For streaming, the text is already rendered live, so we only need to
             # render the transcript echo or awaiting confirmation if applicable.
             if resp.transcript_echo or resp.awaiting_confirmation:

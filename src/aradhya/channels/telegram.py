@@ -340,7 +340,7 @@ class AradhyaTelegramBot:
             def stream_handler(chunk: str):
                 nonlocal accumulated_text, last_edit_time
                 accumulated_text += chunk
-                
+
                 now = time.time()
                 if now - last_edit_time > edit_interval and msg_id:
                     try:
@@ -358,7 +358,7 @@ class AradhyaTelegramBot:
             parts = []
             if response.transcript_echo:
                 parts.append(f"_Heard: {response.transcript_echo}_")
-            
+
             # The full response might have formatting stripped or clean tags, use it over raw accumulation
             if response.spoken_response:
                 parts.append(response.spoken_response)
@@ -371,7 +371,7 @@ class AradhyaTelegramBot:
                 )
 
             final_text = "\n".join(parts)
-            
+
             # Final replacement
             if msg_id:
                 try:
@@ -471,7 +471,7 @@ def main() -> None:
         assistant=assistant,
     )
 
-    print(f"Aradhya Telegram bot starting...")
+    print("Aradhya Telegram bot starting...")
     print(f"Allowed users: {config.get('allowed_user_ids', []) or 'auto-register first user'}")
     print("Press Ctrl+C to stop.")
     print()
