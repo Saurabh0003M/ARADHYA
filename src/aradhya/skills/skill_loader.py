@@ -112,6 +112,16 @@ def _parse_skill_file(
     raw = skill_file.read_text(encoding="utf-8")
     frontmatter, instructions = _split_frontmatter(raw)
 
+    return _parse_frontmatter(frontmatter, instructions.strip(), base_dir)
+
+
+def _parse_frontmatter(
+    frontmatter: dict[str, Any],
+    instructions: str,
+    base_dir: Path,
+) -> SkillDefinition:
+    """Convert raw frontmatter dict and body into a SkillDefinition."""
+
     name = frontmatter.get("name") or base_dir.name
     description = frontmatter.get("description", "")
     enabled = frontmatter.get("enabled", True)
@@ -131,7 +141,7 @@ def _parse_skill_file(
     return SkillDefinition(
         name=str(name),
         description=str(description),
-        instructions=instructions.strip(),
+        instructions=instructions,
         base_dir=base_dir,
         enabled=bool(enabled),
         requires=requirements,
