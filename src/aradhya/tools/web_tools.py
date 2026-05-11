@@ -13,6 +13,24 @@ from src.aradhya.tools.tool_registry import tool_definition
 DEFAULT_TIMEOUT_SECONDS = 15
 DEFAULT_USER_AGENT = "Aradhya/0.1 local assistant"
 
+# Pre-compiled regexes for performance
+_DDG_RESULT_LINK_RE = re.compile(
+    r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_DDG_SNIPPET_RE = re.compile(
+    r'<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>',
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_STRIP_RE = re.compile(
+    r"<(script|style)\b.*?</\1>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_HTML_BR_RE = re.compile(r"<br\s*/?>", flags=re.IGNORECASE)
+_HTML_P_RE = re.compile(r"</p\s*>", flags=re.IGNORECASE)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_WHITESPACE_RE = re.compile(r"[ \t\r\f\v]+")
+
 
 @tool_definition(
     name="web_fetch",
@@ -109,18 +127,10 @@ def _extract_duckduckgo_results(
     *,
     max_results: int,
 ) -> list[dict[str, str]]:
-    link_matches = re.finditer(
-        r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
+    link_matches = _DDG_RESULT_LINK_RE.finditer(html)
     snippets = [
         _html_to_text(match.group(1))
-        for match in re.finditer(
-            r'<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>',
-            html,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
+        for match in _DDG_SNIPPET_RE.finditer(html)
     ]
 
     results: list[dict[str, str]] = []
@@ -153,20 +163,15 @@ def _unwrap_duckduckgo_url(raw_url: str) -> str:
 
 
 def _html_to_text(raw_html: str) -> str:
-    text = re.sub(
-        r"<(script|style)\b.*?</\1>",
-        " ",
-        raw_html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"</p\s*>", "\n", text, flags=re.IGNORECASE)
-    text = re.sub(r"<[^>]+>", " ", text)
+    text = _HTML_STRIP_RE.sub(" ", raw_html)
+    text = _HTML_BR_RE.sub("\n", text)
+    text = _HTML_P_RE.sub("\n", text)
+    text = _HTML_TAG_RE.sub(" ", text)
     return _normalize_text(unescape(text))
 
 
 def _normalize_text(text: str) -> str:
-    return re.sub(r"[ \t\r\f\v]+", " ", text).replace("\n ", "\n").strip()
+    return _WHITESPACE_RE.sub(" ", text).replace("\n ", "\n").strip()
 
 
 ALL_WEB_TOOLS = [web_fetch, web_search]
