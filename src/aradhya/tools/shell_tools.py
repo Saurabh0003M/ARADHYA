@@ -44,7 +44,7 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
     try:
         from src.aradhya.assistant_models import load_preferences
         prefs = load_preferences()
-        
+
         final_command = command
         # Sandboxing support (ZeroClaw feature)
         if getattr(prefs, "use_docker_sandbox", False):

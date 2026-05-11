@@ -132,12 +132,6 @@ def set_volume(level: int | None = None, mute: bool | None = None) -> str:
     try:
         if mute is not None:
             # Use PowerShell COM to toggle mute
-            mute_script = (
-                "$audio = New-Object -ComObject MMDeviceAPI.MMDeviceEnumerator; "
-                "$dev = $audio.GetDefaultAudioEndpoint(0, 1); "
-                "$vol = $dev.AudioEndpointVolume; "
-                f"$vol.Mute = {'$true' if mute else '$false'}"
-            )
             # Fallback: use nircmd or simple key simulation
             if mute:
                 subprocess.run(

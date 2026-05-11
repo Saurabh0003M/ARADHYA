@@ -10,7 +10,6 @@ Enhanced with quick-access buttons for:
   - 'A' Debate AI activation toggle
 """
 
-import sys
 import tkinter as tk
 from pathlib import Path
 
@@ -282,7 +281,7 @@ class FloatingIcon:
 def main():
     root = tk.Tk()
     root.title("Aradhya")
-    app = FloatingIcon(root)
+    FloatingIcon(root)
     root.mainloop()
 
 

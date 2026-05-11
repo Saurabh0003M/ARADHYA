@@ -1,17 +1,3 @@
-import sys
-from unittest.mock import MagicMock
-
-# Mock dependencies before any other imports
-sys.modules["loguru"] = MagicMock()
-sys.modules["requests"] = MagicMock()
-sys.modules["vlc"] = MagicMock()
-sys.modules["pvporcupine"] = MagicMock()
-sys.modules["pyaudio"] = MagicMock()
-sys.modules["pveagle"] = MagicMock()
-sys.modules["yaml"] = MagicMock()
-sys.modules["dotenv"] = MagicMock()
-sys.modules["openai"] = MagicMock()
-
 import json
 import os
 from pathlib import Path

@@ -1,0 +1,38 @@
+import sys
+from unittest.mock import MagicMock
+
+# Mock dependencies before any other imports to avoid ModuleNotFoundError
+mock_mcp = MagicMock()
+sys.modules["mcp"] = mock_mcp
+sys.modules["mcp.client"] = MagicMock()
+sys.modules["mcp.client.stdio"] = MagicMock()
+sys.modules["mcp.client.session"] = MagicMock()
+sys.modules["mcp.types"] = MagicMock()
+
+sys.modules["loguru"] = MagicMock()
+sys.modules["requests"] = MagicMock()
+sys.modules["vlc"] = MagicMock()
+sys.modules["pvporcupine"] = MagicMock()
+sys.modules["pyaudio"] = MagicMock()
+sys.modules["pveagle"] = MagicMock()
+sys.modules["yaml"] = MagicMock()
+sys.modules["dotenv"] = MagicMock()
+sys.modules["openai"] = MagicMock()
+sys.modules["rich"] = MagicMock()
+sys.modules["rich.console"] = MagicMock()
+sys.modules["rich.table"] = MagicMock()
+sys.modules["rich.live"] = MagicMock()
+sys.modules["rich.text"] = MagicMock()
+sys.modules["rich.panel"] = MagicMock()
+sys.modules["rich.markdown"] = MagicMock()
+sys.modules["rich.columns"] = MagicMock()
+sys.modules["rich.theme"] = MagicMock()
+sys.modules["rich.box"] = MagicMock()
+sys.modules["pandas"] = MagicMock()
+sys.modules["numpy"] = MagicMock()
+sys.modules["selenium"] = MagicMock()
+sys.modules["selenium.webdriver"] = MagicMock()
+sys.modules["selenium.webdriver.chrome.options"] = MagicMock()
+sys.modules["selenium.webdriver.chrome.service"] = MagicMock()
+sys.modules["selenium.webdriver.edge.options"] = MagicMock()
+sys.modules["selenium.webdriver.edge.service"] = MagicMock()

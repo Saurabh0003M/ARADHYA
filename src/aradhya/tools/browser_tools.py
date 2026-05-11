@@ -22,7 +22,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-from loguru import logger
 
 from src.aradhya.tools.tool_registry import tool_definition
 
@@ -65,7 +64,6 @@ def _create_driver(
     try:
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options as ChromeOptions
-        from selenium.webdriver.chrome.service import Service as ChromeService
     except ImportError:
         raise RuntimeError(
             "Selenium is not installed. Install it with: pip install selenium"
@@ -94,7 +92,6 @@ def _create_driver(
         # Fallback: try Edge
         try:
             from selenium.webdriver.edge.options import Options as EdgeOptions
-            from selenium.webdriver.edge.service import Service as EdgeService
 
             edge_options = EdgeOptions()
             if profile_dir:

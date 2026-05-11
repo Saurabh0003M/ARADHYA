@@ -2,7 +2,6 @@
 
 import threading
 import time
-from pathlib import Path
 from loguru import logger
 
 from src.aradhya.voice.microphone import MicrophoneCapture, AudioConfig, get_available_backend
@@ -48,7 +47,7 @@ class WakeWordListener:
 
     def _listen_loop(self):
         wake_words = ["wakeup", "wake up", "arise"]
-        
+
         while self.running:
             # If Aradhya is already awake, don't spam recordings
             if self.assistant.state.is_awake:
@@ -56,19 +55,19 @@ class WakeWordListener:
                 continue
 
             temp_path = self.voice_manager.profile.audio_inbox_dir / "temp_wakeword.wav"
-            
+
             # This blocks until 2.5s is up or silence is detected
             result = self.mic.record_until_silence(temp_path)
-            
+
             if not self.running:
                 break
-                
+
             if result.success and result.audio_path:
                 # Transcribe the chunk without full archival process to save time
                 try:
                     transcript_text = self.voice_manager.transcriber.transcribe(result.audio_path)
                     normalized = transcript_text.lower().strip()
-                    
+
                     if any(w in normalized for w in wake_words):
                         logger.info(f"Wake word detected in transcript: {normalized}")
                         print("\nVoice > Wake word detected!")
@@ -85,5 +84,5 @@ class WakeWordListener:
                             result.audio_path.unlink()
                     except OSError:
                         pass
-            
+
             time.sleep(0.1)

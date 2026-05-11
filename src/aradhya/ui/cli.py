@@ -28,8 +28,6 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
-from rich.columns import Columns
-from rich.markdown import Markdown
 from rich.live import Live
 from rich import box
 
@@ -99,7 +97,6 @@ def render_response(spoken: str, transcript_echo: str | None = None,
     if transcript_echo:
         console.print(f"  [dim]Heard >[/] {transcript_echo}")
 
-    style = "aradhya"
     prefix = "  [aradhya]Aradhya >[/] "
 
     if awaiting:
@@ -374,14 +371,14 @@ def prompt_input() -> str:
 
 def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = "") -> str:
     """Render a live stream of text chunks.
-    
+
     Returns the complete text after the stream finishes.
     """
     full_text = ""
     # Use a generic Text renderable so we can prepend the prefix on the first line
     # and update smoothly without markdown parsing jumps.
     text_renderable = Text.from_markup(prefix)
-    
+
     with Live(text_renderable, console=console, refresh_per_second=15, transient=False) as live:
         for chunk in stream:
             full_text += chunk
@@ -391,6 +388,6 @@ def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] 
             else:
                 text_renderable.append(chunk)
             live.update(text_renderable)
-            
+
     console.print()
     return full_text
