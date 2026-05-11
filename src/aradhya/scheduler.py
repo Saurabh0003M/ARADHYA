@@ -8,13 +8,14 @@ a JSON configuration file and executed in a background thread.
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from loguru import logger
 
@@ -194,8 +195,8 @@ class TaskScheduler:
         try:
             if task.action == "shell":
                 result = subprocess.run(
-                    task.payload,
-                    shell=True,
+                    shlex.split(task.payload),
+                    shell=False,
                     capture_output=True,
                     text=True,
                     timeout=60,

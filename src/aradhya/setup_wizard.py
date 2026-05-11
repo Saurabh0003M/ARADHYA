@@ -13,7 +13,6 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
 
 from rich.console import Console
 from rich.panel import Panel

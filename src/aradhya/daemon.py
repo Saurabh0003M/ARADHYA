@@ -23,7 +23,6 @@ To auto-start on Windows login, add a shortcut to
 from __future__ import annotations
 
 import signal
-import sys
 import threading
 import time
 from pathlib import Path

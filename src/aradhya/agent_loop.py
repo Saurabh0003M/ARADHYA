@@ -14,7 +14,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Iterator, Protocol
+from typing import Any, Callable, Protocol
 
 from loguru import logger
 

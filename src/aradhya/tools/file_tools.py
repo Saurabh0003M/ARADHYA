@@ -6,7 +6,6 @@ during multi-step reasoning.
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from src.aradhya.tools.tool_registry import tool_definition
