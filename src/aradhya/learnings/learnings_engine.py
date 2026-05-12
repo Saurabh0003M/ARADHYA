@@ -23,6 +23,7 @@ from loguru import logger
 from src.aradhya.tools.tool_registry import tool_definition
 
 _PROMOTION_THRESHOLD = 3  # Promote to rules.md after this many occurrences
+_WORD_PATTERN = re.compile(r"\w{4,}")
 
 
 class LearningsEngine:
@@ -134,7 +135,7 @@ class LearningsEngine:
 
         content = learnings_file.read_text(encoding="utf-8")
         # Count how many entries have similar summaries (simple word overlap)
-        keywords = set(re.findall(r"\w{4,}", summary.lower()))
+        keywords = set(_WORD_PATTERN.findall(summary.lower()))
         if not keywords:
             return
 
@@ -142,7 +143,7 @@ class LearningsEngine:
         entries = content.split("## [LRN-")
         similar_count = 0
         for entry in entries[1:]:  # Skip header
-            entry_words = set(re.findall(r"\w{4,}", entry.lower()))
+            entry_words = set(_WORD_PATTERN.findall(entry.lower()))
             overlap = keywords & entry_words
             if len(overlap) >= max(2, len(keywords) // 2):
                 similar_count += 1
