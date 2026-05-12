@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import re
 from html import unescape
-from urllib.parse import parse_qs, unquote, urlparse
 
 import requests
 
 from src.aradhya.tools.tool_registry import tool_definition
+from src.aradhya.utils.url_helpers import is_valid_http_url, unwrap_duckduckgo_url
 
 DEFAULT_TIMEOUT_SECONDS = 15
 DEFAULT_USER_AGENT = "Aradhya/0.1 local assistant"
@@ -51,8 +51,7 @@ _WHITESPACE_RE = re.compile(r"[ \t\r\f\v]+")
     },
 )
 def web_fetch(url: str, max_chars: int = 4000) -> str:
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+    if not is_valid_http_url(url):
         return f"Error: unsupported URL: {url}"
 
     try:
@@ -139,7 +138,7 @@ def _extract_duckduckgo_results(
             break
         raw_url = unescape(match.group(1))
         title = _html_to_text(match.group(2))
-        url = _unwrap_duckduckgo_url(raw_url)
+        url = unwrap_duckduckgo_url(raw_url)
         if not title or not url:
             continue
         results.append(
@@ -150,16 +149,6 @@ def _extract_duckduckgo_results(
             }
         )
     return results
-
-
-def _unwrap_duckduckgo_url(raw_url: str) -> str:
-    if raw_url.startswith("//"):
-        raw_url = "https:" + raw_url
-    parsed = urlparse(raw_url)
-    query = parse_qs(parsed.query)
-    if "uddg" in query and query["uddg"]:
-        return unquote(query["uddg"][0])
-    return raw_url
 
 
 def _html_to_text(raw_html: str) -> str:
