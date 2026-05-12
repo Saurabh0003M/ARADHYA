@@ -10,6 +10,7 @@ from __future__ import annotations
 import io
 import os
 import sys
+from dataclasses import dataclass
 from typing import Any, Iterator
 
 # Force UTF-8 on Windows terminals before Rich initializes.
@@ -244,9 +245,15 @@ def render_status(
 
 
 # ── Voice status ──────────────────────────────────────────────────────
-def render_voice_status(status: Any, activation_support: Any,
-                        runtime_profile: Any,
-                        voice_running: bool) -> None:
+
+@dataclass
+class VoiceStatusConfig:
+    status: Any
+    activation_support: Any
+    runtime_profile: Any
+    voice_running: bool
+
+def render_voice_status(config: VoiceStatusConfig) -> None:
     """Render detailed voice pipeline status."""
     table = Table(
         title="[heading]Voice Pipeline[/]",
@@ -258,32 +265,32 @@ def render_voice_status(status: Any, activation_support: Any,
     table.add_column("", style="accent", no_wrap=True, min_width=24)
     table.add_column("")
 
-    table.add_row("Provider", f"[highlight]{status.provider}[/]")
-    table.add_row("Inbox", str(status.inbox_dir))
-    table.add_row("Processed", str(status.processed_dir))
-    table.add_row("Transcripts", str(status.transcripts_dir))
-    table.add_row("Manual Transcripts", str(status.manual_transcripts_dir))
-    table.add_row("Supported Audio", ", ".join(status.supported_extensions))
+    table.add_row("Provider", f"[highlight]{config.status.provider}[/]")
+    table.add_row("Inbox", str(config.status.inbox_dir))
+    table.add_row("Processed", str(config.status.processed_dir))
+    table.add_row("Transcripts", str(config.status.transcripts_dir))
+    table.add_row("Manual Transcripts", str(config.status.manual_transcripts_dir))
+    table.add_row("Supported Audio", ", ".join(config.status.supported_extensions))
 
-    if status.provider == "faster_whisper":
-        table.add_row("Whisper Model", status.faster_whisper_model_size)
-        table.add_row("Whisper Device", status.faster_whisper_device)
-        table.add_row("Whisper Compute", status.faster_whisper_compute_type)
-        table.add_row("Language", status.language or "auto")
+    if config.status.provider == "faster_whisper":
+        table.add_row("Whisper Model", config.status.faster_whisper_model_size)
+        table.add_row("Whisper Device", config.status.faster_whisper_device)
+        table.add_row("Whisper Compute", config.status.faster_whisper_compute_type)
+        table.add_row("Language", config.status.language or "auto")
 
-    live_icon = "[+]" if voice_running else "[ ]"
+    live_icon = "[+]" if config.voice_running else "[ ]"
     table.add_row(
         f"{live_icon} Live Activation",
-        "[success]Running[/]" if voice_running else "[dim]Stopped[/]",
+        "[success]Running[/]" if config.voice_running else "[dim]Stopped[/]",
     )
-    table.add_row("Available", "Yes" if activation_support.available else "No")
-    table.add_row("Note", activation_support.message)
+    table.add_row("Available", "Yes" if config.activation_support.available else "No")
+    table.add_row("Note", config.activation_support.message)
     table.add_row(
         "Spoken Replies",
-        "[success]Enabled[/]" if runtime_profile.voice_output.enabled else "[dim]Disabled[/]",
+        "[success]Enabled[/]" if config.runtime_profile.voice_output.enabled else "[dim]Disabled[/]",
     )
 
-    pending = status.pending_audio
+    pending = config.status.pending_audio
     table.add_row(
         "Pending Audio",
         f"[warning]{len(pending)} file(s)[/]" if pending else "[dim]None[/]",
