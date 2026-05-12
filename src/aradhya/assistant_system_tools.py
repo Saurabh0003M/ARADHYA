@@ -6,9 +6,9 @@ import os
 import webbrowser
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlparse
 
 from loguru import logger
+from src.aradhya.utils.url_helpers import is_valid_http_url
 
 from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import (
@@ -313,8 +313,7 @@ class SystemToolbox:
     def _validated_browser_urls(self, urls: tuple[str, ...]) -> tuple[str, ...]:
         safe_urls: list[str] = []
         for url in urls:
-            parsed = urlparse(url)
-            if parsed.scheme in {"http", "https"} and parsed.netloc:
+            if is_valid_http_url(url):
                 safe_urls.append(url)
                 continue
 
