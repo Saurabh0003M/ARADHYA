@@ -25,6 +25,11 @@ from src.aradhya.tools.tool_registry import tool_definition
 _PROMOTION_THRESHOLD = 3  # Promote to rules.md after this many occurrences
 _WORD_PATTERN = re.compile(r"\w{4,}")
 
+_ERRORS_HEADER = "# Errors\n\nCommand failures and integration errors.\n\n---\n"
+_LEARNINGS_HEADER = "# Learnings\n\nCorrections, insights, and best practices.\n\n---\n"
+_FEATURES_HEADER = "# Feature Requests\n\nCapabilities requested by the user.\n\n---\n"
+_RULES_HEADER = "# Rules\n\nStanding orders for Aradhya.\n\n"
+
 
 class LearningsEngine:
     """Manages the .learnings/ directory and its log files."""
@@ -39,9 +44,9 @@ class LearningsEngine:
         self.learnings_dir.mkdir(parents=True, exist_ok=True)
 
         for filename, header in [
-            ("ERRORS.md", "# Errors\n\nCommand failures and integration errors.\n\n---\n"),
-            ("LEARNINGS.md", "# Learnings\n\nCorrections, insights, and best practices.\n\n---\n"),
-            ("FEATURES.md", "# Feature Requests\n\nCapabilities requested by the user.\n\n---\n"),
+            ("ERRORS.md", _ERRORS_HEADER),
+            ("LEARNINGS.md", _LEARNINGS_HEADER),
+            ("FEATURES.md", _FEATURES_HEADER),
         ]:
             path = self.learnings_dir / filename
             if not path.is_file():
@@ -168,8 +173,7 @@ class LearningsEngine:
             )
         else:
             self.rules_file.write_text(
-                "# Rules\n\nStanding orders for Aradhya.\n\n"
-                "## Auto-Promoted Learnings\n" + rule_line,
+                _RULES_HEADER + "## Auto-Promoted Learnings\n" + rule_line,
                 encoding="utf-8",
             )
 
