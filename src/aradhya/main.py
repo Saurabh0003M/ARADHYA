@@ -28,6 +28,7 @@ from src.aradhya.ui.cli import (
     render_skills_list,
     render_status,
     render_success,
+    VoiceStatusConfig,
     render_voice_status,
     render_warning,
     prompt_input,
@@ -147,10 +148,13 @@ def _handle_voice_status(*, voice_manager, runtime_profile,
                          live_voice_runtime) -> None:
     status = voice_manager.status()
     activation_support = describe_voice_activation_support(runtime_profile)
-    render_voice_status(
-        status, activation_support, runtime_profile,
-        bool(live_voice_runtime and live_voice_runtime.is_running()),
+    config = VoiceStatusConfig(
+        status=status,
+        activation_support=activation_support,
+        runtime_profile=runtime_profile,
+        voice_running=bool(live_voice_runtime and live_voice_runtime.is_running()),
     )
+    render_voice_status(config)
 
 
 def _handle_voice_process(*, assistant, voice_manager) -> None:
