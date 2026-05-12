@@ -184,3 +184,70 @@ def test_persist_model_name_updates_local_override_file(tmp_path):
     assert payload["model"]["provider"] == "ollama"
     assert shared_payload["model"]["model_name"] == profile.model.model_name
     assert shared_payload["voice"]["provider"] == profile.voice.provider
+
+def test_render_model_health_fully_ready():
+    health = ModelHealth(
+        reachable=True,
+        ready=True,
+        provider="ollama",
+        configured_model="gemma4:e4b",
+        available_models=("phi4", "qwen2.5-coder:7b"),
+        message="System ready",
+    )
+    outputs: list[str] = []
+
+    from src.aradhya.model_setup import render_model_health
+    render_model_health(health, output_handler=outputs.append)
+
+    assert "Model > Provider: ollama" in outputs
+    assert "Model > Configured model: gemma4:e4b" in outputs
+    assert "Model > Reachable: yes" in outputs
+    assert "Model > Ready: yes" in outputs
+    assert "Model > Local models:" in outputs
+    assert "Model >   1. phi4" in outputs
+    assert "Model >   2. qwen2.5-coder:7b" in outputs
+    assert "Model > System ready" in outputs
+
+
+def test_render_model_health_unreachable():
+    health = ModelHealth(
+        reachable=False,
+        ready=False,
+        provider="ollama",
+        configured_model="gemma4:e4b",
+        available_models=(),
+        message="Cannot connect",
+    )
+    outputs: list[str] = []
+
+    from src.aradhya.model_setup import render_model_health, OLLAMA_DOWNLOAD_URL
+    render_model_health(health, output_handler=outputs.append)
+
+    assert "Model > Reachable: no" in outputs
+    assert "Model > Ready: no" in outputs
+    assert "Model > Local models: none" in outputs
+    assert f"Model > Install Ollama from {OLLAMA_DOWNLOAD_URL} or start the Ollama service." in outputs
+
+
+def test_render_model_health_reachable_no_models():
+    health = ModelHealth(
+        reachable=True,
+        ready=False,
+        provider="ollama",
+        configured_model="gemma4:e4b",
+        available_models=(),
+        message="No models available",
+    )
+    outputs: list[str] = []
+
+    from src.aradhya.model_setup import render_model_health, RECOMMENDED_OLLAMA_MODELS
+    render_model_health(health, output_handler=outputs.append)
+
+    assert "Model > Reachable: yes" in outputs
+    assert "Model > Local models: none" in outputs
+    assert "Model > Suggested download catalog:" in outputs
+
+    for i, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
+        assert f"Model >   {i}. {model.name} - {model.description}" in outputs
+
+    assert "Model > After installing one, run `ollama pull <model-name>`." in outputs
