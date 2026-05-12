@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import shlex
 import subprocess
 from typing import Any, Callable, Protocol
 
@@ -46,7 +47,9 @@ class ManualTranscriptFileTranscriber:
         transcript_destination: Path,
     ) -> FileTranscription:
         del transcript_destination
-        manual_transcript_path = self.profile.manual_transcripts_dir / f"{audio_path.stem}.txt"
+        manual_transcript_path = (
+            self.profile.manual_transcripts_dir / f"{audio_path.stem}.txt"
+        )
         if not manual_transcript_path.exists():
             return FileTranscription(
                 status="waiting",
@@ -94,8 +97,8 @@ class WhisperCommandFileTranscriber:
             )
 
         rendered_command = template.format(
-            audio_path=str(audio_path),
-            transcript_path=str(transcript_destination),
+            audio_path=shlex.quote(str(audio_path)),
+            transcript_path=shlex.quote(str(transcript_destination)),
         )
         logger.info("Running whisper_command provider for {}", audio_path.name)
         completed = subprocess.run(
@@ -133,7 +136,9 @@ class WhisperCommandFileTranscriber:
             status="processed",
             message=f"Processed {audio_path.name} using the Whisper command flow.",
             transcript_text=transcript_text,
-            transcript_path=transcript_destination if transcript_destination.exists() else None,
+            transcript_path=transcript_destination
+            if transcript_destination.exists()
+            else None,
         )
 
 
@@ -209,8 +214,12 @@ class FasterWhisperFileTranscriber:
         if model_factory is None:
             try:
                 from faster_whisper import WhisperModel
-            except ImportError as error:  # pragma: no cover - depends on optional package
-                raise RuntimeError("Optional dependency 'faster-whisper' is not installed.") from error
+            except (
+                ImportError
+            ) as error:  # pragma: no cover - depends on optional package
+                raise RuntimeError(
+                    "Optional dependency 'faster-whisper' is not installed."
+                ) from error
 
             model_factory = WhisperModel
 
