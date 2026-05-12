@@ -12,6 +12,19 @@ from loguru import logger
 class JSONExtractionError(ValueError):
     """Raised when a model response does not contain usable JSON."""
 
+_MARKDOWN_PATTERNS = (
+    re.compile(r"```json\s*(\{.*?\})\s*```", flags=re.DOTALL),
+    re.compile(r"```\s*(\{.*?\})\s*```", flags=re.DOTALL),
+    re.compile(r"`(\{.*?\})`", flags=re.DOTALL),
+)
+
+_PREFIX_CLEAN_PATTERN = re.compile(
+    r"^(here(?:'s| is)? the (?:json|plan)|json|output)\s*:?\s*",
+    flags=re.IGNORECASE,
+)
+_TRAILING_BRACE_COMMA_PATTERN = re.compile(r",\s*}")
+_TRAILING_BRACKET_COMMA_PATTERN = re.compile(r",\s*]")
+
 
 def extract_json_from_llm_response(response: str) -> dict[str, Any]:
     """Extract the first valid JSON object from an LLM response.
@@ -30,13 +43,8 @@ def extract_json_from_llm_response(response: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    markdown_patterns = (
-        r"```json\s*(\{.*?\})\s*```",
-        r"```\s*(\{.*?\})\s*```",
-        r"`(\{.*?\})`",
-    )
-    for pattern in markdown_patterns:
-        for match in re.findall(pattern, stripped_response, re.DOTALL):
+    for pattern in _MARKDOWN_PATTERNS:
+        for match in pattern.findall(stripped_response):
             try:
                 parsed = json.loads(match.strip())
                 logger.debug("Extracted JSON from Markdown-style response.")
@@ -102,12 +110,7 @@ def _extract_json_objects(text: str) -> list[str]:
 
 
 def _clean_common_json_issues(text: str) -> str:
-    cleaned = re.sub(
-        r"^(here(?:'s| is)? the (?:json|plan)|json|output)\s*:?\s*",
-        "",
-        text,
-        flags=re.IGNORECASE,
-    )
+    cleaned = _PREFIX_CLEAN_PATTERN.sub("", text)
     last_brace = cleaned.rfind("}")
     if last_brace != -1:
         cleaned = cleaned[: last_brace + 1]
@@ -115,6 +118,6 @@ def _clean_common_json_issues(text: str) -> str:
     if '"' not in cleaned and "'" in cleaned:
         cleaned = cleaned.replace("'", '"')
 
-    cleaned = re.sub(r",\s*}", "}", cleaned)
-    cleaned = re.sub(r",\s*]", "]", cleaned)
+    cleaned = _TRAILING_BRACE_COMMA_PATTERN.sub("}", cleaned)
+    cleaned = _TRAILING_BRACKET_COMMA_PATTERN.sub("]", cleaned)
     return cleaned.strip()
