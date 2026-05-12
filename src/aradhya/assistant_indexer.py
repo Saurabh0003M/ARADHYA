@@ -1007,11 +1007,24 @@ class DirectoryIndexManager:
         limit: int,
     ) -> list[Path]:
         existing_paths: list[Path] = []
+        dir_entries: dict[str, set[str]] = {}
         for candidate in candidates:
-            path = Path(candidate.path)
-            if not path.exists():
+            dir_path, filename = os.path.split(candidate.path)
+
+            if dir_path not in dir_entries:
+                try:
+                    dir_entries[dir_path] = set(os.listdir(dir_path or "."))
+                except OSError:
+                    dir_entries[dir_path] = set()
+
+            # os.listdir doesn't include "." and ".."
+            if filename and filename not in (".", "..") and filename not in dir_entries[dir_path]:
                 continue
-            existing_paths.append(path)
+
+            if not os.path.exists(candidate.path):
+                continue
+
+            existing_paths.append(Path(candidate.path))
             if len(existing_paths) >= limit:
                 break
         return existing_paths
