@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+import inspect
 import sys
 import threading
 import time
@@ -111,12 +112,12 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
 
 # ── Command handlers ──────────────────────────────────────────────────
 
-def _handle_help(**_) -> None:
+def _handle_help() -> None:
     render_help()
 
 
 def _handle_status(*, assistant, runtime_profile, model_provider,
-                   live_voice_runtime, **_) -> None:
+                   live_voice_runtime) -> None:
     model_ok = None
     try:
         health = model_provider.health_check()
@@ -137,13 +138,13 @@ def _handle_status(*, assistant, runtime_profile, model_provider,
     )
 
 
-def _handle_sleep(*, assistant, **_) -> None:
+def _handle_sleep(*, assistant) -> None:
     resp = assistant.go_idle()
     render_response(resp.spoken_response)
 
 
 def _handle_voice_status(*, voice_manager, runtime_profile,
-                         live_voice_runtime, **_) -> None:
+                         live_voice_runtime) -> None:
     status = voice_manager.status()
     activation_support = describe_voice_activation_support(runtime_profile)
     render_voice_status(
@@ -152,7 +153,7 @@ def _handle_voice_status(*, voice_manager, runtime_profile,
     )
 
 
-def _handle_voice_process(*, assistant, voice_manager, **_) -> None:
+def _handle_voice_process(*, assistant, voice_manager) -> None:
     results = voice_manager.process_pending_audio()
     if not results:
         render_info("No pending audio files in the inbox.")
@@ -174,7 +175,7 @@ def _handle_voice_process(*, assistant, voice_manager, **_) -> None:
 
 
 def _handle_voice_activate(*, assistant, voice_manager, runtime_profile,
-                           ctx, **_) -> None:
+                           ctx) -> None:
     try:
         if ctx.get("live_voice_runtime") is None:
             ctx["live_voice_runtime"] = VoiceActivatedAradhya(
@@ -188,7 +189,7 @@ def _handle_voice_activate(*, assistant, voice_manager, runtime_profile,
         render_error(f"Live activation failed: {error}")
 
 
-def _handle_voice_stop(*, ctx, **_) -> None:
+def _handle_voice_stop(*, ctx) -> None:
     lvr = ctx.get("live_voice_runtime")
     if lvr and lvr.is_running():
         lvr.stop()
@@ -196,7 +197,7 @@ def _handle_voice_stop(*, ctx, **_) -> None:
         render_info("Live voice activation is not running.")
 
 
-def _handle_wake_word_on(*, assistant, voice_manager, ctx, **_) -> None:
+def _handle_wake_word_on(*, assistant, voice_manager, ctx) -> None:
     if ctx.get("wake_word_listener") is None:
         ctx["wake_word_listener"] = WakeWordListener(
             assistant=assistant, voice_manager=voice_manager,
@@ -205,18 +206,18 @@ def _handle_wake_word_on(*, assistant, voice_manager, ctx, **_) -> None:
     render_success("Wake word detection enabled (listening for 'wakeup').")
 
 
-def _handle_wake_word_off(*, ctx, **_) -> None:
+def _handle_wake_word_off(*, ctx) -> None:
     wl = ctx.get("wake_word_listener")
     if wl:
         wl.stop()
     render_success("Wake word detection disabled.")
 
 
-def _handle_model_ping(*, model_provider, **_) -> None:
+def _handle_model_ping(*, model_provider) -> None:
     render_model_health(model_provider.health_check())
 
 
-def _handle_model_ask(*, command, model_provider, **_) -> None:
+def _handle_model_ask(*, command, model_provider) -> None:
     prompt = command[len("/model ask "):].strip()
     if not prompt:
         prompt = command[len("model ask "):].strip()
@@ -235,12 +236,12 @@ def _handle_model_ask(*, command, model_provider, **_) -> None:
         render_error(f"Generation failed: {error}")
 
 
-def _handle_skills_list(*, skill_registry, **_) -> None:
+def _handle_skills_list(*, skill_registry) -> None:
     all_skills = skill_registry.all_skills() if skill_registry else []
     render_skills_list(all_skills)
 
 
-def _handle_skills_enable(*, command, skill_registry, **_) -> None:
+def _handle_skills_enable(*, command, skill_registry) -> None:
     name = command.split(maxsplit=2)[-1].strip() if len(command.split()) > 2 else ""
     if not name:
         render_error("Usage: /skills enable <name>")
@@ -251,7 +252,7 @@ def _handle_skills_enable(*, command, skill_registry, **_) -> None:
         render_error(f"Skill '{name}' not found.")
 
 
-def _handle_skills_disable(*, command, skill_registry, **_) -> None:
+def _handle_skills_disable(*, command, skill_registry) -> None:
     name = command.split(maxsplit=2)[-1].strip() if len(command.split()) > 2 else ""
     if not name:
         render_error("Usage: /skills disable <name>")
@@ -262,7 +263,7 @@ def _handle_skills_disable(*, command, skill_registry, **_) -> None:
         render_error(f"Skill '{name}' not found.")
 
 
-def _handle_icon_on(*, ctx, **_) -> None:
+def _handle_icon_on(*, ctx) -> None:
     fp = ctx.get("floating_icon_process")
     if fp is None or fp.poll() is not None:
         try:
@@ -277,7 +278,7 @@ def _handle_icon_on(*, ctx, **_) -> None:
         render_info("Floating icon is already running.")
 
 
-def _handle_icon_off(*, ctx, **_) -> None:
+def _handle_icon_off(*, ctx) -> None:
     fp = ctx.get("floating_icon_process")
     if fp and fp.poll() is None:
         fp.terminate()
@@ -287,14 +288,14 @@ def _handle_icon_off(*, ctx, **_) -> None:
         render_info("Floating icon is not running.")
 
 
-def _handle_cache(*, assistant, **_) -> None:
+def _handle_cache(*, assistant) -> None:
     report = run_cache_validation(assistant.preferences)
     for line in format_cache_validation_report(report):
         console.print(f"  {line}")
     console.print()
 
 
-def _handle_telegram_start(*, assistant, ctx, **_) -> None:
+def _handle_telegram_start(*, assistant, ctx) -> None:
     if ctx.get("telegram_bot") and ctx["telegram_bot"].is_running():
         render_info("Telegram bot is already running.")
         return
@@ -319,7 +320,7 @@ def _handle_telegram_start(*, assistant, ctx, **_) -> None:
         render_error(f"Failed to start Telegram bot: {error}")
 
 
-def _handle_telegram_stop(*, ctx, **_) -> None:
+def _handle_telegram_stop(*, ctx) -> None:
     bot = ctx.get("telegram_bot")
     if bot and bot.is_running():
         bot.stop()
@@ -329,7 +330,7 @@ def _handle_telegram_stop(*, ctx, **_) -> None:
         render_info("Telegram bot is not running.")
 
 
-def _handle_audit(**_) -> None:
+def _handle_audit() -> None:
     audit = get_audit_logger()
     entries = audit.recent_entries(15)
     if not entries:
@@ -354,7 +355,7 @@ def _handle_audit(**_) -> None:
     console.print()
 
 
-def _handle_daemon_start(*, ctx, **_) -> None:
+def _handle_daemon_start(*, ctx) -> None:
     dp = ctx.get("daemon_process")
     if dp and dp.poll() is None:
         render_info("Daemon is already running.")
@@ -374,7 +375,7 @@ def _handle_daemon_start(*, ctx, **_) -> None:
         render_error(f"Failed to start daemon: {error}")
 
 
-def _handle_daemon_stop(*, ctx, **_) -> None:
+def _handle_daemon_stop(*, ctx) -> None:
     dp = ctx.get("daemon_process")
     if dp and dp.poll() is None:
         dp.terminate()
@@ -384,7 +385,7 @@ def _handle_daemon_stop(*, ctx, **_) -> None:
         render_info("Daemon is not running from this session.")
 
 
-def _handle_setup(**_) -> None:
+def _handle_setup() -> None:
     try:
         from src.aradhya.setup_wizard import run_wizard
         run_wizard()
@@ -452,7 +453,14 @@ def _dispatch_command(command: str, **kwargs) -> bool:
     for prefixes, handler in COMMAND_TABLE:
         for prefix in prefixes:
             if normalized == prefix or normalized.startswith(prefix + " "):
-                handler(command=command, **kwargs)
+                sig = inspect.signature(handler).parameters
+                has_varkw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.values())
+                all_kwargs = dict(command=command, **kwargs)
+                if has_varkw:
+                    filtered = all_kwargs
+                else:
+                    filtered = {k: v for k, v in all_kwargs.items() if k in sig}
+                handler(**filtered)
                 return True
     return False
 
