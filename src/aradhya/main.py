@@ -500,9 +500,7 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
     return t
 
 
-# ── Main entry point ──────────────────────────────────────────────────
-
-def main() -> None:
+def _setup_environment():
     runtime_profile = load_runtime_profile(PROJECT_ROOT)
     log_path = configure_logging(PROJECT_ROOT)
     runtime_profile = bootstrap_runtime_profile(runtime_profile, PROJECT_ROOT)
@@ -574,6 +572,76 @@ def main() -> None:
     # ── IPC watcher for floating icon ─────────────────────────────────
     _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx)
 
+    return assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx
+
+
+def _run_cli_loop(handler_kwargs: dict):
+    ctx = handler_kwargs["ctx"]
+    assistant = handler_kwargs["assistant"]
+    voice_manager = handler_kwargs["voice_manager"]
+    runtime_profile = handler_kwargs["runtime_profile"]
+
+    while True:
+        try:
+            command = prompt_input().strip()
+        except (EOFError, KeyboardInterrupt):
+            console.print()
+            render_info("Shutting down.")
+            break
+
+        if not command:
+            continue
+
+        normalized = command.lower().strip()
+
+        # Exit
+        if normalized == "exit":
+            render_info("Shutting down.")
+            break
+
+        # Update live_voice_runtime reference in handler_kwargs
+        handler_kwargs["live_voice_runtime"] = ctx.get("live_voice_runtime")
+
+        # Try slash/legacy command dispatch
+        if _dispatch_command(command, **handler_kwargs):
+            continue
+
+        # Legacy wake commands — still supported but no longer needed
+        if normalized in {"wake", "ctrl+win"}:
+            source = (
+                WakeSource.HOTKEY if normalized == "ctrl+win"
+                else WakeSource.FLOATING_ICON
+            )
+            resp = assistant.handle_wake(source)
+            render_response(resp.spoken_response)
+            if runtime_profile.voice.poll_on_wake:
+                pending_audio = voice_manager.status().pending_audio
+                if pending_audio:
+                    render_info(
+                        f"{len(pending_audio)} pending audio file(s) in "
+                        f"{runtime_profile.voice.audio_inbox_dir}"
+                    )
+            continue
+
+        # ── Natural language input ────────────────────────────────
+        # Everything that isn't a command goes to the assistant planner.
+        resp = assistant.handle_transcript(command, stream_handler=render_stream)
+
+        # For streaming, the text is already rendered live, so we only need to
+        # render the transcript echo or awaiting confirmation if applicable.
+        if resp.transcript_echo or resp.awaiting_confirmation:
+            render_response(
+                resp.spoken_response if resp.awaiting_confirmation else "",
+                transcript_echo=resp.transcript_echo,
+                awaiting=resp.awaiting_confirmation,
+            )
+
+
+# ── Main entry point ──────────────────────────────────────────────────
+
+def main() -> None:
+    assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx = _setup_environment()
+
     # ── Shared kwargs for all command handlers ────────────────────────
     handler_kwargs = dict(
         assistant=assistant,
@@ -587,61 +655,7 @@ def main() -> None:
 
     # ── Main input loop ───────────────────────────────────────────────
     try:
-        while True:
-            try:
-                command = prompt_input().strip()
-            except (EOFError, KeyboardInterrupt):
-                console.print()
-                render_info("Shutting down.")
-                break
-
-            if not command:
-                continue
-
-            normalized = command.lower().strip()
-
-            # Exit
-            if normalized == "exit":
-                render_info("Shutting down.")
-                break
-
-            # Update live_voice_runtime reference in handler_kwargs
-            handler_kwargs["live_voice_runtime"] = ctx.get("live_voice_runtime")
-
-            # Try slash/legacy command dispatch
-            if _dispatch_command(command, **handler_kwargs):
-                continue
-
-            # Legacy wake commands — still supported but no longer needed
-            if normalized in {"wake", "ctrl+win"}:
-                source = (
-                    WakeSource.HOTKEY if normalized == "ctrl+win"
-                    else WakeSource.FLOATING_ICON
-                )
-                resp = assistant.handle_wake(source)
-                render_response(resp.spoken_response)
-                if runtime_profile.voice.poll_on_wake:
-                    pending_audio = voice_manager.status().pending_audio
-                    if pending_audio:
-                        render_info(
-                            f"{len(pending_audio)} pending audio file(s) in "
-                            f"{runtime_profile.voice.audio_inbox_dir}"
-                        )
-                continue
-
-            # ── Natural language input ────────────────────────────────
-            # Everything that isn't a command goes to the assistant planner.
-            resp = assistant.handle_transcript(command, stream_handler=render_stream)
-
-            # For streaming, the text is already rendered live, so we only need to
-            # render the transcript echo or awaiting confirmation if applicable.
-            if resp.transcript_echo or resp.awaiting_confirmation:
-                render_response(
-                    resp.spoken_response if resp.awaiting_confirmation else "",
-                    transcript_echo=resp.transcript_echo,
-                    awaiting=resp.awaiting_confirmation,
-                )
-
+        _run_cli_loop(handler_kwargs)
     finally:
         ctx["ipc_running"] = False
         wl = ctx.get("wake_word_listener")
