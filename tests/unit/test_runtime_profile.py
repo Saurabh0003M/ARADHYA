@@ -211,9 +211,10 @@ def test_default_preferences_use_portable_roots(tmp_path):
     external_project_root = Path("Z:/AradhyaClone")
     preferences = build_default_preferences(external_project_root)
 
-    assert Path.home() in preferences.user_roots
+    assert Path.home() not in preferences.user_roots
     assert external_project_root in preferences.user_roots
     assert Path("F:/") not in preferences.user_roots
+    assert all(root == external_project_root or root.exists() for root in preferences.user_roots)
 
 
 def test_persist_model_name_updates_local_override_file(tmp_path):

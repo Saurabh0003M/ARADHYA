@@ -28,7 +28,7 @@ If you want real local transcription from dropped audio files:
 
 1. Install the optional dependencies:
    `venv\Scripts\python.exe -m pip install -r requirements-voice.txt`
-2. Update `core/memory/profile.json`
+2. Update `core/config/profile.json` or `core/config/profile.local.json`
 3. Change `"provider"` from `"manual_transcript"` to `"faster_whisper"`
 4. Optionally tune:
    - `"faster_whisper_model_size"`
@@ -51,7 +51,7 @@ This path still archives the handled audio and writes the transcript into the sa
 
 ## Whisper Command Alternative
 
-When you install or choose a Whisper command workflow, update `core/memory/profile.json`:
+When you install or choose a Whisper command workflow, update `core/config/profile.json` or `core/config/profile.local.json`:
 
 - change `"provider"` from `"manual_transcript"` to `"whisper_command"`
 - set `"whisper_command_template"`

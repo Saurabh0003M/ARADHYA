@@ -1,0 +1,4 @@
+# Optional local file transcription support.
+# Install with:
+#   venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+faster-whisper>=1.1.0

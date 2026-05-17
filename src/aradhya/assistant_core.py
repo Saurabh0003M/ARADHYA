@@ -86,9 +86,7 @@ class AradhyaAssistant:
             for phrase in self.preferences.confirmation_phrases
         }
 
-        from src.aradhya.mcp_client import MCPManager
-        self.mcp_manager = MCPManager()
-        self.mcp_manager.load_from_profile(self.project_root / "core" / "memory" / "profile.json")
+        self.mcp_manager = self._load_mcp_manager()
 
     @classmethod
     def from_project_root(
@@ -106,6 +104,20 @@ class AradhyaAssistant:
             session_manager=session_manager,
             project_root=root,
         )
+
+    def _load_mcp_manager(self):
+        try:
+            from src.aradhya.mcp_client import MCPManager
+        except ModuleNotFoundError as error:
+            missing_name = error.name or ""
+            if missing_name != "mcp" and not missing_name.startswith("mcp."):
+                raise
+            logger.warning("MCP support disabled because the mcp package is not installed.")
+            return None
+
+        manager = MCPManager()
+        manager.load_from_profile(self.project_root / "core" / "memory" / "profile.json")
+        return manager
 
     def handle_wake(self, source: WakeSource) -> AssistantResponse:
         self.state.is_awake = True
@@ -363,7 +375,8 @@ class AradhyaAssistant:
         ):
             registry.register_function(tool)
 
-        self.mcp_manager.connect_and_register_tools(registry)
+        if self.mcp_manager is not None:
+            self.mcp_manager.connect_and_register_tools(registry)
 
         return registry
 

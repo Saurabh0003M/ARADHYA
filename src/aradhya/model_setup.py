@@ -89,6 +89,16 @@ def bootstrap_runtime_profile(
         output_handler("")
         return runtime_profile
 
+    if health.configured_model in health.available_models:
+        output_handler(f"Model > {health.message}")
+        output_handler("Model > The installed model is not usable on the current machine state.")
+        output_handler("Model > Suggested smaller local models:")
+        for index, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
+            output_handler(f"Model >   {index}. {model.name} - {model.description}")
+        output_handler("Model > Pull a smaller model, then update the profile with /setup or profile.local.json.")
+        output_handler("")
+        return runtime_profile
+
     if len(health.available_models) == 1:
         selected_model = health.available_models[0]
         output_handler(

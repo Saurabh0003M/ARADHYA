@@ -783,18 +783,16 @@ class DirectoryIndexManager:
             raise ValueError(f"Context cache shard {filename} is invalid.") from error
 
     def _write_manifest(self, manifest: ContextCacheManifest) -> None:
-        self._manifest_path.write_text(
-            json.dumps(manifest.to_dict(), indent=2) + "\n",
-            encoding="utf-8",
-        )
+        with self._manifest_path.open("w", encoding="utf-8") as manifest_file:
+            json.dump(manifest.to_dict(), manifest_file, indent=2)
+            manifest_file.write("\n")
 
     def _write_shards(self, shards: dict[str, DriveCacheShard]) -> None:
         for drive_key, shard in shards.items():
             shard_path = self.preferences.context_cache_dir / self._shard_filename(drive_key)
-            shard_path.write_text(
-                json.dumps(shard.to_dict(), indent=2) + "\n",
-                encoding="utf-8",
-            )
+            with shard_path.open("w", encoding="utf-8") as shard_file:
+                json.dump(shard.to_dict(), shard_file, indent=2)
+                shard_file.write("\n")
 
     def _write_summary_artifact(
         self,
@@ -1171,6 +1169,12 @@ class DirectoryIndexManager:
         return self._build_exact_name_index(shards)
 
     def _is_loaded_cache_state_current(self, cache_state: _LoadedCacheState) -> bool:
+        try:
+            current_manifest = self._read_manifest()
+        except ValueError:
+            return False
+        if current_manifest.to_dict() != cache_state.manifest.to_dict():
+            return False
         if self._file_mtime_ns(self._manifest_path) != cache_state.manifest_mtime_ns:
             return False
         current_filenames = set(cache_state.manifest.shards.values())
@@ -1393,12 +1397,23 @@ class DirectoryIndexManager:
         return relative_path.as_posix()
 
     def _should_ignore_name(self, name: str) -> bool:
-        return name.lower() in self._ignored_names
+        lowered_name = name.lower()
+        return (
+            lowered_name in self._ignored_names
+            or lowered_name.startswith(".pytest_")
+            or lowered_name.startswith("pytest-")
+            or lowered_name.startswith("pytest_")
+            or lowered_name.startswith("pytest-cache-files-")
+        )
 
     def _should_ignore_path(self, path: Path) -> bool:
-        resolved = path.resolve()
-        context_dir = self.preferences.context_cache_dir.resolve()
-        directory_index_path = self.preferences.directory_index_path.resolve()
+        try:
+            resolved = path.resolve()
+            context_dir = self.preferences.context_cache_dir.resolve()
+            directory_index_path = self.preferences.directory_index_path.resolve()
+        except OSError as error:
+            logger.debug("Skipping path that could not be resolved at {}: {}", path, error)
+            return True
 
         if resolved == directory_index_path:
             return True

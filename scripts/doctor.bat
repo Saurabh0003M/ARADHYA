@@ -153,7 +153,7 @@ if errorlevel 1 (
     echo [PASS] pip is available inside the local virtual environment.
 )
 
-"venv\Scripts\python.exe" -c "import requests, dotenv, yaml, loguru" >nul 2>nul
+"venv\Scripts\python.exe" -c "import requests, dotenv, yaml, loguru, rich, mcp, pandas, numpy" >nul 2>nul
 if errorlevel 1 (
     echo [FAIL] Core runtime dependencies are missing from the local virtual environment.
     echo        Next step: scripts\first_run.bat
@@ -195,7 +195,7 @@ if errorlevel 1 (
 exit /b 0
 
 :read_configured_model
-for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$ErrorActionPreference = 'Stop'; $model = ''; $sharedPath = 'core/memory/profile.json'; if (Test-Path $sharedPath) { $shared = Get-Content $sharedPath -Raw | ConvertFrom-Json; if ($shared.model -and $shared.model.model_name) { $model = $shared.model.model_name } }; $localPath = 'core/memory/profile.local.json'; if (Test-Path $localPath) { $local = Get-Content $localPath -Raw | ConvertFrom-Json; if ($local.model -and $local.model.model_name) { $model = $local.model.model_name } }; if (-not $model) { $model = 'gemma4:e4b' }; Write-Output $model"`) do set "CONFIGURED_MODEL=%%I"
+for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$ErrorActionPreference = 'Stop'; $model = ''; $paths = @('core/config/profile.json', 'core/memory/profile.json', 'core/config/profile.local.json', 'core/memory/profile.local.json'); foreach ($path in $paths) { if (Test-Path $path) { $payload = Get-Content $path -Raw | ConvertFrom-Json; if ($payload.model -and $payload.model.model_name) { $model = $payload.model.model_name } } }; if (-not $model) { $model = 'gemma4:e4b' }; Write-Output $model"`) do set "CONFIGURED_MODEL=%%I"
 
 if defined CONFIGURED_MODEL (
     echo [INFO] Configured model: !CONFIGURED_MODEL!

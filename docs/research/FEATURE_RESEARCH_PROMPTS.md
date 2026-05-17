@@ -9,7 +9,7 @@ Use rules:
 - Distinguish `Source says` from `Inference`.
 - Report time complexity before space complexity.
 - Stay inside implemented Aradhya scope. Do not spend tokens on roadmap-only features such as browser operator or screen automation.
-- Prefer mechanisms and code paths that map to `src/aradhya/assistant_indexer.py`, `src/aradhya/assistant_planner.py`, `src/aradhya/llm_planner.py`, `src/aradhya/voice_pipeline.py`, and `src/aradhya/voice_activation.py`.
+- Prefer mechanisms and code paths that map to `src/aradhya/assistant_indexer.py`, `src/aradhya/assistant_planner.py`, `src/aradhya/llm_planner.py`, `src/aradhya/voice/pipeline.py`, and `src/aradhya/voice/activation.py`.
 
 ## Output Contract
 
@@ -42,7 +42,7 @@ Goal:
 Repo context:
 - Local context engine: src/aradhya/assistant_indexer.py
 - Planner boundary: src/aradhya/assistant_planner.py, src/aradhya/llm_planner.py
-- Voice pipeline: src/aradhya/voice_pipeline.py, src/aradhya/voice_activation.py
+- Voice pipeline: src/aradhya/voice/pipeline.py, src/aradhya/voice/activation.py
 
 Scope constraints:
 - Include implemented features only.
@@ -158,7 +158,7 @@ Hard rule:
 
 ```text
 Focus only on:
-- src/aradhya/voice_pipeline.py
+- src/aradhya/voice/pipeline.py
 - src/aradhya/voice_activation.py
 - src/aradhya/voice_transcriber.py
 

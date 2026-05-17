@@ -53,7 +53,8 @@ Aradhya is being built as a personal AI laptop assistant that can understand nat
 
 ### Model Layer
 
-- The local reasoning model is configured through `core/memory/profile.json`.
+- The local reasoning model is configured through `core/config/profile.json`,
+  with machine-local overrides in `core/config/profile.local.json`.
 - The current default provider is Ollama.
 - The current default model is `gemma4:e4b`.
 - Future model swaps should happen by changing the profile, not the code.

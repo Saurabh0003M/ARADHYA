@@ -7,7 +7,7 @@ name = "aradhya"
 version = "0.1.0"
 description = "AI Assistant Project"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 
 [project.scripts]
 aradhya = "src.aradhya.main:main"

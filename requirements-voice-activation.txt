@@ -1,0 +1,6 @@
+# Optional push-to-talk microphone capture and local spoken replies.
+# Install with:
+#   venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
+sounddevice>=0.4.6
+pynput>=1.7.6
+pyttsx3>=2.90

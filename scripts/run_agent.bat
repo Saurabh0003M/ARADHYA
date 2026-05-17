@@ -12,7 +12,7 @@ if not exist "venv\Scripts\python.exe" (
 )
 
 echo Starting Aradhya Agent...
-venv\Scripts\python.exe -m core.agent.aradhya
+venv\Scripts\python.exe -m src.aradhya.main
 set "EXIT_CODE=%ERRORLEVEL%"
 
 popd >nul

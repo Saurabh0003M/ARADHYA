@@ -290,3 +290,38 @@ def test_named_path_lookup_negative_cache_skips_repeat_refreshes(tmp_path, monke
     clock.advance(seconds=11)
     assert manager.find_named_paths("missing target") == []
     assert refresh_calls == 2
+
+
+def test_refresh_skips_generated_pytest_cache_folders(tmp_path):
+    user_root = tmp_path / "user"
+    visible_dir = user_root / "visible"
+    pytest_cache_dir = user_root / "pytest-cache-files-demo"
+    pytest_dash_dir = user_root / "pytest-demo"
+    pytest_tmp_dir = user_root / "pytest_tmp_scan"
+    visible_dir.mkdir(parents=True)
+    pytest_cache_dir.mkdir(parents=True)
+    pytest_dash_dir.mkdir(parents=True)
+    pytest_tmp_dir.mkdir(parents=True)
+    (visible_dir / "keep.txt").write_text("keep", encoding="utf-8")
+    (pytest_cache_dir / "skip.txt").write_text("skip", encoding="utf-8")
+    (pytest_dash_dir / "skip-dash.txt").write_text("skip", encoding="utf-8")
+    (pytest_tmp_dir / "skip-too.txt").write_text("skip", encoding="utf-8")
+
+    clock = MutableClock(datetime(2026, 4, 5, 10, 0, 0))
+    preferences = build_test_preferences(tmp_path, user_roots=(user_root,))
+    manager = DirectoryIndexManager(preferences, now_provider=clock.now)
+
+    manager.refresh("wake")
+
+    _manifest, shards = manager._load_cache()
+    indexed_paths = {
+        candidate.path
+        for shard in shards.values()
+        for candidates in shard.name_candidates.values()
+        for candidate in candidates
+    }
+
+    assert str(visible_dir / "keep.txt") in indexed_paths
+    assert str(pytest_cache_dir / "skip.txt") not in indexed_paths
+    assert str(pytest_dash_dir / "skip-dash.txt") not in indexed_paths
+    assert str(pytest_tmp_dir / "skip-too.txt") not in indexed_paths

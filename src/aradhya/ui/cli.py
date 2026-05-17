@@ -98,6 +98,10 @@ def render_response(spoken: str, transcript_echo: str | None = None,
     if transcript_echo:
         console.print(f"  [dim]Heard >[/] {transcript_echo}")
 
+    if not spoken and not awaiting:
+        console.print()
+        return
+
     prefix = "  [aradhya]Aradhya >[/] "
 
     if awaiting:
@@ -217,8 +221,8 @@ def render_status(
     table.add_row(f"{state_icon} State", state_text)
 
     model_icon = "[+]" if model_ok else ("[!]" if model_ok is False else "[?]")
-    model_status = "[success]Connected[/]" if model_ok else (
-        "[error]Offline[/]" if model_ok is False else "[dim]Unknown[/]"
+    model_status = "[success]Ready[/]" if model_ok else (
+        "[error]Not ready[/]" if model_ok is False else "[dim]Unknown[/]"
     )
     table.add_row(f"{model_icon} Model", f"{model_name} — {model_status}")
 

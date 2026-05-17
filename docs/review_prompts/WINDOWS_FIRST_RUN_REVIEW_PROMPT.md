@@ -7,7 +7,7 @@ visible in your environment. Focus especially on:
 
 - `README.md`
 - `WINDOWS_SETUP_GUIDE.md`
-- `core/memory/profile.json`
+- `core/config/profile.json`
 - `scripts/setup.bat`
 - `scripts/run_agent.bat`
 - `src/aradhya/main.py`

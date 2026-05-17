@@ -33,6 +33,8 @@ pytest_basetemp*/
 # Generated runtime artifacts
 .tmp/
 python_temp*/
+project_tree.txt
+data/processed/context/
 
 # Logs
 *.log

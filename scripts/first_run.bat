@@ -63,7 +63,9 @@ echo.
 if "!DOCTOR_EXIT!"=="0" (
     echo Base setup is complete.
     echo Start Aradhya with:
-    echo   venv\Scripts\python.exe -m core.agent.aradhya
+    echo   .\arise.bat
+    echo or:
+    echo   venv\Scripts\python.exe -m src.aradhya.main
 ) else (
     echo Base Python setup is complete, but doctor reported remaining blockers.
     echo Resolve the items above, then rerun:

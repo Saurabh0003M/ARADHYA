@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import os
 from pathlib import Path
 
 from loguru import logger
@@ -23,11 +24,12 @@ def configure_logging(project_root: Path) -> Path:
         return log_path
 
     logger.remove()
-    logger.add(
-        sys.stderr,
-        level="INFO",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
-    )
+    if os.getenv("ARADHYA_CONSOLE_LOGS", "").strip().lower() in {"1", "true", "yes"}:
+        logger.add(
+            sys.stderr,
+            level="INFO",
+            format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+        )
     # The rotating file keeps a longer audit trail for planner and voice
     # debugging without requiring the user to keep the terminal open.
     logger.add(

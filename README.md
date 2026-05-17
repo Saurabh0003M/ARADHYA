@@ -1,131 +1,140 @@
-<div align="center">
-
 # Aradhya
-**The 100% Local Operating Intelligence (OI) for Windows**
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
-[![Ollama](https://img.shields.io/badge/Ollama-Local_Inference-black.svg)](https://ollama.ai/)
-[![OS Windows](https://img.shields.io/badge/OS-Windows-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/)
+Aradhya is a local-first Operating Intelligence assistant for Windows. It uses Ollama for local model inference, keeps user data on the machine, and routes risky system actions through explicit confirmation.
 
-Aradhya is a personal AI laptop assistant focused on system-level operation. It goes beyond simple chat by acting as an **Operating Intelligence (OI)** layer that can safely execute complex tasks on your local machine, with zero reliance on cloud APIs.
+## What It Can Do Today
 
-</div>
+- Start a Rich terminal assistant.
+- Use a local Ollama model for chat and fallback planning.
+- Build safe plans before opening files, folders, apps, or URLs.
+- Require confirmation before device-affecting actions.
+- Keep a local directory cache and summary in `project_tree.txt`.
+- Process dropped voice files through the audio inbox.
+- Optionally use push-to-talk microphone capture.
+- Load local `SKILL.md` instruction packs from `core/skills`.
 
----
+## Requirements
 
-## 🌟 Why Aradhya?
+- Windows 10 or 11
+- Python 3.10+
+- Git
+- Ollama
+- At least one local Ollama model
 
-While competitors focus on cloud-dependent REST APIs, Aradhya is built specifically for **privacy, speed, and Windows**.
+The current configured model is read from `core/config/profile.local.json` first, then `core/config/profile.json`.
 
-* **Zero-Cloud Architecture:** Your data never leaves your laptop. Powered entirely by [Ollama](https://ollama.ai/).
-* **Instant Streaming Responses:** No more waiting 30 seconds for a spinner. Watch the AI "think" and type in real-time.
-* **Safe Agentic Execution:** Aradhya can parse complex system tasks, propose file modifications, and run shell commands, but features a strict **User Confirmation Gate** (`yes proceed`) before running destructive actions.
-* **Voice-Native:** Push-to-talk live voice activation, wake word detection, and background audio processing pipelines built-in.
+## First Run
 
----
-
-## 🏗️ System Architecture
-
-Aradhya separates conversational Fast Chat from complex Agentic Loops to maximize responsiveness.
-
-```mermaid
-graph TD
-    User([User CLI / Voice]) --> Main[main.py Entry Point]
-    
-    Main -->|Slash Commands| Dispatcher{Command Dispatch}
-    Main -->|Natural Language| Core[Assistant Core]
-    
-    Core --> Planner{Intent Planner}
-    Planner -->|Simple Chat| FastChat[Fast Stream Mode]
-    Planner -->|System Task| AgentLoop[Agent Loop]
-    
-    AgentLoop -->|Thinks & Streams| LLM[Local Ollama Model]
-    LLM -->|JSON Tool Call| Executor[System Toolbox]
-    Executor -->|File/Shell/Search| OS[Windows OS]
-    
-    FastChat --> LLM
-```
-
----
-
-## 🚀 Quick Start
-
-Get Aradhya running in under 2 minutes. 
-
-### 1. Prerequisites
-- Python 3.10 or higher
-- [Ollama](https://ollama.ai/) installed with your preferred model (default: `gemma4:e4b`)
-
-### 2. Installation
-Clone the repository and run the setup wizard.
+From PowerShell:
 
 ```powershell
-git clone https://github.com/Saurabh0003M/ARADHYA.git aradhya
-cd aradhya
-.\scripts\first_run.bat
+git clone https://github.com/Saurabh0003M/ARADHYA.git ARADHYA
+cd ARADHYA
+scripts\first_run.bat
 ```
 
-### 3. Launch
-To start Aradhya at any time, just run:
+Then verify:
+
+```powershell
+scripts\doctor.bat
+```
+
+## Launch
 
 ```powershell
 .\arise.bat
 ```
 
-> [!TIP]
-> **Try typing:** `hello, who are you?` for a fast chat response, or `find all python files modified today in my documents folder` to trigger an agentic background task.
+The launcher prefers `venv\Scripts\python.exe` when the venv has the required runtime packages. If the venv is incomplete, it falls back to `python` on `PATH` and tells you to rerun setup.
 
----
+Direct launch:
 
-## 📂 Project Structure
-
-Aradhya is built with a clean, modular package architecture:
-
-```text
-aradhya/
-├── core/
-│   ├── config/          # Central configuration (profile.json, preferences.json)
-│   ├── logs/            # Audit and system logs
-│   └── skills/          # Dynamically loaded SKILL.md toolsets
-├── scripts/             # Windows batch utilities (first_run, doctor)
-└── src/aradhya/
-    ├── channels/        # Remote connections (e.g., Telegram Bot)
-    ├── providers/       # LLM Backends (Ollama, etc.)
-    ├── tools/           # System operation tool definitions
-    ├── ui/              # Rich CLI rendering and formatting
-    ├── utils/           # Shared extraction and logging utilities
-    ├── voice/           # Microphone, wake word, and TTS pipeline
-    ├── agent_loop.py    # Multi-step reasoning loop 
-    └── main.py          # Application entry point
+```powershell
+venv\Scripts\python.exe -m src.aradhya.main
 ```
 
----
+## First Commands
 
-## ⌨️ Command Reference
+Inside Aradhya:
 
-While Aradhya understands natural English effortlessly, you can use these quick slash commands:
+```text
+/help
+/status
+/model
+/skills
+/voice
+/cache
+open README.md
+yes proceed
+find the folder with the highest concentration of .txt files
+exit
+```
 
-### Core
-- `/help` - Show all commands.
-- `/status` - View current model health, execution policy, and loaded skills.
-- `/sleep` - Put Aradhya into idle mode.
-- `exit` - Close the assistant safely.
+## Configuration
 
-### Voice Integration
-- `/voice activate` - Start live push-to-talk microphone capture.
-- `/voice stop` - Stop microphone capture.
-- `/wake-word on` - Continuously listen for "Wake up" or "Arise".
+Primary config:
 
-### Safety & Auditing
-- `/audit` - Show recent tool executions and shell commands run by the AI.
+- `core/config/profile.json`
+- `core/config/profile.local.json`
+- `core/config/preferences.json`
 
----
+Legacy fallback config:
 
-## 🛠️ Configuration
+- `core/memory/profile.json`
+- `core/memory/profile.local.json`
+- `core/memory/preferences.json`
 
-Aradhya's behavior is controlled via `core/config/preferences.json` and `core/config/profile.json`.
+Important fields:
 
-* **`allow_live_execution`:** If `false`, Aradhya dry-runs actions instead of actually running shell commands.
-* **`model_name`:** Switch to any local model pulled via Ollama (e.g. `llama3`, `phi3`).
+- `model.model_name`: Ollama model name.
+- `model.base_url`: Ollama API URL, usually `http://127.0.0.1:11434`.
+- `allow_live_execution`: false by default. When false, confirmed opens and launches are dry-run previews.
+- `user_roots`: optional search roots. If omitted, Aradhya uses Desktop, Documents, Downloads, and the repo root instead of scanning the entire home folder.
 
-*Note: You can safely place machine-specific overrides in `profile.local.json` without dirtying git tracking.*
+## Voice
+
+Default voice provider: `manual_transcript`.
+
+Manual transcript flow:
+
+1. Put audio in `audio/inbox`, for example `task.wav`.
+2. Put matching text in `audio/manual_transcripts`, for example `task.txt`.
+3. Run `/voice process`.
+
+Optional local transcription:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice.txt
+```
+
+Optional live microphone activation:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
+```
+
+## Project Structure
+
+```text
+core/
+  config/       Runtime configuration
+  memory/       User context and legacy config fallback
+  skills/       Bundled SKILL.md files
+src/aradhya/
+  main.py       CLI entry point
+  assistant_core.py
+  assistant_indexer.py
+  model_provider.py
+  voice/
+scripts/
+  first_run.bat
+  doctor.bat
+  run_agent.bat
+```
+
+## Safety Model
+
+- Risky tools require explicit confirmation.
+- Live execution is disabled by default.
+- Tool calls are audited.
+- Local tools and local models are preferred.

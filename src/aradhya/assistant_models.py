@@ -49,11 +49,32 @@ class DirectoryIndexPolicy:
     refresh_interval_seconds: int = 60
     ignored_names: tuple[str, ...] = (
         ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".pytest_scan_tmp",
+        ".pytest_tmp",
+        ".pytest_tmp_codex",
+        ".ruff_cache",
+        ".tmp",
+        ".venv",
         "__pycache__",
+        "application data",
         "appdata",
+        "build",
         "cache",
+        "dist",
+        "env",
+        "local settings",
+        "my music",
+        "my pictures",
+        "my videos",
         "node_modules",
+        "pytest_basetemp",
+        "pytest_tmp",
+        "pytest_tmp_scan",
         "temp",
+        "temporary internet files",
+        "test-fixtures",
         "tmp",
         "venv",
     )
@@ -145,13 +166,24 @@ def _build_default_user_roots(project_root: Path) -> tuple[Path, ...]:
     """Return safe default search roots for the current machine.
 
     The assistant should not assume a specific drive letter such as ``F:/``.
-    Instead, it searches the current user's home folder and, when different,
-    the cloned project root so the repo remains discoverable after a fresh clone.
+    It also should not scan the entire home folder on startup because Windows
+    profile directories can contain large AppData trees and inaccessible
+    junctions. Start with common user document folders plus the cloned project.
     """
 
-    roots: list[Path] = [Path.home()]
-    if project_root not in roots and not str(project_root).startswith(str(Path.home())):
-        roots.append(project_root)
+    home = Path.home()
+    candidates = (
+        home / "Desktop",
+        home / "Documents",
+        home / "Downloads",
+        project_root,
+    )
+    roots: list[Path] = []
+    for candidate in candidates:
+        if candidate in roots:
+            continue
+        if candidate == project_root or candidate.exists():
+            roots.append(candidate)
     return tuple(roots)
 
 
@@ -221,6 +253,20 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         return defaults
 
     raw_policy = data.get("directory_index_policy", {})
+    configured_ignored_names = tuple(
+        raw_policy.get(
+            "ignored_names",
+            defaults.directory_index_policy.ignored_names,
+        )
+    )
+    ignored_names = tuple(
+        dict.fromkeys(
+            (
+                *defaults.directory_index_policy.ignored_names,
+                *configured_ignored_names,
+            )
+        )
+    )
     policy = DirectoryIndexPolicy(
         refresh_on_wake=raw_policy.get(
             "refresh_on_wake", defaults.directory_index_policy.refresh_on_wake
@@ -233,11 +279,7 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
             "refresh_interval_seconds",
             defaults.directory_index_policy.refresh_interval_seconds,
         ),
-        ignored_names=tuple(
-            raw_policy.get(
-                "ignored_names", defaults.directory_index_policy.ignored_names
-            )
-        ),
+        ignored_names=ignored_names,
         max_nodes=raw_policy.get(
             "max_nodes", defaults.directory_index_policy.max_nodes
         ),

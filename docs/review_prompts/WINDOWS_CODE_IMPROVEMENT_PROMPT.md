@@ -34,7 +34,7 @@ visible in your environment. Prioritize these files:
 - `WINDOWS_SETUP_GUIDE.md`
 - `scripts/setup.bat`
 - `scripts/run_agent.bat`
-- `core/memory/profile.json`
+- `core/config/profile.json`
 - `src/aradhya/main.py`
 - `src/aradhya/model_provider.py`
 - `src/aradhya/model_setup.py`

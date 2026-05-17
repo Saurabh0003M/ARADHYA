@@ -11,8 +11,14 @@ import time
 
 from loguru import logger
 
+if __package__ in {None, ""}:
+    project_root = Path(__file__).resolve().parents[2]
+    project_root_str = str(project_root)
+    if project_root_str not in sys.path:
+        sys.path.insert(0, project_root_str)
+
 from src.aradhya.assistant_core import AradhyaAssistant
-from src.aradhya.assistant_models import WakeSource
+from src.aradhya.assistant_models import PlanKind, WakeSource
 from src.aradhya.utils.cache_diagnostics import (
     format_cache_validation_report,
     run_cache_validation,
@@ -52,6 +58,16 @@ IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
 MAX_DIRECT_MODEL_PROMPT_CHARS = 4000
 
 
+def _response_was_streamed(resp) -> bool:
+    """Return True when the live stream renderer already printed the reply."""
+
+    if resp.awaiting_confirmation or resp.result is None or not resp.result.success:
+        return False
+    if resp.plan is None:
+        return False
+    return resp.plan.kind in {PlanKind.AGENT_TASK, PlanKind.GENERAL_CHAT}
+
+
 # ── Startup health checks ────────────────────────────────────────────
 
 def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool, str]]:
@@ -70,10 +86,10 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
     # 2. Ollama reachability + model
     try:
         health = model_provider.health_check()
-        model_ok = getattr(health, "reachable", False)
+        model_ok = getattr(health, "ready", False)
         model_name = runtime_profile.model.model_name
         if model_ok:
-            checks.append(("Ollama", True, f"Connected — {model_name}"))
+            checks.append(("Ollama", True, f"Ready - {model_name}"))
         else:
             msg = getattr(health, "error", "unreachable")
             checks.append(("Ollama", False, f"Offline — {msg}"))
@@ -122,7 +138,7 @@ def _handle_status(*, assistant, runtime_profile, model_provider,
     model_ok = None
     try:
         health = model_provider.health_check()
-        model_ok = getattr(health, "reachable", False)
+        model_ok = getattr(health, "ready", False)
     except Exception:
         model_ok = False
 
@@ -272,7 +288,7 @@ def _handle_icon_on(*, ctx) -> None:
     if fp is None or fp.poll() is not None:
         try:
             ctx["floating_icon_process"] = subprocess.Popen(
-                [sys.executable, "-m", "src.aradhya.floating_icon"],
+                [sys.executable, "-m", "src.aradhya.ui.floating_icon"],
                 cwd=str(PROJECT_ROOT),
             )
             render_success("Floating icon enabled.")
@@ -503,8 +519,40 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
                                 )
                                 ctx["live_voice_runtime"] = lvr
                             lvr.start()
-                except Exception:
-                    pass
+                    elif cmd == "debate_toggle":
+                        console.print()
+                        transcript = (
+                            "disable debate mode"
+                            if assistant.state.debate_mode_enabled
+                            else "enable debate mode"
+                        )
+                        resp = assistant.handle_transcript(transcript)
+                        render_response(
+                            resp.spoken_response,
+                            transcript_echo=resp.transcript_echo,
+                            awaiting=resp.awaiting_confirmation,
+                        )
+                    elif cmd in {"screen_watch_toggle", "browser_toggle"}:
+                        console.print()
+                        render_warning(
+                            "That floating-icon button is visible, but its screen/browser "
+                            "watch backend is not implemented yet."
+                        )
+                    elif cmd in {"lock_screen", "prevent_sleep"}:
+                        console.print()
+                        render_warning(
+                            f"Floating-icon command '{cmd}' is not wired to a safe "
+                            "confirmed action yet."
+                        )
+                    elif cmd == "exit_icon":
+                        console.print()
+                        render_info("Floating icon closed.")
+                    else:
+                        console.print()
+                        render_warning(f"Unknown floating-icon command: {cmd}")
+                except Exception as error:
+                    console.print()
+                    render_warning(f"Floating-icon command failed: {error}")
             time.sleep(0.5)
 
     t = threading.Thread(target=watcher, daemon=True)
@@ -639,11 +687,10 @@ def _run_cli_loop(handler_kwargs: dict):
         # Everything that isn't a command goes to the assistant planner.
         resp = assistant.handle_transcript(command, stream_handler=render_stream)
 
-        # For streaming, the text is already rendered live, so we only need to
-        # render the transcript echo or awaiting confirmation if applicable.
-        if resp.transcript_echo or resp.awaiting_confirmation:
+        spoken = "" if _response_was_streamed(resp) else resp.spoken_response
+        if resp.transcript_echo or resp.awaiting_confirmation or spoken:
             render_response(
-                resp.spoken_response if resp.awaiting_confirmation else "",
+                spoken,
                 transcript_echo=resp.transcript_echo,
                 awaiting=resp.awaiting_confirmation,
             )

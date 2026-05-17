@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any, Iterator, Protocol
 
 from loguru import logger
@@ -96,6 +97,8 @@ class TextModelProvider(Protocol):
 class OllamaTextModelProvider:
     """Ollama-backed provider for local text generation."""
 
+    _health_cache_ttl_seconds = 30.0
+
     def __init__(
         self,
         profile: ModelProfile,
@@ -103,8 +106,15 @@ class OllamaTextModelProvider:
     ):
         self.profile = profile
         self.session = session or requests.Session()
+        self._cached_health: tuple[float, ModelHealth] | None = None
 
     def health_check(self) -> ModelHealth:
+        now = time.monotonic()
+        if self._cached_health is not None:
+            cached_at, cached_health = self._cached_health
+            if now - cached_at <= self._health_cache_ttl_seconds:
+                return cached_health
+
         logger.debug(
             "Checking Ollama health at {} for model {}",
             self.profile.base_url,
@@ -115,10 +125,10 @@ class OllamaTextModelProvider:
                 f"{self.profile.base_url}/api/tags",
                 timeout=self.profile.request_timeout_seconds,
             )
-            response.raise_for_status()
+            self._raise_for_status_with_details(response)
             payload = response.json()
         except requests.RequestException as error:
-            return ModelHealth(
+            health = ModelHealth(
                 reachable=False,
                 ready=False,
                 provider=self.profile.provider,
@@ -126,6 +136,8 @@ class OllamaTextModelProvider:
                 available_models=tuple(),
                 message=f"Ollama is not reachable at {self.profile.base_url}: {error}",
             )
+            self._cached_health = (now, health)
+            return health
 
         available_models = tuple(
             model.get("name", "")
@@ -133,16 +145,15 @@ class OllamaTextModelProvider:
             if model.get("name")
         )
         ready = self.profile.model_name in available_models
-        message = (
-            f"Configured model {self.profile.model_name} is available."
-            if ready
-            else (
+        if ready:
+            ready, message = self._probe_model_ready()
+        else:
+            message = (
                 f"Ollama is reachable, but {self.profile.model_name} was not listed. "
                 "Update profile.json or pull the model."
             )
-        )
 
-        return ModelHealth(
+        health = ModelHealth(
             reachable=True,
             ready=ready,
             provider=self.profile.provider,
@@ -150,6 +161,30 @@ class OllamaTextModelProvider:
             available_models=available_models,
             message=message,
         )
+        self._cached_health = (now, health)
+        return health
+
+    def _probe_model_ready(self) -> tuple[bool, str]:
+        payload = {
+            "model": self.profile.model_name,
+            "prompt": "ok",
+            "stream": False,
+            "options": {"num_predict": 1},
+        }
+        try:
+            response = self.session.post(
+                f"{self.profile.base_url}/api/generate",
+                json=payload,
+                timeout=self.profile.request_timeout_seconds,
+            )
+            self._raise_for_status_with_details(response)
+        except requests.RequestException as error:
+            return (
+                False,
+                f"Configured model {self.profile.model_name} is installed but cannot run: {error}",
+            )
+
+        return True, f"Configured model {self.profile.model_name} is available and runnable."
 
     def generate(
         self,
@@ -173,13 +208,46 @@ class OllamaTextModelProvider:
             json=payload,
             timeout=self.profile.request_timeout_seconds,
         )
-        response.raise_for_status()
+        try:
+            self._raise_for_status_with_details(response)
+        except requests.HTTPError as error:
+            if self._should_retry_generate_as_chat(error):
+                logger.warning(
+                    "Ollama /api/generate failed for model {}; retrying /api/chat",
+                    self.profile.model_name,
+                )
+                return self._generate_via_chat(prompt, system_prompt=system_prompt)
+            raise
         raw = response.json()
 
         return ModelResult(
             text=raw.get("response", "").strip(),
             model=raw.get("model", self.profile.model_name),
             provider=self.profile.provider,
+            raw=raw,
+        )
+
+    def _should_retry_generate_as_chat(self, error: requests.HTTPError) -> bool:
+        response = getattr(error, "response", None)
+        status_code = getattr(response, "status_code", None)
+        return status_code is None or status_code >= 500 or status_code in {404, 405}
+
+    def _generate_via_chat(
+        self,
+        prompt: str,
+        *,
+        system_prompt: str | None = None,
+    ) -> ModelResult:
+        result = self.chat(
+            [{"role": "user", "content": prompt}],
+            system_prompt=system_prompt or self.profile.system_prompt,
+        )
+        raw = dict(result.raw)
+        raw["generate_fallback"] = "chat"
+        return ModelResult(
+            text=result.text,
+            model=result.model,
+            provider=result.provider,
             raw=raw,
         )
 
@@ -206,7 +274,7 @@ class OllamaTextModelProvider:
             timeout=self.profile.request_timeout_seconds,
             stream=True,
         )
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
 
         import json
         for line in response.iter_lines():
@@ -245,7 +313,7 @@ class OllamaTextModelProvider:
             json=payload,
             timeout=self.profile.request_timeout_seconds,
         )
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
         raw = response.json()
         message = raw.get("message", {}) or {}
 
@@ -285,7 +353,7 @@ class OllamaTextModelProvider:
             timeout=self.profile.request_timeout_seconds,
             stream=True,
         )
-        response.raise_for_status()
+        self._raise_for_status_with_details(response)
 
         import json
         for line in response.iter_lines():
@@ -315,6 +383,32 @@ class OllamaTextModelProvider:
             arguments=arguments,
             id=str(raw_call.get("id", "") or ""),
         )
+
+    def _raise_for_status_with_details(self, response) -> None:
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as error:
+            detail = self._response_error_detail(response)
+            if detail:
+                raise requests.HTTPError(
+                    f"{error}. Ollama error: {detail}",
+                    response=response,
+                ) from error
+            raise
+
+    def _response_error_detail(self, response) -> str:
+        try:
+            payload = response.json()
+        except (TypeError, ValueError):
+            payload = None
+
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if error:
+                return str(error)
+
+        text = str(getattr(response, "text", "") or "").strip()
+        return text[:500]
 
 
 def build_text_model_provider(profile: ModelProfile) -> TextModelProvider:
