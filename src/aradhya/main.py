@@ -551,6 +551,98 @@ def _handle_setup() -> None:
         render_error(f"Setup wizard failed: {error}")
 
 
+
+def _handle_parasite(*, command) -> None:
+    """Handle /parasite digest|resume|status commands."""
+    from src.aradhya.parasite.pipeline import DigestionPipeline
+
+    normalized = command.strip().lower()
+    pipeline = DigestionPipeline(PROJECT_ROOT)
+
+    def _ptail(*prefixes: str) -> str:
+        for prefix in prefixes:
+            if normalized.startswith(prefix):
+                return command.strip()[len(prefix):].strip()
+        return ""
+
+    # /parasite status
+    if normalized in {"/parasite", "/parasite status", "parasite status", "parasite"}:
+        targets = pipeline.list_targets()
+        if not targets:
+            render_info("No targets in Hosts/ yet. Clone a repo there or use /parasite digest <name>.")
+            return
+        console.print("\n[bold]  Parasite OS — Digestion Pipeline Status[/]\n")
+        for t in targets:
+            stage = t["current_stage"]
+            completed = len(t["completed_stages"])
+            trust = t.get("trust_score") or "—"
+            error = t.get("error")
+            if error:
+                status_icon = "❌"
+            elif completed == 7:
+                status_icon = "✅"
+            elif completed > 0:
+                status_icon = "🔄"
+            else:
+                status_icon = "⬜"
+            console.print(
+                f"  {status_icon} [bold]{t['name']:25s}[/] "
+                f"stage: {stage:12s}  "
+                f"done: {completed}/7  "
+                f"trust: {trust}"
+            )
+            if error:
+                console.print(f"     [red]Error: {error}[/]")
+        console.print()
+        return
+
+    # /parasite digest <target>
+    if normalized.startswith("/parasite digest") or normalized.startswith("parasite digest"):
+        target = _ptail("/parasite digest", "parasite digest")
+        if not target:
+            render_error("Usage: /parasite digest <target-folder-in-Hosts>")
+            return
+        target_path = PROJECT_ROOT / "Hosts" / target
+        if not target_path.is_dir():
+            render_error(f"Target '{target}' not found in Hosts/. Available targets:")
+            for child in sorted((PROJECT_ROOT / "Hosts").iterdir()):
+                if child.is_dir() and not child.name.startswith("."):
+                    console.print(f"  • {child.name}")
+            return
+
+        console.print(f"\n[bold]  Digesting: {target}[/]\n")
+        cp = pipeline.digest(target)
+        completed = len(cp.completed_stages)
+        if cp.error:
+            render_error(f"Pipeline stopped at {cp.current_stage}: {cp.error}")
+            render_info("Fix the issue and run: /parasite resume " + target)
+        else:
+            render_success(f"Digestion complete! {completed}/7 stages passed.")
+            digest_path = target_path / ".parasite" / "DIGEST.md"
+            if digest_path.is_file():
+                render_info(f"Digest written to: {digest_path}")
+        return
+
+    # /parasite resume <target>
+    if normalized.startswith("/parasite resume") or normalized.startswith("parasite resume"):
+        target = _ptail("/parasite resume", "parasite resume")
+        if not target:
+            render_error("Usage: /parasite resume <target>")
+            return
+        cp = pipeline.resume(target)
+        if cp is None:
+            render_error(f"No checkpoint found for '{target}'. Run /parasite digest {target} first.")
+            return
+        completed = len(cp.completed_stages)
+        if cp.error:
+            render_error(f"Pipeline stopped at {cp.current_stage}: {cp.error}")
+        else:
+            render_success(f"Resumed and completed! {completed}/7 stages passed.")
+        return
+
+    render_error("Usage: /parasite [status|digest <target>|resume <target>]")
+
+
 # ── Command dispatch ──────────────────────────────────────────────────
 
 # Maps slash commands and their legacy equivalents to handlers.
@@ -595,6 +687,11 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
 
     # Cache
     (["/cache", "cache validate"], _handle_cache),
+
+    # Parasite OS (longer prefix first)
+    (["/parasite digest", "parasite digest"], _handle_parasite),
+    (["/parasite resume", "parasite resume"], _handle_parasite),
+    (["/parasite status", "parasite status", "/parasite", "parasite"], _handle_parasite),
 
     # API catalog
     (["/apis", "apis"], _handle_apis),
