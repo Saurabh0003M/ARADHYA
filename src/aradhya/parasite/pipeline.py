@@ -228,8 +228,12 @@ class DigestionPipeline:
         digest_path = target_path / ".parasite" / "DIGEST.md"
         generate_digest(analysis, digest_path)
 
-        # Special handling for public-apis repo
-        if target == "public-apis" and analysis.get("type") == "data":
+        # Special handling for repos with data_catalog capability
+        has_data_catalog = any(
+            cap.get("kind") == "data_catalog"
+            for cap in analysis.get("capabilities", [])
+        )
+        if has_data_catalog:
             api_entries = analyze_public_apis_readme(target_path)
             if api_entries:
                 catalog_path = target_path / ".parasite" / "verified_catalog.json"
