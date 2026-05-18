@@ -1,0 +1,37 @@
+version: 1
+generated_at: "2026-05-19T00:00:00+00:00"
+updated_at: "2026-05-19T00:00:00+00:00"
+transport:
+  mode: lan-only
+  hub_bind_host: 127.0.0.1
+  hub_port: 19842
+  internet_federation: false
+local_node_id: example-laptop-00000000
+nodes:
+  - node_id: example-laptop-00000000
+    display_name: example-laptop
+    role: primary
+    device_class: workstation
+    os:
+      system: Windows
+      release: "11"
+      version: example
+      machine: AMD64
+      python: "3.10"
+    resources:
+      cpu_count: 8
+      ram_gb: 16
+      disk_total_gb: 512
+      disk_free_gb: 128
+      gpu: unknown
+    capabilities:
+      - name: aradhya_core
+        kind: system
+        enabled: true
+      - name: federation_hub
+        kind: transport
+        enabled: true
+    paths:
+      project_root: F:\ARADHYA
+      topology: F:\ARADHYA\core\config\topology.yaml
+    privacy_level: local

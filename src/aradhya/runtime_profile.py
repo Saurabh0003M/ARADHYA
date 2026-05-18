@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,6 +32,8 @@ class ModelProfile:
     system_prompt: str
     ollama_home: Path
     ollama_models_path: Path
+    api_key: str = ""
+    api_key_env: str = ""
 
 
 @dataclass(frozen=True)
@@ -144,6 +147,12 @@ def _deep_merge_payloads(
     return merged
 
 
+def _default_api_key_env(provider: str) -> str:
+    if provider.lower() == "openrouter":
+        return "ARADHYA_OPENROUTER_API_KEY"
+    return ""
+
+
 def build_default_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     """Build the default runtime profile for this machine."""
 
@@ -220,9 +229,15 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     raw_voice_activation = data.get("voice_activation", {})
     raw_voice_output = data.get("voice_output", {})
 
+    model_provider = str(raw_model.get("provider", defaults.model.provider))
+    api_key_env = str(raw_model.get("api_key_env", "") or _default_api_key_env(model_provider))
+    env_api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+    file_api_key = str(raw_model.get("api_key", defaults.model.api_key) or "")
+    api_key = env_api_key or file_api_key
+
     return RuntimeProfile(
         model=ModelProfile(
-            provider=raw_model.get("provider", defaults.model.provider),
+            provider=model_provider,
             model_name=raw_model.get("model_name", defaults.model.model_name),
             base_url=raw_model.get("base_url", defaults.model.base_url),
             request_timeout_seconds=raw_model.get(
@@ -243,6 +258,8 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
                 root,
                 defaults.model.ollama_models_path,
             ),
+            api_key=api_key,
+            api_key_env=api_key_env,
         ),
         voice=VoiceProfile(
             provider=raw_voice.get("provider", defaults.voice.provider),

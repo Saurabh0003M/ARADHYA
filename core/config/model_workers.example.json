@@ -1,0 +1,23 @@
+{
+  "workers": [
+    {
+      "worker_id": "cloud-balanced",
+      "enabled": true,
+      "provider": "openrouter",
+      "model_name": "google/gemma-4-31b-it:free",
+      "api_key_env": "ARADHYA_OPENROUTER_API_KEY",
+      "privacy_mode": "public-cloud-only",
+      "description": "Default cloud-safe worker for public prompts."
+    },
+    {
+      "worker_id": "opus-collaborator",
+      "enabled": true,
+      "provider": "openrouter",
+      "model_name": "google/gemma-4-31b-it:free",
+      "api_key_env": "OPUS_OPENROUTER_API_KEY",
+      "owner": "opus",
+      "privacy_mode": "public-cloud-only",
+      "description": "Separate key for a parallel collaborator; Aradhya does not need to use it."
+    }
+  ]
+}

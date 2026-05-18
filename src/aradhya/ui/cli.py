@@ -137,6 +137,8 @@ def render_help() -> None:
     table.add_row("[heading]── Core ──", "")
     table.add_row("/help", "Show this command reference")
     table.add_row("/status", "Show system status (model, voice, skills, state)")
+    table.add_row("/topology", "Show detected local device topology")
+    table.add_row("/topology rescan", "Regenerate topology for this machine")
     table.add_row("/sleep", "Send Aradhya to idle")
     table.add_row("exit", "Shut down Aradhya")
 
@@ -152,6 +154,8 @@ def render_help() -> None:
     # Model
     table.add_row("[heading]── Model ──", "")
     table.add_row("/model", "Check configured model health")
+    table.add_row("/model workers", "List local and optional cloud model workers")
+    table.add_row("/model workers assess <text>", "Check if text is safe for cloud routing")
     table.add_row("/model ask <prompt>", "Send a direct prompt to the local model")
 
     # Skills
@@ -165,6 +169,20 @@ def render_help() -> None:
     table.add_row("/icon on", "Launch the floating quick-access icon")
     table.add_row("/icon off", "Close the floating icon")
     table.add_row("/cache", "Rebuild and benchmark the context cache")
+
+    # API catalog
+    table.add_row("[heading]-- Public APIs --", "")
+    table.add_row("/apis", "Show API catalog source and categories")
+    table.add_row("/apis search <query>", "Search the local public API catalog")
+    table.add_row("/apis category <name>", "List APIs in a category")
+    table.add_row("/apis inspect <name>", "Show one API entry and risk label")
+    table.add_row("/apis recommend <need>", "Recommend APIs for a stated need")
+
+    # Federation
+    table.add_row("[heading]-- Federation --", "")
+    table.add_row("/federation init", "Create local LAN federation identity")
+    table.add_row("/federation status", "Show local federation status")
+    table.add_row("/federation doctor", "Run federation foundation diagnostics")
 
     # Telegram
     table.add_row("[heading]-- Telegram --", "")
@@ -248,7 +266,259 @@ def render_status(
     console.print()
 
 
+def render_topology(topology: dict[str, Any], *, path: str, refreshed: bool = False) -> None:
+    """Render the local topology manifest."""
+
+    title = "Topology"
+    if refreshed:
+        title += " (rescanned)"
+    table = Table(
+        title=f"[heading]{title}[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Path", f"[dim]{path}[/]")
+    table.add_row("Mode", str(topology.get("transport", {}).get("mode", "unknown")))
+    table.add_row("Local node", str(topology.get("local_node_id", "unknown")))
+
+    nodes = topology.get("nodes") or []
+    table.add_row("Nodes", str(len(nodes)))
+    for node in nodes:
+        resources = node.get("resources", {})
+        caps = node.get("capabilities", [])
+        table.add_row(
+            str(node.get("node_id", "unknown")),
+            (
+                f"{node.get('role', 'unknown')} / {node.get('device_class', 'unknown')} | "
+                f"CPU {resources.get('cpu_count', '?')} | "
+                f"RAM {resources.get('ram_gb', 'unknown')} GB | "
+                f"{len(caps)} capabilities"
+            ),
+        )
+    console.print(table)
+    console.print()
+
+
+def render_federation_status(status: dict[str, Any]) -> None:
+    """Render federation identity and peer status."""
+
+    identity = status.get("identity", {})
+    table = Table(
+        title="[heading]Federation Status[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Mode", str(status.get("mode", "unknown")))
+    table.add_row("Transport", "active" if status.get("transport_active") else "not started")
+    table.add_row("Node", str(identity.get("node_id", "unknown")))
+    table.add_row("Fingerprint", str(identity.get("fingerprint", "unknown")))
+    table.add_row("Peers", str(status.get("peer_count", 0)))
+    table.add_row("State", f"[dim]{status.get('state_dir', '')}[/]")
+    console.print(table)
+    console.print()
+
+
+def render_federation_doctor(checks: list[dict[str, Any]]) -> None:
+    """Render federation diagnostics."""
+
+    table = Table(
+        title="[heading]Federation Doctor[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    table.add_column("Check", style="accent", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Detail")
+    for check in checks:
+        ok = bool(check.get("ok"))
+        table.add_row(
+            str(check.get("name", "?")),
+            "[success]OK[/]" if ok else "[error]FAIL[/]",
+            str(check.get("detail", "")),
+        )
+    console.print(table)
+    console.print()
+
+
 # ── Voice status ──────────────────────────────────────────────────────
+
+def render_model_workers(statuses: list[Any]) -> None:
+    """Render local and optional cloud model workers."""
+
+    table = Table(
+        title="[heading]Model Workers[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    table.add_column("Worker", style="accent", no_wrap=True)
+    table.add_column("Role", no_wrap=True)
+    table.add_column("Owner", no_wrap=True)
+    table.add_column("Provider", no_wrap=True)
+    table.add_column("Model")
+    table.add_column("Privacy", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+
+    for status in statuses:
+        worker = status.worker
+        state = str(status.status)
+        if state in {"configured", "local"}:
+            rendered_status = f"[success]{state}[/]"
+        elif state == "disabled":
+            rendered_status = "[dim]disabled[/]"
+        else:
+            rendered_status = f"[warning]{state}[/]"
+        table.add_row(
+            worker.worker_id,
+            worker.role,
+            worker.owner,
+            worker.provider,
+            worker.model_name,
+            worker.privacy_mode,
+            rendered_status,
+        )
+
+    console.print(table)
+    for status in statuses:
+        if status.status not in {"configured", "local"}:
+            console.print(f"  [dim]{status.worker.worker_id}: {status.detail}[/]")
+    console.print()
+
+
+def render_cloud_safety_assessment(assessment: Any) -> None:
+    """Render cloud privacy gate results."""
+
+    style = "success" if assessment.allowed else "error"
+    table = Table(
+        title="[heading]Cloud Privacy Gate[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Allowed", f"[{style}]{assessment.allowed}[/]")
+    table.add_row("Risk", str(assessment.risk_level))
+    table.add_row("Summary", str(assessment.summary))
+    console.print(table)
+
+    if assessment.findings:
+        findings = Table(
+            box=box.SIMPLE,
+            border_style="dim",
+            show_header=True,
+            expand=False,
+        )
+        findings.add_column("Severity", no_wrap=True)
+        findings.add_column("Code", no_wrap=True)
+        findings.add_column("Message")
+        for finding in assessment.findings:
+            findings.add_row(finding.severity, finding.code, finding.message)
+        console.print(findings)
+    console.print()
+
+
+def render_api_categories(source: Any, categories: list[tuple[str, int]]) -> None:
+    """Render public API catalog category counts."""
+
+    table = Table(
+        title="[heading]Public API Catalog[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Source", str(source.kind))
+    table.add_row("Entries", str(source.entry_count))
+    table.add_row("Repo", str(source.url))
+    if source.path is not None:
+        table.add_row("Cache", str(source.path))
+    console.print(table)
+
+    cat_table = Table(
+        box=box.SIMPLE,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    cat_table.add_column("Category", style="accent")
+    cat_table.add_column("Count", justify="right")
+    for category, count in categories:
+        cat_table.add_row(category, str(count))
+    console.print(cat_table)
+    console.print()
+
+
+def render_api_entries(title: str, entries: list[Any], risk_labels: dict[str, str]) -> None:
+    """Render API search/recommend/category results."""
+
+    if not entries:
+        render_info("No matching API entries in the local catalog.")
+        return
+
+    table = Table(
+        title=f"[heading]{title}[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    table.add_column("API", style="accent", no_wrap=True)
+    table.add_column("Category", no_wrap=True)
+    table.add_column("Auth", no_wrap=True)
+    table.add_column("HTTPS", no_wrap=True)
+    table.add_column("Risk")
+    table.add_column("Description")
+    for entry in entries:
+        table.add_row(
+            entry.name,
+            entry.category,
+            entry.auth,
+            "yes" if entry.https else "no",
+            risk_labels.get(entry.name, "unknown"),
+            entry.description,
+        )
+    console.print(table)
+    console.print()
+
+
+def render_api_entry(entry: Any, risk_label: str) -> None:
+    """Render one API catalog entry."""
+
+    table = Table(
+        title=f"[heading]API: {entry.name}[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Category", entry.category)
+    table.add_row("Auth", entry.auth)
+    table.add_row("HTTPS", "yes" if entry.https else "no")
+    table.add_row("CORS", entry.cors)
+    table.add_row("Risk", risk_label)
+    table.add_row("Link", entry.link or "[dim]unknown[/]")
+    table.add_row("Description", entry.description)
+    table.add_row("Rule", "External calls still require an explicit confirmed action.")
+    console.print(table)
+    console.print()
+
 
 @dataclass
 class VoiceStatusConfig:

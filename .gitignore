@@ -47,6 +47,9 @@ core/logs/*.log
 .python313/
 python-*-amd64.exe
 core/config/*.local.json
+core/config/topology.yaml
+core/config/topology.local.yaml
+core/memory/federation/
 
 # Audit (runtime data)
 core/audit/
@@ -64,6 +67,9 @@ audio/manual_transcripts/*
 !audio/transcripts/.gitkeep
 !audio/manual_transcripts/.gitkeep
 !audio/README.md
+
+# Competitor reference repos (competitive intelligence)
+Hosts/
 
 # Windows
 Thumbs.db

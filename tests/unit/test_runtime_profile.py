@@ -148,6 +148,29 @@ def test_load_runtime_profile_merges_local_override_without_clobbering_shared_de
     assert profile.voice_output.voice_id == "zira"
 
 
+def test_load_runtime_profile_reads_openrouter_key_from_environment(tmp_path, monkeypatch):
+    (tmp_path / "core" / "memory").mkdir(parents=True)
+    (tmp_path / "core" / "memory" / "profile.json").write_text(
+        json.dumps(
+            {
+                "model": {
+                    "provider": "openrouter",
+                    "model_name": "google/gemma-4-31b-it:free",
+                    "base_url": "https://openrouter.ai/api/v1",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ARADHYA_OPENROUTER_API_KEY", "test-key")
+
+    profile = load_runtime_profile(tmp_path)
+
+    assert profile.model.provider == "openrouter"
+    assert profile.model.api_key == "test-key"
+    assert profile.model.api_key_env == "ARADHYA_OPENROUTER_API_KEY"
+
+
 def test_ollama_provider_uses_configured_model_name():
     profile = ModelProfile(
         provider="ollama",

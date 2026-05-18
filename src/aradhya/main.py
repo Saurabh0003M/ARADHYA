@@ -33,6 +33,14 @@ from src.aradhya.ui.cli import (
     render_response,
     render_skills_list,
     render_status,
+    render_topology,
+    render_federation_status,
+    render_federation_doctor,
+    render_model_workers,
+    render_cloud_safety_assessment,
+    render_api_categories,
+    render_api_entries,
+    render_api_entry,
     render_success,
     VoiceStatusConfig,
     render_voice_status,
@@ -44,6 +52,11 @@ from src.aradhya.utils.logging import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
 from src.aradhya.model_provider import build_text_model_provider
 from src.aradhya.runtime_profile import load_runtime_profile
+from src.aradhya.cloud_safety import CloudPrivacyGate
+from src.aradhya.model_workers import ModelWorkerRegistry
+from src.aradhya.api_catalog import PublicApiCatalog
+from src.aradhya.topology import ensure_topology, topology_path
+from src.aradhya.federation import FederationManager
 from src.aradhya.skills import load_skills
 from src.aradhya.voice.activation import (
     VoiceActivatedAradhya,
@@ -155,6 +168,38 @@ def _handle_status(*, assistant, runtime_profile, model_provider,
     )
 
 
+def _handle_topology(*, runtime_profile, command) -> None:
+    normalized = command.strip().lower()
+    refreshed = normalized.startswith("/topology rescan") or normalized.startswith("topology rescan")
+    topology = ensure_topology(PROJECT_ROOT, runtime_profile, force=refreshed)
+    render_topology(
+        topology,
+        path=str(topology_path(PROJECT_ROOT)),
+        refreshed=refreshed,
+    )
+
+
+def _federation_manager(runtime_profile) -> FederationManager:
+    return FederationManager(PROJECT_ROOT, runtime_profile)
+
+
+def _handle_federation_init(*, runtime_profile) -> None:
+    manager = _federation_manager(runtime_profile)
+    manager.initialize()
+    render_success("Federation foundation initialized for LAN-only mode.")
+    render_federation_status(manager.status())
+
+
+def _handle_federation_status(*, runtime_profile) -> None:
+    manager = _federation_manager(runtime_profile)
+    render_federation_status(manager.status())
+
+
+def _handle_federation_doctor(*, runtime_profile) -> None:
+    manager = _federation_manager(runtime_profile)
+    render_federation_doctor(manager.doctor())
+
+
 def _handle_sleep(*, assistant) -> None:
     resp = assistant.go_idle()
     render_response(resp.spoken_response)
@@ -237,7 +282,27 @@ def _handle_model_ping(*, model_provider) -> None:
     render_model_health(model_provider.health_check())
 
 
-def _handle_model_ask(*, command, model_provider) -> None:
+def _handle_model_workers(*, runtime_profile, command) -> None:
+    normalized = command.strip().lower()
+    assess_prefixes = ("/model workers assess", "model workers assess")
+    if any(normalized.startswith(prefix) for prefix in assess_prefixes):
+        text = command
+        for prefix in assess_prefixes:
+            if normalized.startswith(prefix):
+                text = command[len(prefix):].strip()
+                break
+        if not text:
+            render_error("Usage: /model workers assess <text>")
+            return
+        assessment = CloudPrivacyGate().assess_text(text, source="/model workers assess")
+        render_cloud_safety_assessment(assessment)
+        return
+
+    registry = ModelWorkerRegistry(PROJECT_ROOT, runtime_profile)
+    render_model_workers(registry.statuses())
+
+
+def _handle_model_ask(*, command, model_provider, runtime_profile) -> None:
     prompt = command[len("/model ask "):].strip()
     if not prompt:
         prompt = command[len("model ask "):].strip()
@@ -248,6 +313,11 @@ def _handle_model_ask(*, command, model_provider) -> None:
     if len(normalized) > MAX_DIRECT_MODEL_PROMPT_CHARS:
         render_error(f"Direct model prompts must stay under {MAX_DIRECT_MODEL_PROMPT_CHARS} characters.")
         return
+    if runtime_profile.model.provider.lower() == "openrouter":
+        assessment = CloudPrivacyGate().assess_text(normalized, source="/model ask")
+        if not assessment.allowed:
+            render_cloud_safety_assessment(assessment)
+            return
     try:
         result = model_provider.generate(normalized)
         console.print(f"  [accent]Model ›[/] {result.text}")
@@ -313,6 +383,74 @@ def _handle_cache(*, assistant) -> None:
     for line in format_cache_validation_report(report):
         console.print(f"  {line}")
     console.print()
+
+
+def _handle_apis(*, command) -> None:
+    catalog = PublicApiCatalog(PROJECT_ROOT)
+    normalized = command.strip().lower()
+
+    def _tail(*prefixes: str) -> str:
+        for prefix in prefixes:
+            if normalized.startswith(prefix):
+                return command[len(prefix):].strip()
+        return ""
+
+    if normalized in {"/apis", "apis"}:
+        render_api_categories(catalog.source, catalog.categories())
+        return
+
+    if normalized.startswith("/apis search") or normalized.startswith("apis search"):
+        query = _tail("/apis search", "apis search")
+        if not query:
+            render_error("Usage: /apis search <query>")
+            return
+        entries = catalog.search(query)
+        render_api_entries(
+            f"API Search: {query}",
+            entries,
+            {entry.name: catalog.risk_label(entry) for entry in entries},
+        )
+        return
+
+    if normalized.startswith("/apis category") or normalized.startswith("apis category"):
+        category = _tail("/apis category", "apis category")
+        if not category:
+            render_error("Usage: /apis category <name>")
+            return
+        entries = catalog.by_category(category)
+        render_api_entries(
+            f"API Category: {category}",
+            entries,
+            {entry.name: catalog.risk_label(entry) for entry in entries},
+        )
+        return
+
+    if normalized.startswith("/apis inspect") or normalized.startswith("apis inspect"):
+        name = _tail("/apis inspect", "apis inspect")
+        if not name:
+            render_error("Usage: /apis inspect <name>")
+            return
+        entry = catalog.inspect(name)
+        if entry is None:
+            render_info("No matching API entry in the local catalog.")
+            return
+        render_api_entry(entry, catalog.risk_label(entry))
+        return
+
+    if normalized.startswith("/apis recommend") or normalized.startswith("apis recommend"):
+        need = _tail("/apis recommend", "apis recommend")
+        if not need:
+            render_error("Usage: /apis recommend <need>")
+            return
+        entries = catalog.recommend(need)
+        render_api_entries(
+            f"API Recommendations: {need}",
+            entries,
+            {entry.name: catalog.risk_label(entry) for entry in entries},
+        )
+        return
+
+    render_error("Usage: /apis [search|category|inspect|recommend] ...")
 
 
 def _handle_telegram_start(*, assistant, ctx) -> None:
@@ -423,6 +561,11 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     # Core
     (["/help", "help"], _handle_help),
     (["/status"], _handle_status),
+    (["/topology rescan", "topology rescan"], _handle_topology),
+    (["/topology", "topology"], _handle_topology),
+    (["/federation doctor", "federation doctor"], _handle_federation_doctor),
+    (["/federation init", "federation init"], _handle_federation_init),
+    (["/federation status", "federation status", "/federation", "federation"], _handle_federation_status),
     (["/sleep", "sleep"], _handle_sleep),
 
     # Voice (order matters — longer prefixes first)
@@ -436,6 +579,8 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     (["/wake-word off", "wake word disable"], _handle_wake_word_off),
 
     # Model (longer prefix first)
+    (["/model workers assess", "model workers assess"], _handle_model_workers),
+    (["/model workers", "model workers"], _handle_model_workers),
     (["/model ask", "model ask"], _handle_model_ask),
     (["/model", "model ping"], _handle_model_ping),
 
@@ -450,6 +595,9 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
 
     # Cache
     (["/cache", "cache validate"], _handle_cache),
+
+    # API catalog
+    (["/apis", "apis"], _handle_apis),
 
     # Telegram
     (["/telegram start", "/telegram on"], _handle_telegram_start),

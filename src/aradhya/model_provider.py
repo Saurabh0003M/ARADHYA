@@ -414,11 +414,16 @@ class OllamaTextModelProvider:
 def build_text_model_provider(profile: ModelProfile) -> TextModelProvider:
     """Construct the configured model provider."""
 
+
     provider = profile.provider.lower()
     if provider == "ollama":
         return OllamaTextModelProvider(profile)
 
+    if provider == "openrouter":
+        from src.aradhya.providers.openrouter import OpenRouterTextModelProvider
+        return OpenRouterTextModelProvider(profile)
+
     raise ValueError(
         f"Unsupported model provider '{profile.provider}'. "
-        "Add a new provider implementation instead of hard-coding a model."
+        "Supported: ollama, openrouter."
     )
