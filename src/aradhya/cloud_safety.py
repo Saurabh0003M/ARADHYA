@@ -160,23 +160,25 @@ class CloudPrivacyGate:
     ) -> CloudSafetyAssessment:
         """Assess OpenAI-style chat messages.
 
-        System messages are intentionally excluded because they contain
-        ARADHYA's own internal context (paths, config references) which
-        would always trigger false positives.  Only user and assistant
-        content is scanned.
+        Only USER messages are scanned.  System messages are ARADHYA's
+        own internal context, and assistant messages are prior model
+        responses — both will always contain internal paths and terms
+        that would trigger false positives.  The gate exists to prevent
+        the user's private data from reaching cloud models.
         """
 
         text_parts: list[str] = []
         for message in messages:
             role = str(message.get("role", "message"))
-            # Skip system messages — they are ARADHYA's own context,
-            # not user secrets.  Scanning them blocks every request
-            # because they mention internal paths like core/memory.
-            if role == "system":
+            # Only scan what the USER actually typed.  System messages
+            # are ARADHYA's own code context, assistant messages are
+            # prior model responses — both legitimately reference
+            # internal paths like core/memory.
+            if role != "user":
                 continue
             content = self._extract_text(message.get("content", ""))
             if content:
-                text_parts.append(f"{role}: {content}")
+                text_parts.append(content)
         return self.assess_text("\n".join(text_parts), source=source)
 
     def _extract_text(self, value: Any) -> str:
