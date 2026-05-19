@@ -1061,6 +1061,17 @@ def _run_cli_loop(handler_kwargs: dict):
 # ── Main entry point ──────────────────────────────────────────────────
 
 def main() -> None:
+    import argparse  # noqa: PLC0415
+    parser = argparse.ArgumentParser(description="Aradhya CLI", add_help=False)
+    parser.add_argument(
+        "--session",
+        default="main",
+        metavar="NAME",
+        help="Named session to use (default: main). Use 'telegram' for the Telegram bot, etc.",
+    )
+    args, _ = parser.parse_known_args()
+    session_name: str = args.session
+
     assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx = _setup_environment()
 
     # ── Gap D: Session heartbeat (NanoClaw pattern) ───────────────────
@@ -1075,6 +1086,7 @@ def main() -> None:
         skill_registry=skill_registry,
         live_voice_runtime=ctx.get("live_voice_runtime"),
         ctx=ctx,
+        session_name=session_name,   # Gap G: named per-channel session
     )
 
     # ── Main input loop ───────────────────────────────────────────────

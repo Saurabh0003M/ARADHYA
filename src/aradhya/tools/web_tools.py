@@ -10,6 +10,27 @@ import requests
 from src.aradhya.tools.tool_registry import tool_definition
 from src.aradhya.utils.url_helpers import is_valid_http_url, unwrap_duckduckgo_url
 
+# ── Gap E: network policy registry ──────────────────────────────────────────────────
+# The active ToolRuntimePolicy for the current agent turn is stored here
+# so web tools can query it without being passed a policy argument.
+# Set by assistant_core before each agent turn; cleared to None after.
+_active_policy = None
+
+
+def set_active_network_policy(policy) -> None:
+    """Store the current turn's ToolRuntimePolicy for network checks."""
+    global _active_policy
+    _active_policy = policy
+
+
+def _check_network(tool_name: str) -> str | None:
+    """Return a denial string if network is blocked, else None."""
+    if _active_policy is not None and hasattr(_active_policy, "check_network_access"):
+        decision = _active_policy.check_network_access(tool_name)
+        if not decision.allowed:
+            return decision.message
+    return None
+
 DEFAULT_TIMEOUT_SECONDS = 15
 DEFAULT_USER_AGENT = "Aradhya/0.1 local assistant"
 
@@ -51,6 +72,11 @@ _WHITESPACE_RE = re.compile(r"[ \t\r\f\v]+")
     },
 )
 def web_fetch(url: str, max_chars: int = 4000) -> str:
+    # ── Gap E: network policy check ──
+    denial = _check_network("web_fetch")
+    if denial:
+        return denial
+
     if not is_valid_http_url(url):
         return f"Error: unsupported URL: {url}"
 
@@ -95,6 +121,11 @@ def web_fetch(url: str, max_chars: int = 4000) -> str:
     },
 )
 def web_search(query: str, max_results: int = 5) -> str:
+    # ── Gap E: network policy check ──
+    denial = _check_network("web_search")
+    if denial:
+        return denial
+
     cleaned_query = " ".join(query.split())
     if not cleaned_query:
         return "Error: search query is empty."

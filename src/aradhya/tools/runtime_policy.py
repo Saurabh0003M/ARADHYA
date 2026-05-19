@@ -45,6 +45,13 @@ class ToolRuntimePolicy:
     write_roots: tuple[Path, ...] = ()
     live_execution_enabled: bool = False
     mutation_granted: bool = False
+    network_allowed: bool = True
+    """Gap E: When False, web_fetch and web_search are denied.
+
+    Mirrors Codex's ``sandbox_policy.network_access: false`` — prevents
+    prompt-injection via malicious web content that triggers tool chains.
+    Set to False for high-security / air-gapped sessions.
+    """
 
     def __post_init__(self) -> None:
         # Backward compatibility: if only allowed_roots is set, populate
@@ -122,6 +129,25 @@ class ToolRuntimePolicy:
 
         return ToolPolicyDecision(allowed=True)
 
+    def check_network_access(self, tool_name: str) -> ToolPolicyDecision:
+        """Return whether a network tool may execute (Gap E).
+
+        Called by ``web_fetch`` and ``web_search`` before making outbound
+        HTTP requests.  When ``network_allowed`` is False, the tool returns
+        a policy-denial result instead of fetching the URL — preventing
+        prompt-injection attacks via crafted web content.
+        """
+        if not self.network_allowed:
+            return ToolPolicyDecision(
+                allowed=False,
+                message=(
+                    f"Tool '{tool_name}' blocked — network access is disabled "
+                    "in the current session policy (network_allowed=False). "
+                    "Enable it in preferences or ask the user to allow network access."
+                ),
+            )
+        return ToolPolicyDecision(allowed=True)
+
     def to_permission_profile(self) -> dict[str, Any]:
         """Serialize the permission matrix for turn_context injection.
 
@@ -132,7 +158,7 @@ class ToolRuntimePolicy:
             "write_roots": [str(r) for r in self._effective_write_roots()],
             "live_execution": self.live_execution_enabled,
             "mutation_granted": self.mutation_granted,
-            "network": "restricted",
+            "network": "allowed" if self.network_allowed else "restricted",
         }
 
     def _effective_read_roots(self) -> tuple[Path, ...]:

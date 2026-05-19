@@ -45,6 +45,8 @@ from src.aradhya.context_compressor import (
 )
 from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
 from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS
+from src.aradhya.tools.scheduler_tool import ALL_SCHEDULER_TOOLS
+from src.aradhya.tools.web_tools import ALL_WEB_TOOLS, set_active_network_policy
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 40
@@ -253,16 +255,18 @@ class AradhyaAssistant:
         return normalized in {"cancel", "stop", "never mind", "nevermind", "no cancel"}
 
     def _execute_plan(
-        self, plan, stream_handler: Callable[..., str] | None = None
+        self, plan, stream_handler: Callable[..., str] | None = None,
+        session_name: str | None = None,
     ) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
-            return self._execute_agent_task(plan, stream_handler=stream_handler)
+            return self._execute_agent_task(plan, stream_handler=stream_handler, session_name=session_name)
         if plan.kind == PlanKind.GENERAL_CHAT:
-            return self._execute_general_chat(plan, stream_handler=stream_handler)
+            return self._execute_general_chat(plan, stream_handler=stream_handler, session_name=session_name)
         return self.toolbox.execute(plan, self.state)
 
     def _execute_general_chat(
-        self, plan, stream_handler: Callable[..., str] | None = None
+        self, plan, stream_handler: Callable[..., str] | None = None,
+        session_name: str | None = None,
     ) -> ExecutionResult:
         if self.model_provider is None:
             return ExecutionResult(False, "No model provider configured.")
@@ -271,7 +275,7 @@ class AradhyaAssistant:
         if not request:
             return ExecutionResult(False, "Chat plan missing request.")
 
-        session = self.session_manager.active_session or self.session_manager.load_or_create("main")
+        session = self.session_manager.active_session or self.session_manager.load_or_create(session_name or "main")
         history = self._build_agent_history(session)
 
         try:
@@ -308,7 +312,8 @@ class AradhyaAssistant:
             return ExecutionResult(False, f"[Chat Error: {e}]")
 
     def _execute_agent_task(
-        self, plan, stream_handler: Callable[..., str] | None = None
+        self, plan, stream_handler: Callable[..., str] | None = None,
+        session_name: str | None = None,
     ) -> ExecutionResult:
         if self.model_provider is None:
             return ExecutionResult(
@@ -320,7 +325,8 @@ class AradhyaAssistant:
         if not request:
             return ExecutionResult(False, "The agent task did not include a request.")
 
-        session = self.session_manager.active_session or self.session_manager.load_or_create("main")
+        # Gap G: named session per channel (NanoClaw pattern)
+        session = self.session_manager.active_session or self.session_manager.load_or_create(session_name or "main")
         history = self._build_agent_history(session)
 
         # Build runtime policy and turn context (Codex-inspired)
@@ -370,7 +376,12 @@ class AradhyaAssistant:
             max_repeated_tool_calls=3,
         )
 
-        turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
+        # Gap E: set active network policy so web_fetch/web_search can check it
+        set_active_network_policy(policy)
+        try:
+            turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
+        finally:
+            set_active_network_policy(None)  # always clear after turn
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         # Log turn end
@@ -432,6 +443,7 @@ class AradhyaAssistant:
             *ALL_VISION_TOOLS,
             *ALL_SKILL_INSTALLER_TOOLS,
             *ALL_LEARNINGS_TOOLS,
+            *ALL_SCHEDULER_TOOLS,   # Gap F: expose scheduler to model
         ):
             registry.register_function(tool)
 

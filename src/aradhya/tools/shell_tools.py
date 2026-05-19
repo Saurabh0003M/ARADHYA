@@ -9,12 +9,21 @@ stdout, and stderr — matching the Codex tool output protocol.
 
 from __future__ import annotations
 
+import collections
 import subprocess
 import time
 from pathlib import Path
 
 from src.aradhya.tools.tool_registry import tool_definition
 
+
+# ── Gap H: rotating in-memory terminal history buffer ──────────────────
+# Stores up to _MAX_TERMINAL_LINES lines from all run_command invocations
+# this session. Lets the model call read_terminal_history() to review
+# accumulated output without relying on message history alone.
+# Inspired by Codex's read_thread_terminal dynamic tool.
+_MAX_TERMINAL_LINES = 500
+_terminal_buffer: collections.deque[str] = collections.deque(maxlen=_MAX_TERMINAL_LINES)
 
 @tool_definition(
     name="run_command",
@@ -84,12 +93,52 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         if result.stderr.strip():
             output_parts.append(f"STDERR:\n{result.stderr.strip()}")
 
-        return "\n".join(output_parts)
+        full_output = "\n".join(output_parts)
+
+        # ── Gap H: append to rotating terminal history buffer ──
+        _terminal_buffer.append(f"$ {command}")
+        for line in full_output.splitlines():
+            _terminal_buffer.append(line)
+
+        return full_output
 
     except subprocess.TimeoutExpired:
+        _terminal_buffer.append(f"$ {command}")
+        _terminal_buffer.append(f"[TIMEOUT after {timeout}s]")
         return f"Exit code: -1\nWall time: {timeout}s\nError: Command timed out after {timeout} seconds."
     except Exception as error:
+        _terminal_buffer.append(f"$ {command}")
+        _terminal_buffer.append(f"[ERROR: {error}]")
         return f"Exit code: -1\nWall time: 0s\nError: {error}"
 
 
-ALL_SHELL_TOOLS = [run_command]
+@tool_definition(
+    name="read_terminal_history",
+    description=(
+        "Read accumulated terminal output from all run_command calls this session. "
+        "Use this to review previous command results without relying on message history. "
+        "Inspired by Codex's read_thread_terminal dynamic tool."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "last_n_lines": {
+                "type": "integer",
+                "description": "Number of lines to return from the end of the buffer. Default 100.",
+            },
+        },
+    },
+)
+def read_terminal_history(last_n_lines: int = 100) -> str:
+    """Return the last N lines from the in-session terminal history buffer."""
+    if not _terminal_buffer:
+        return "Terminal history is empty. No commands have been run yet this session."
+    lines = list(_terminal_buffer)
+    selected = lines[-max(1, last_n_lines):]
+    return (
+        f"Terminal history (last {len(selected)} of {len(lines)} lines):\n"
+        + "\n".join(selected)
+    )
+
+
+ALL_SHELL_TOOLS = [run_command, read_terminal_history]
