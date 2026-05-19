@@ -115,7 +115,11 @@ class ToolRegistry:
             )
 
     def list_tools(self) -> list[dict[str, Any]]:
-        """Return JSON Schema definitions for all registered tools."""
+        """Return JSON Schema definitions for all registered tools.
+
+        Sorted alphabetically by tool name for deterministic prompt cache
+        behaviour (OpenClaw prompt-cache determinism rule).
+        """
         return [
             {
                 "type": "function",
@@ -125,8 +129,9 @@ class ToolRegistry:
                     "parameters": td.parameters,
                 },
             }
-            for td in self._tools.values()
+            for td in sorted(self._tools.values(), key=lambda t: t.name)
         ]
+
 
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)

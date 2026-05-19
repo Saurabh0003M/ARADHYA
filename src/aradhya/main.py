@@ -68,7 +68,48 @@ from src.aradhya.audit_logger import get_audit_logger
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
+IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"   # atomic append-only queue
+HEARTBEAT_FILE = PROJECT_ROOT / ".aradhya_heartbeat"   # touched by heartbeat thread
 MAX_DIRECT_MODEL_PROMPT_CHARS = 4000
+
+# ── Gap D: Session heartbeat (NanoClaw pattern) ──────────────────────
+_HEARTBEAT_INTERVAL = 30   # seconds between touches
+_heartbeat_stop = threading.Event()
+
+
+def _heartbeat_worker() -> None:
+    """Touch HEARTBEAT_FILE every _HEARTBEAT_INTERVAL seconds.
+
+    The daemon's /health endpoint checks this file's mtime to detect
+    a frozen CLI session (no heartbeat for >90 s → reported as stale).
+    Inspired by NanoClaw's container heartbeat mechanism.
+    """
+    while not _heartbeat_stop.wait(_HEARTBEAT_INTERVAL):
+        try:
+            HEARTBEAT_FILE.touch()
+        except OSError:
+            pass   # non-fatal — file system issues must not crash the agent
+
+
+def _start_heartbeat() -> threading.Thread:
+    """Start the heartbeat background thread and return it."""
+    HEARTBEAT_FILE.touch()   # immediate first touch at startup
+    t = threading.Thread(
+        target=_heartbeat_worker,
+        name="aradhya-heartbeat",
+        daemon=True,
+    )
+    t.start()
+    return t
+
+
+def _stop_heartbeat() -> None:
+    """Signal the heartbeat thread to stop and clean up the heartbeat file."""
+    _heartbeat_stop.set()
+    try:
+        HEARTBEAT_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _response_was_streamed(resp) -> bool:
@@ -1022,6 +1063,9 @@ def _run_cli_loop(handler_kwargs: dict):
 def main() -> None:
     assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx = _setup_environment()
 
+    # ── Gap D: Session heartbeat (NanoClaw pattern) ───────────────────
+    _start_heartbeat()
+
     # ── Shared kwargs for all command handlers ────────────────────────
     handler_kwargs = dict(
         assistant=assistant,
@@ -1037,6 +1081,7 @@ def main() -> None:
     try:
         _run_cli_loop(handler_kwargs)
     finally:
+        _stop_heartbeat()   # remove heartbeat file on clean shutdown
         ctx["ipc_running"] = False
         wl = ctx.get("wake_word_listener")
         if wl:

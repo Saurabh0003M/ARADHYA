@@ -19,6 +19,8 @@ from typing import Any, Callable, Protocol
 from loguru import logger
 
 from src.aradhya.audit_logger import get_audit_logger
+# NOTE: approved_rules is imported lazily inside _execute_with_gate to avoid
+# the circular import chain: agent_loop -> tools/__init__ -> tool_registry -> agent_loop
 
 from src.aradhya.utils.json_extractor import (
     JSONExtractionError,
@@ -475,12 +477,30 @@ class AgentLoop:
         """
         assert self.tool_executor is not None
         audit = get_audit_logger()
+        # Lazy import avoids the circular dependency chain
+        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
+        rules = get_approved_rules()
 
-        # ── Gap 1 fix: enforce gate even when confirmation_gate is None ──
+        # ── Gap 1 fix + Gap A: allow-list + dry-run guard ─────────────
         if tool_call.name in self.DANGEROUS_TOOLS:
-            if self.confirmation_gate:
+            # Check allow-list first — skip prompt for pre-approved calls
+            if rules.is_approved(tool_call.name, tool_call.arguments):
+                logger.debug(
+                    "Tool '{}' auto-approved from allow-list", tool_call.name
+                )
+            elif self.confirmation_gate:
                 # Interactive path — ask the user
-                approved = self.confirmation_gate(tool_call.name, tool_call.arguments)
+                # Gate returns (approved: bool, persist: bool)
+                # persist=True when user answered 'always' instead of 'yes'
+                gate_result = self.confirmation_gate(
+                    tool_call.name, tool_call.arguments
+                )
+                # Support both old bool return and new (bool, bool) tuple
+                if isinstance(gate_result, tuple):
+                    approved, persist = gate_result
+                else:
+                    approved, persist = bool(gate_result), False
+
                 if not approved:
                     audit.log_security_event(
                         "tool_denied",
@@ -493,6 +513,15 @@ class AgentLoop:
                         output=f"[Tool '{tool_call.name}' was denied by user]",
                         success=False,
                         requires_confirmation=True,
+                    )
+                # Record the approval in the allow-list
+                rules.record_approval(
+                    tool_call.name, tool_call.arguments, persist=persist
+                )
+                if persist:
+                    logger.info(
+                        "Tool '{}' permanently approved — won't ask again",
+                        tool_call.name,
                     )
             else:
                 # No gate at all — dry-run / headless mode.  Block the call.

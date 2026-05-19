@@ -341,9 +341,31 @@ class AradhyaAssistant:
 
         system_prompt = self._build_agent_system_prompt(session, turn_ctx)
         registry = self._build_tool_registry_from_policy(policy)
+
+        # ── Gap A: CLI confirmation gate with allow-list (Codex prefix_rule) ──
+        def _cli_gate(tool_name: str, arguments: dict) -> tuple[bool, bool]:
+            from src.aradhya.cli_ui import render_warning, prompt_input  # noqa: PLC0415
+            args_preview = ", ".join(
+                f"{k}={str(v)[:60]}" for k, v in list(arguments.items())[:3]
+            )
+            render_warning(
+                f"Tool [bold]{tool_name}[/bold] wants to run"
+                + (f": {args_preview}" if args_preview else "")
+            )
+            try:
+                answer = prompt_input("  Approve? [y]es / [a]lways / [n]o: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                return (False, False)
+            if answer in ("y", "yes"):
+                return (True, False)
+            if answer in ("a", "always"):
+                return (True, True)
+            return (False, False)
+
         loop = AgentLoop(
             self.model_provider,
             tool_executor=registry,
+            confirmation_gate=_cli_gate,
             max_iterations=10,
             max_repeated_tool_calls=3,
         )
@@ -523,5 +545,19 @@ class AradhyaAssistant:
                 result.estimated_tokens_before,
                 result.estimated_tokens_after,
             )
+            # ── Gap B: emit 'compacted' audit event so the trail is never broken ──
+            try:
+                get_audit_logger().log_event(
+                    "compacted",
+                    {
+                        "original_messages": result.original_messages,
+                        "kept_messages": result.kept_messages,
+                        "original_tokens": result.estimated_tokens_before,
+                        "compacted_tokens": result.estimated_tokens_after,
+                        "strategy": "extractive",
+                    },
+                )
+            except Exception:  # pragma: no cover
+                pass  # audit must never crash the agent
 
         return compacted

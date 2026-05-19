@@ -19,6 +19,19 @@ if str(_ROOT) not in sys.path:
 
 from src.aradhya.agent_loop import AgentLoop, ToolCall, ToolResult
 from src.aradhya.model_provider import ModelChatResult, ModelToolCall
+import src.aradhya.tools.approved_rules as _ar_module
+
+
+@pytest.fixture(autouse=True)
+def _reset_approved_rules():
+    """Reset the global ApprovedRules singleton between tests.
+
+    The allow-list is an in-process singleton; without this, an approval
+    recorded in one test leaks into the next and causes false pass/fail.
+    """
+    _ar_module._global_rules = None
+    yield
+    _ar_module._global_rules = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

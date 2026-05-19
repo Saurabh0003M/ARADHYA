@@ -187,6 +187,19 @@ class AuditLogger:
             "severity": severity,
         })
 
+    def log_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
+        """Generic event logger for one-off event types (e.g. 'compacted').
+
+        Codex emits a ``compacted`` event whenever session history is
+        replaced with a summarised version, so the full session can still
+        be replayed from the audit log.  Use this method for any event type
+        that doesn't fit the existing typed helpers.
+        """
+        entry: dict[str, Any] = {"type": event_type}
+        if payload:
+            entry.update(payload)
+        self._write(entry)
+
     # ── Read helpers ──────────────────────────────────────────────────
 
     def recent_entries(self, count: int = 20) -> list[dict[str, Any]]:
