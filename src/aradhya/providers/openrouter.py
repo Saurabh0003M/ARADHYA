@@ -432,6 +432,10 @@ class OpenRouterTextModelProvider:
         if used_model != self.profile.model_name:
             yield f"[Routed to {used_model} — primary model was rate-limited]\n\n"
 
+        # Stream with safety valve — truncate runaway/gibberish responses
+        total_chars = 0
+        max_stream_chars = 4000  # Prevent garbage floods from broken models
+
         for line in response.iter_lines():
             if not line:
                 continue
@@ -445,6 +449,14 @@ class OpenRouterTextModelProvider:
                 delta = (chunk.get("choices") or [{}])[0].get("delta", {})
                 content = delta.get("content")
                 if content:
+                    total_chars += len(content)
+                    if total_chars > max_stream_chars:
+                        yield "\n\n[Response truncated — model exceeded safe length]"
+                        logger.warning(
+                            "Stream from {} truncated at {} chars (safety valve)",
+                            used_model, total_chars,
+                        )
+                        break
                     yield content
             except (json.JSONDecodeError, IndexError):
                 continue
