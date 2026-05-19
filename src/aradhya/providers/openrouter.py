@@ -41,25 +41,25 @@ from src.aradhya.runtime_profile import ModelProfile
 # Sorted by recommended use.  All $0/M input+output as of May 2026.
 
 FREE_MODELS: dict[str, dict[str, Any]] = {
-    # ── Heavy reasoning / agentic (use for complex digestion tasks)
-    "openrouter/optimus-alpha": {
-        "context": 1_050_000,
-        "label": "Owl Alpha — agentic workloads, tool use",
-        "tier": "heavy",
-    },
-    "nvidia/nemotron-3-super:free": {
-        "context": 1_000_000,
-        "label": "NVIDIA Nemotron 3 Super 120B — complex reasoning",
-        "tier": "heavy",
-    },
+    # ── Heavy reasoning (use for complex tasks, digestion)
     "deepseek/deepseek-v4-flash:free": {
         "context": 1_050_000,
-        "label": "DeepSeek V4 Flash — fast coding",
+        "label": "DeepSeek V4 Flash — fast coding & reasoning",
+        "tier": "heavy",
+    },
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+        "context": 1_000_000,
+        "label": "NVIDIA Nemotron 3 Super 120B — complex reasoning",
         "tier": "heavy",
     },
     "openai/gpt-oss-120b:free": {
         "context": 131_000,
         "label": "OpenAI gpt-oss-120b — general purpose MoE",
+        "tier": "heavy",
+    },
+    "nousresearch/hermes-3-llama-3.1-405b:free": {
+        "context": 128_000,
+        "label": "Hermes 3 405B — uncensored, tool-capable",
         "tier": "heavy",
     },
     # ── Medium (good balance of speed + quality)
@@ -68,14 +68,9 @@ FREE_MODELS: dict[str, dict[str, Any]] = {
         "label": "Google Gemma 4 31B — multimodal, 140+ languages",
         "tier": "medium",
     },
-    "poolside/laguna-m.1:free": {
-        "context": 131_000,
-        "label": "Poolside Laguna M.1 — coding agent",
-        "tier": "medium",
-    },
-    "arcee-ai/trinity-large-thinking:free": {
+    "qwen/qwen3-coder:free": {
         "context": 262_000,
-        "label": "Arcee Trinity Large Thinking — reasoning",
+        "label": "Qwen 3 Coder — coding specialist",
         "tier": "medium",
     },
     "minimax/minimax-m2.5:free": {
@@ -83,10 +78,30 @@ FREE_MODELS: dict[str, dict[str, Any]] = {
         "label": "MiniMax M2.5 — SWE-bench 80.2%",
         "tier": "medium",
     },
-    # ── Light (fast, cheap, good for simple queries)
+    "poolside/laguna-m.1:free": {
+        "context": 131_000,
+        "label": "Poolside Laguna M.1 — coding agent",
+        "tier": "medium",
+    },
+    "meta-llama/llama-3.3-70b-instruct:free": {
+        "context": 128_000,
+        "label": "Llama 3.3 70B — Meta's flagship open model",
+        "tier": "medium",
+    },
+    "arcee-ai/trinity-large-thinking:free": {
+        "context": 262_000,
+        "label": "Arcee Trinity Large — chain-of-thought reasoning",
+        "tier": "medium",
+    },
+    # ── Light (fast, good for simple queries)
     "nvidia/nemotron-3-nano-30b-a3b:free": {
         "context": 256_000,
         "label": "NVIDIA Nemotron 3 Nano 30B — efficient",
+        "tier": "light",
+    },
+    "qwen/qwen3-next-80b-a3b-instruct:free": {
+        "context": 128_000,
+        "label": "Qwen 3 Next 80B — fast instruct",
         "tier": "light",
     },
     "openai/gpt-oss-20b:free": {
@@ -102,6 +117,9 @@ FREE_MODELS: dict[str, dict[str, Any]] = {
 }
 
 DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+
+# How many fallback models to try before giving up.
+_MAX_FALLBACK_ATTEMPTS = 4
 
 
 class OpenRouterTextModelProvider:
@@ -277,29 +295,57 @@ class OpenRouterTextModelProvider:
                     })
             payload["tools"] = openai_tools
 
-        try:
-            response = self.session.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                timeout=self.profile.request_timeout_seconds,
-            )
-            response.raise_for_status()
-        except requests.HTTPError as e:
-            logger.error("OpenRouter request failed: {}", e)
-            error_detail = ""
+        # Try primary model, then fallbacks on 429
+        models_to_try = [payload["model"]] + self._get_fallback_models(payload["model"])
+
+        last_error = ""
+        for model_name in models_to_try[:1 + _MAX_FALLBACK_ATTEMPTS]:
+            payload["model"] = model_name
             try:
-                error_detail = response.json().get("error", {}).get("message", "")
-            except Exception:
-                pass
+                response = self.session.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    timeout=self.profile.request_timeout_seconds,
+                )
+                response.raise_for_status()
+                break  # Success — exit retry loop
+            except requests.HTTPError as e:
+                status_code = getattr(response, "status_code", 0)
+                error_detail = ""
+                try:
+                    error_detail = response.json().get("error", {}).get("message", "")
+                except Exception:
+                    pass
+                last_error = error_detail or str(e)
+
+                if status_code == 429 and model_name != models_to_try[-1]:
+                    logger.warning(
+                        "Model {} returned 429, trying next fallback...",
+                        model_name,
+                    )
+                    continue  # Try next model
+
+                logger.error("OpenRouter request failed: {}", e)
+                return ModelChatResult(
+                    text=f"[OpenRouter error: {last_error}]",
+                    model=model_name,
+                    provider="openrouter",
+                    raw={},
+                )
+            except requests.RequestException as e:
+                return ModelChatResult(
+                    text=f"[OpenRouter unreachable: {e}]",
+                    model=model_name,
+                    provider="openrouter",
+                    raw={},
+                )
+        else:
+            # All models exhausted
             return ModelChatResult(
-                text=f"[OpenRouter error: {error_detail or e}]",
-                model=self.profile.model_name,
-                provider="openrouter",
-                raw={},
-            )
-        except requests.RequestException as e:
-            return ModelChatResult(
-                text=f"[OpenRouter unreachable: {e}]",
+                text=(
+                    f"[All free models are rate-limited right now. "
+                    f"Last error: {last_error}. Try again in 30 seconds.]"
+                ),
                 model=self.profile.model_name,
                 provider="openrouter",
                 raw={},
@@ -349,17 +395,42 @@ class OpenRouterTextModelProvider:
             "stream": True,
         }
 
-        try:
-            response = self.session.post(
-                f"{self.base_url}/chat/completions",
-                json=payload,
-                timeout=self.profile.request_timeout_seconds,
-                stream=True,
-            )
-            response.raise_for_status()
-        except Exception as e:
-            yield f"[OpenRouter stream error: {e}]"
+        # Try primary model, then fallbacks on 429
+        models_to_try = [payload["model"]] + self._get_fallback_models(payload["model"])
+        response = None
+        used_model = payload["model"]
+
+        for model_name in models_to_try[:1 + _MAX_FALLBACK_ATTEMPTS]:
+            payload["model"] = model_name
+            try:
+                response = self.session.post(
+                    f"{self.base_url}/chat/completions",
+                    json=payload,
+                    timeout=self.profile.request_timeout_seconds,
+                    stream=True,
+                )
+                response.raise_for_status()
+                used_model = model_name
+                break
+            except requests.HTTPError:
+                status_code = getattr(response, "status_code", 0)
+                if status_code == 429 and model_name != models_to_try[-1]:
+                    logger.warning(
+                        "Stream: {} returned 429, trying next fallback...",
+                        model_name,
+                    )
+                    continue
+                yield f"[OpenRouter stream error: {status_code} for {model_name}]"
+                return
+            except Exception as e:
+                yield f"[OpenRouter stream error: {e}]"
+                return
+        else:
+            yield "[All free models are rate-limited. Try again in 30 seconds.]"
             return
+
+        if used_model != self.profile.model_name:
+            yield f"[Routed to {used_model} — primary model was rate-limited]\n\n"
 
         for line in response.iter_lines():
             if not line:
@@ -377,6 +448,15 @@ class OpenRouterTextModelProvider:
                     yield content
             except (json.JSONDecodeError, IndexError):
                 continue
+
+    # ── Failover ────────────────────────────────────────────────────────
+
+    def _get_fallback_models(self, primary: str) -> list[str]:
+        """Return a list of free fallback models, excluding the primary."""
+        return [
+            model_id for model_id in FREE_MODELS
+            if model_id != primary
+        ]
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
