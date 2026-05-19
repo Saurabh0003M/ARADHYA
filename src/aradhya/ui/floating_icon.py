@@ -13,9 +13,12 @@ Enhanced with quick-access buttons for:
 import tkinter as tk
 from pathlib import Path
 
-# We use a simple IPC file in the project root to send commands to main.py
+# We use a simple IPC queue file in the project root to send commands to main.py.
+# Using an append-only queue avoids the race condition where two rapid button
+# presses overwrote each other in the old single-shot file protocol.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
+IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"            # legacy, kept for compat
+IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"  # new queue protocol
 
 # ── Color palette ─────────────────────────────────────────────────────
 BG_DARK = "#0d1117"
@@ -244,7 +247,9 @@ class FloatingIcon:
 
     def send_command(self, cmd: str):
         try:
-            IPC_FILE.write_text(cmd, encoding="utf-8")
+            # Append to queue file — handles rapid multi-press without data loss
+            with IPC_QUEUE_FILE.open("a", encoding="utf-8") as fh:
+                fh.write(cmd + "\n")
         except Exception as e:
             print(f"Failed to send command {cmd}: {e}")
 

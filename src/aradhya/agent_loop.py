@@ -98,12 +98,14 @@ class AgentLoop:
         confirmation_gate: Callable[[str, dict[str, Any]], bool] | None = None,
         max_iterations: int = 10,
         max_repeated_tool_calls: int = 3,
+        turn_token_budget: int = 6000,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
         self.confirmation_gate = confirmation_gate
         self.max_iterations = max_iterations
         self.max_repeated_tool_calls = max_repeated_tool_calls
+        self.turn_token_budget = turn_token_budget
 
     def run(
         self,
@@ -134,6 +136,10 @@ class AgentLoop:
         messages.append({"role": "user", "content": user_message})
 
         turn.messages = messages
+
+        # Per-turn token accumulator — prevents single-turn context overflow
+        # from accumulating huge tool outputs across many iterations.
+        accumulated_result_tokens = 0
 
         for iteration in range(self.max_iterations):
             turn.iterations = iteration + 1
@@ -180,6 +186,49 @@ class AgentLoop:
                     result = self._execute_with_gate(tool_call)
 
                 turn.tool_results.append(result)
+
+                # ── Per-turn token budget guard (Gap 3) ──────────────────
+                # Count tokens in this tool result and bail if we've
+                # accumulated too many, preventing context overflow.
+                result_tokens = max(1, len(result.output or "") // 4)
+                accumulated_result_tokens += result_tokens
+                if accumulated_result_tokens > self.turn_token_budget:
+                    logger.warning(
+                        "Turn token budget exceeded ({} > {}), injecting trim notice",
+                        accumulated_result_tokens,
+                        self.turn_token_budget,
+                    )
+                    # Add a trim notice so the model knows it hit the limit
+                    messages.append({
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [
+                            {
+                                "id": tool_call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call.name,
+                                    "arguments": json.dumps(tool_call.arguments),
+                                },
+                            }
+                        ],
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": (
+                            result.output[:500]
+                            + f"\n\n[Output trimmed — turn token budget ({self.turn_token_budget} tokens) reached. "
+                            "Summarize findings and respond now.]"
+                        ),
+                    })
+                    # Force one final model call to summarise
+                    try:
+                        final_resp = self._call_model(messages)
+                        turn.final_response = self._extract_text(final_resp)
+                    except Exception:
+                        turn.final_response = "[Tool results were trimmed due to token budget. Please ask a more focused question.]"
+                    return turn
 
                 # Add tool call and result to message history
                 messages.append({
@@ -390,36 +439,76 @@ class AgentLoop:
         """Extract the final text content from a model response."""
         return str(response.get("text", "") or "").strip()
 
+    # ── Dangerous tool set ─────────────────────────────────────────────
+    # Any tool in this set requires either explicit user confirmation
+    # OR live_execution_enabled to be True at the policy level.
+    # When neither is available the call is blocked with a policy-denial
+    # result — this closes the silent bypass that existed when
+    # confirmation_gate was None (e.g. streaming mode).
+    DANGEROUS_TOOLS: frozenset[str] = frozenset({
+        "run_command",
+        "write_file",
+        "delete_file",
+        "move_file",
+        "browser_click",
+        "browser_type",
+        "browser_submit",
+        "open_path",
+        "open_url",
+        "clipboard_write",
+    })
+
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
-        """Execute a tool call, applying the confirmation gate if needed."""
+        """Execute a tool call, applying the confirmation gate if needed.
+
+        Safety contract
+        ---------------
+        Dangerous tools are blocked in two layers:
+
+        1. If a ``confirmation_gate`` is set — the user is asked interactively.
+           The tool runs only if they approve.
+
+        2. If ``confirmation_gate`` is *not* set (e.g. streaming / headless
+           mode) — the tool is blocked with a policy-denial result.  This
+           closes the silent bypass that previously allowed dangerous tools
+           to execute unchallenged in streaming mode.
+        """
         assert self.tool_executor is not None
         audit = get_audit_logger()
 
-        dangerous_tools = {
-            "run_command",
-            "write_file",
-            "delete_file",
-            "move_file",
-            "browser_click",
-            "browser_type",
-            "browser_submit",
-            "open_path",
-            "open_url",
-            "clipboard_write",
-        }
-
-        if tool_call.name in dangerous_tools and self.confirmation_gate:
-            approved = self.confirmation_gate(tool_call.name, tool_call.arguments)
-            if not approved:
+        # ── Gap 1 fix: enforce gate even when confirmation_gate is None ──
+        if tool_call.name in self.DANGEROUS_TOOLS:
+            if self.confirmation_gate:
+                # Interactive path — ask the user
+                approved = self.confirmation_gate(tool_call.name, tool_call.arguments)
+                if not approved:
+                    audit.log_security_event(
+                        "tool_denied",
+                        f"User denied tool '{tool_call.name}'",
+                        severity="warning",
+                    )
+                    return ToolResult(
+                        tool_call_id=tool_call.id,
+                        name=tool_call.name,
+                        output=f"[Tool '{tool_call.name}' was denied by user]",
+                        success=False,
+                        requires_confirmation=True,
+                    )
+            else:
+                # No gate at all — dry-run / headless mode.  Block the call.
                 audit.log_security_event(
-                    "tool_denied",
-                    f"User denied tool '{tool_call.name}'",
+                    "tool_blocked_dry_run",
+                    f"Dangerous tool '{tool_call.name}' blocked — no confirmation gate (dry-run mode)",
                     severity="warning",
                 )
                 return ToolResult(
                     tool_call_id=tool_call.id,
                     name=tool_call.name,
-                    output=f"[Tool '{tool_call.name}' was denied by user]",
+                    output=(
+                        f"[Tool '{tool_call.name}' requires confirmation but no gate is "
+                        "configured (dry-run mode). Enable live execution or provide a "
+                        "confirmation_gate to run this tool.]"
+                    ),
                     success=False,
                     requires_confirmation=True,
                 )
@@ -434,6 +523,9 @@ class AgentLoop:
                 success=result.success,
                 output_preview=result.output[:200] if result.output else "",
             )
+            # ── Gap 2: auto-log tool failures to learnings engine ────────
+            if not result.success:
+                self._auto_log_tool_failure(tool_call.name, result.output or "")
             return result
         except Exception as error:
             logger.error(
@@ -445,12 +537,34 @@ class AgentLoop:
                 success=False,
                 output_preview=str(error)[:200],
             )
+            error_msg = f"[Error executing '{tool_call.name}': {error}]"
+            self._auto_log_tool_failure(tool_call.name, str(error))
             return ToolResult(
                 tool_call_id=tool_call.id,
                 name=tool_call.name,
-                output=f"[Error executing '{tool_call.name}': {error}]",
+                output=error_msg,
                 success=False,
             )
+
+    def _auto_log_tool_failure(self, tool_name: str, error_msg: str) -> None:
+        """Silently log a tool failure to the learnings engine.
+
+        This closes the loop: tool failures now *automatically* feed the
+        self-improvement system without relying on the model choosing to
+        call log_error itself.
+        """
+        try:
+            from pathlib import Path as _Path
+            from src.aradhya.learnings.learnings_engine import LearningsEngine
+            _root = _Path(__file__).resolve().parents[2]
+            LearningsEngine(_root).log_error(
+                tool_name=tool_name,
+                error_message=error_msg[:400],
+                context="auto-logged by agent_loop on tool failure",
+            )
+        except Exception as _exc:
+            # Never let learnings logging crash the agent loop
+            logger.debug("Auto-learnings log failed (non-fatal): {}", _exc)
 
     def _tool_definitions(self) -> list[dict[str, Any]]:
         if self.tool_executor is None:

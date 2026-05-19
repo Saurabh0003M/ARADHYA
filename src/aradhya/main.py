@@ -490,26 +490,71 @@ def _handle_telegram_stop(*, ctx) -> None:
 
 def _handle_audit() -> None:
     audit = get_audit_logger()
-    entries = audit.recent_entries(15)
+    entries = audit.recent_entries(20)
     if not entries:
         render_info("No audit entries yet.")
         return
-    console.print("[heading]  Recent Audit Log[/]")
+
+    # ── Summary stats ──────────────────────────────────────────────────
+    tool_entries = [e for e in entries if e.get("type") == "tool_call"]
+    tool_ok = sum(1 for e in tool_entries if e.get("success"))
+    tool_fail = len(tool_entries) - tool_ok
+    security_entries = [e for e in entries if e.get("type") == "security"]
+    sessions = {e.get("session_id", "") for e in entries if e.get("session_id")}
+    last_session = (sorted(sessions) or ["—"])[-1]
+
+    console.print()
+    console.print("[heading]  Audit Log — Last 20 Events[/]")
+    console.print(
+        f"  Tools: [green]{tool_ok} OK[/]  [red]{tool_fail} FAIL[/]  "
+        f"│  Security events: [yellow]{len(security_entries)}[/]  "
+        f"│  Session: [dim]{last_session[:12]}[/]"
+    )
+    console.print()
+
     for entry in entries:
-        ts = entry.get("ts", "?")[-8:]  # just the time part
+        raw_ts = entry.get("ts", "")
+        if raw_ts and "T" in raw_ts:
+            ts = raw_ts[5:19].replace("T", " ")   # "MM-DD HH:MM:SS"
+        else:
+            ts = raw_ts[-8:] if raw_ts else "??:??:??"
         etype = entry.get("type", "?")
+
         if etype == "tool_call":
             tool = entry.get("tool", "?")
-            ok = "OK" if entry.get("success") else "FAIL"
-            console.print(f"  [dim]{ts}[/] [accent]{tool}[/] [{ok}]")
+            ok = entry.get("success", False)
+            status_tag = "[green]OK  [/]" if ok else "[red]FAIL[/]"
+            preview = (entry.get("output_preview", "") or "")[:60]
+            console.print(
+                f"  [dim]{ts}[/] {status_tag} [accent]{tool:<22}[/]"
+                + (f" [dim]{preview}[/]" if preview else "")
+            )
+        elif etype == "turn_start":
+            msg = (entry.get("user_message", "") or "")[:50]
+            console.print(f"  [dim]{ts}[/] [cyan]▶ TURN[/]  [dim]{msg}[/]")
+        elif etype == "turn_end":
+            iters = entry.get("iterations", "?")
+            calls = entry.get("tool_calls_count", 0)
+            ok = entry.get("success", True)
+            status_tag = "[green]✓[/]" if ok else "[red]✗[/]"
+            console.print(
+                f"  [dim]{ts}[/] {status_tag} [cyan]END[/]    "
+                f"[dim]iter={iters} tools={calls}[/]"
+            )
         elif etype == "command":
             cmd = entry.get("command", "?")
-            console.print(f"  [dim]{ts}[/] cmd: {cmd}")
-        elif etype == "security":
-            evt = entry.get("event", "?")
-            console.print(f"  [dim]{ts}[/] [warning]SECURITY: {evt}[/]")
+            console.print(f"  [dim]{ts}[/] [blue]CMD[/]    {cmd}")
+        elif etype in ("security", "tool_blocked_dry_run"):
+            evt = entry.get("event", entry.get("message", "?"))
+            console.print(f"  [dim]{ts}[/] [red]⚠ SEC[/]  {evt}")
         else:
-            console.print(f"  [dim]{ts}[/] {etype}")
+            console.print(f"  [dim]{ts}[/] [dim]{etype}[/]")
+
+    console.print()
+    console.print(
+        "  [dim]Showing 20 of latest events. "
+        "Full log: ~/.aradhya/audit/audit.jsonl[/]"
+    )
     console.print()
 
 
@@ -731,74 +776,105 @@ def _dispatch_command(command: str, **kwargs) -> bool:
 
 
 # ── IPC watcher ───────────────────────────────────────────────────────
+# Uses an append-only queue file (.aradhya_ipc_queue) instead of a
+# single-shot file.  The watcher atomically reads all pending lines,
+# processes each command in order, then truncates the queue.
+# This eliminates the race condition where a rapid second press was
+# silently dropped because the file was unlinked before being read.
+
+IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"
 
 def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
     """Background thread that reads commands from the floating icon."""
 
+    def _dispatch_ipc(cmd: str) -> None:
+        """Execute a single IPC command string."""
+        if cmd == "wake":
+            console.print()
+            resp = assistant.handle_wake(WakeSource.FLOATING_ICON)
+            render_response(resp.spoken_response)
+        elif cmd == "sleep":
+            console.print()
+            resp = assistant.go_idle()
+            render_response(resp.spoken_response)
+        elif cmd == "voice_toggle":
+            console.print()
+            lvr = ctx.get("live_voice_runtime")
+            if lvr and lvr.is_running():
+                lvr.stop()
+            else:
+                if lvr is None:
+                    lvr = VoiceActivatedAradhya(
+                        assistant=assistant,
+                        voice_manager=voice_manager,
+                        runtime_profile=runtime_profile,
+                        output_handler=print,
+                    )
+                    ctx["live_voice_runtime"] = lvr
+                lvr.start()
+        elif cmd == "debate_toggle":
+            console.print()
+            transcript = (
+                "disable debate mode"
+                if assistant.state.debate_mode_enabled
+                else "enable debate mode"
+            )
+            resp = assistant.handle_transcript(transcript)
+            render_response(
+                resp.spoken_response,
+                transcript_echo=resp.transcript_echo,
+                awaiting=resp.awaiting_confirmation,
+            )
+        elif cmd in {"screen_watch_toggle", "browser_toggle"}:
+            console.print()
+            render_warning(
+                "That floating-icon button is visible, but its screen/browser "
+                "watch backend is not implemented yet."
+            )
+        elif cmd in {"lock_screen", "prevent_sleep"}:
+            console.print()
+            render_warning(
+                f"Floating-icon command '{cmd}' is not wired to a safe "
+                "confirmed action yet."
+            )
+        elif cmd == "exit_icon":
+            console.print()
+            render_info("Floating icon closed.")
+        elif cmd:
+            console.print()
+            render_warning(f"Unknown floating-icon command: {cmd}")
+
     def watcher():
         while ctx.get("ipc_running", True):
+            # Legacy single-file support (backward compat)
             if IPC_FILE.exists():
                 try:
                     cmd = IPC_FILE.read_text(encoding="utf-8").strip()
-                    IPC_FILE.unlink()
-                    if cmd == "wake":
-                        console.print()
-                        resp = assistant.handle_wake(WakeSource.FLOATING_ICON)
-                        render_response(resp.spoken_response)
-                    elif cmd == "sleep":
-                        console.print()
-                        resp = assistant.go_idle()
-                        render_response(resp.spoken_response)
-                    elif cmd == "voice_toggle":
-                        console.print()
-                        lvr = ctx.get("live_voice_runtime")
-                        if lvr and lvr.is_running():
-                            lvr.stop()
-                        else:
-                            if lvr is None:
-                                lvr = VoiceActivatedAradhya(
-                                    assistant=assistant,
-                                    voice_manager=voice_manager,
-                                    runtime_profile=runtime_profile,
-                                    output_handler=print,
-                                )
-                                ctx["live_voice_runtime"] = lvr
-                            lvr.start()
-                    elif cmd == "debate_toggle":
-                        console.print()
-                        transcript = (
-                            "disable debate mode"
-                            if assistant.state.debate_mode_enabled
-                            else "enable debate mode"
-                        )
-                        resp = assistant.handle_transcript(transcript)
-                        render_response(
-                            resp.spoken_response,
-                            transcript_echo=resp.transcript_echo,
-                            awaiting=resp.awaiting_confirmation,
-                        )
-                    elif cmd in {"screen_watch_toggle", "browser_toggle"}:
-                        console.print()
-                        render_warning(
-                            "That floating-icon button is visible, but its screen/browser "
-                            "watch backend is not implemented yet."
-                        )
-                    elif cmd in {"lock_screen", "prevent_sleep"}:
-                        console.print()
-                        render_warning(
-                            f"Floating-icon command '{cmd}' is not wired to a safe "
-                            "confirmed action yet."
-                        )
-                    elif cmd == "exit_icon":
-                        console.print()
-                        render_info("Floating icon closed.")
-                    else:
-                        console.print()
-                        render_warning(f"Unknown floating-icon command: {cmd}")
+                    IPC_FILE.unlink(missing_ok=True)
+                    _dispatch_ipc(cmd)
                 except Exception as error:
                     console.print()
                     render_warning(f"Floating-icon command failed: {error}")
-            time.sleep(0.5)
+
+            # New queue-file: read all lines atomically then truncate
+            if IPC_QUEUE_FILE.exists():
+                try:
+                    raw = IPC_QUEUE_FILE.read_text(encoding="utf-8")
+                    # Truncate before processing so new commands can append
+                    IPC_QUEUE_FILE.write_text("", encoding="utf-8")
+                    for line in raw.splitlines():
+                        cmd = line.strip()
+                        if cmd:
+                            try:
+                                _dispatch_ipc(cmd)
+                            except Exception as error:
+                                console.print()
+                                render_warning(f"Floating-icon command failed: {error}")
+                except Exception as error:
+                    console.print()
+                    render_warning(f"IPC queue read failed: {error}")
+
+            time.sleep(0.25)   # Faster polling with queue — 250 ms
 
     t = threading.Thread(target=watcher, daemon=True)
     t.start()
