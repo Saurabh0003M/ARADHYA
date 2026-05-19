@@ -651,24 +651,81 @@ def prompt_input() -> str:
     return console.input(get_prompt())
 
 def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = "") -> str:
-    """Render a live stream of text chunks.
+    """Render a live stream of text chunks with post-processing.
 
+    During streaming: raw text shown live for instant feedback.
+    After streaming: re-rendered with thought/routing/markdown formatting.
     Returns the complete text after the stream finishes.
     """
     full_text = ""
-    # Use a generic Text renderable so we can prepend the prefix on the first line
-    # and update smoothly without markdown parsing jumps.
     text_renderable = Text.from_markup(prefix)
 
-    with Live(text_renderable, console=console, refresh_per_second=15, transient=False) as live:
+    with Live(text_renderable, console=console, refresh_per_second=15, transient=True) as live:
         for chunk in stream:
             full_text += chunk
-            # Append chunk (unmarked) to the rich Text object
             if style:
                 text_renderable.append(chunk, style=style)
             else:
                 text_renderable.append(chunk)
             live.update(text_renderable)
 
-    console.print()
+    # Post-process: render with proper formatting
+    _render_formatted_response(full_text, prefix)
     return full_text
+
+
+def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/] ") -> None:
+    """Post-process and render a model response with proper formatting.
+
+    Splits routing notices, thinking blocks, and the main body into
+    separate Rich-styled sections.
+    """
+    import re
+    from rich.markdown import Markdown
+
+    remaining = text
+
+    # 1. Extract and render routing notices
+    routing_pattern = re.compile(r"\[Routed to (.+?) \u2014 (.+?)\]\n*")
+    for match in routing_pattern.finditer(remaining):
+        model_name = match.group(1)
+        reason = match.group(2)
+        console.print(
+            f"  [dim]\u27f3 Routed \u2192 [accent]{model_name}[/accent] ({reason})[/]"
+        )
+    remaining = routing_pattern.sub("", remaining)
+
+    # 2. Extract and render <thought>/<think> blocks
+    think_pattern = re.compile(
+        r"<(?:thought|think)>(.*?)</(?:thought|think)>",
+        re.DOTALL,
+    )
+    thoughts = think_pattern.findall(remaining)
+    remaining = think_pattern.sub("", remaining)
+
+    if thoughts:
+        for thought in thoughts:
+            cleaned = thought.strip()
+            if cleaned:
+                if len(cleaned) > 200:
+                    cleaned = cleaned[:200] + "\u2026"
+                console.print(f"  [dim italic]\U0001f4ad {cleaned}[/]")
+        console.print()
+
+    # 3. Render the main body
+    body = remaining.strip()
+    if not body:
+        return
+
+    has_markdown = any(
+        marker in body
+        for marker in ("## ", "```", "| ", "- **", "1. ", "* ", "---")
+    )
+
+    if has_markdown:
+        console.print(prefix.rstrip())
+        console.print(Markdown(body, code_theme="monokai"), width=100)
+    else:
+        console.print(f"{prefix}{body}")
+
+    console.print()

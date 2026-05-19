@@ -22,7 +22,7 @@
     ".git"
   ],
   "game_library_roots": [],
-  "allow_live_execution": false,
+  "allow_live_execution": true,
   "directory_index_policy": {
     "refresh_on_wake": true,
     "refresh_on_local_query": true,
