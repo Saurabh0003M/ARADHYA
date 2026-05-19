@@ -2,11 +2,15 @@
 
 These tools allow the model to execute shell commands on the user's
 machine, with mandatory confirmation gates for safety.
+
+Command results include structured metadata: exit code, wall time,
+stdout, and stderr — matching the Codex tool output protocol.
 """
 
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
 
 from src.aradhya.tools.tool_registry import tool_definition
@@ -36,7 +40,7 @@ from src.aradhya.tools.tool_registry import tool_definition
     requires_confirmation=True,
 )
 def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
-    """Execute a shell command and return stdout/stderr."""
+    """Execute a shell command and return structured stdout/stderr."""
     work_dir = Path(cwd).resolve()
     if not work_dir.is_dir():
         return f"Error: Working directory does not exist: {work_dir}"
@@ -59,6 +63,7 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
                 # Docker not installed/running, gracefully fallback to local execution
                 pass
 
+        start_time = time.perf_counter()
         result = subprocess.run(
             final_command,
             shell=True,
@@ -67,20 +72,24 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
             cwd=str(work_dir) if final_command == command else None,
             timeout=timeout,
         )
+        wall_time = time.perf_counter() - start_time
 
-        output_parts: list[str] = []
+        # Structured output matching Codex protocol
+        output_parts: list[str] = [
+            f"Exit code: {result.returncode}",
+            f"Wall time: {wall_time:.1f}s",
+        ]
         if result.stdout.strip():
             output_parts.append(f"STDOUT:\n{result.stdout.strip()}")
         if result.stderr.strip():
             output_parts.append(f"STDERR:\n{result.stderr.strip()}")
-        output_parts.append(f"Exit code: {result.returncode}")
 
-        return "\n\n".join(output_parts)
+        return "\n".join(output_parts)
 
     except subprocess.TimeoutExpired:
-        return f"Error: Command timed out after {timeout} seconds."
+        return f"Exit code: -1\nWall time: {timeout}s\nError: Command timed out after {timeout} seconds."
     except Exception as error:
-        return f"Error executing command: {error}"
+        return f"Exit code: -1\nWall time: 0s\nError: {error}"
 
 
 ALL_SHELL_TOOLS = [run_command]

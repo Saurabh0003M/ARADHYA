@@ -1,8 +1,18 @@
-"""Audit logger for all tool executions and system actions.
+"""Event-sourced audit logger for all tool executions and system actions.
 
-Every tool call, command execution, and state change is logged to a
-JSONL file for transparency, debugging, and safety review.  Inspired
-by GStack's security logging and Career-Ops' pipeline verification.
+Every tool call, command execution, turn lifecycle event, and state change
+is logged to a JSONL file with session and turn identifiers for full
+session replay.  Inspired by Codex's event-sourced session protocol.
+
+Event types
+-----------
+- ``session_meta``  – emitted once per session start with config snapshot
+- ``turn_start``    – emitted at the beginning of each user turn
+- ``turn_end``      – emitted at the end of each turn with summary stats
+- ``tool_call``     – each tool invocation (enhanced with wall_time_ms)
+- ``command``       – user slash-commands
+- ``state_change``  – assistant state transitions
+- ``security``      – blocked actions, policy denials
 """
 
 from __future__ import annotations
@@ -10,7 +20,9 @@ from __future__ import annotations
 import json
 import os
 import threading
-from datetime import datetime
+import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,13 +33,21 @@ MAX_LOG_SIZE_MB = 10
 MAX_LOG_FILES = 5
 
 
+def _generate_turn_id() -> str:
+    """Generate a compact, unique turn identifier."""
+    return f"turn_{uuid.uuid4().hex[:12]}"
+
+
 class AuditLogger:
-    """Append-only JSONL audit logger with automatic rotation.
+    """Append-only JSONL audit logger with session/turn tracking.
 
     All entries are written to ``audit.jsonl``.  When the file exceeds
     ``MAX_LOG_SIZE_MB``, it is rotated (renamed with a timestamp suffix)
     and a new file is started.  Up to ``MAX_LOG_FILES`` rotated files
     are kept.
+
+    Every entry includes ``session_id`` and ``turn_id`` fields so that
+    the full session can be replayed from the log alone.
     """
 
     def __init__(self, audit_dir: Path | None = None) -> None:
@@ -35,6 +55,68 @@ class AuditLogger:
         self._dir.mkdir(parents=True, exist_ok=True)
         self._path = self._dir / "audit.jsonl"
         self._lock = threading.Lock()
+        self._session_id: str = ""
+        self._turn_id: str = ""
+
+    # ── Session / turn lifecycle ──────────────────────────────────────
+
+    def set_session_id(self, session_id: str) -> None:
+        """Bind subsequent events to a session."""
+        self._session_id = session_id
+
+    @property
+    def current_turn_id(self) -> str:
+        return self._turn_id
+
+    def log_session_meta(
+        self,
+        session_id: str,
+        config_snapshot: dict[str, Any] | None = None,
+    ) -> None:
+        """Emit a session_meta event (once at session start)."""
+        self._session_id = session_id
+        self._write({
+            "type": "session_meta",
+            "session_id": session_id,
+            "config": config_snapshot or {},
+        })
+
+    def log_turn_start(
+        self,
+        user_message: str,
+        turn_id: str | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> str:
+        """Emit a turn_start event and return the assigned turn_id."""
+        self._turn_id = turn_id or _generate_turn_id()
+        self._write({
+            "type": "turn_start",
+            "turn_id": self._turn_id,
+            "user_message": user_message[:500],
+            "context": context or {},
+        })
+        return self._turn_id
+
+    def log_turn_end(
+        self,
+        turn_id: str | None = None,
+        iterations: int = 0,
+        tool_calls_count: int = 0,
+        success: bool = True,
+        final_response_preview: str = "",
+    ) -> None:
+        """Emit a turn_end event with summary statistics."""
+        self._write({
+            "type": "turn_end",
+            "turn_id": turn_id or self._turn_id,
+            "iterations": iterations,
+            "tool_calls_count": tool_calls_count,
+            "success": success,
+            "response_preview": final_response_preview[:300],
+        })
+        self._turn_id = ""
+
+    # ── Tool calls ────────────────────────────────────────────────────
 
     def log_tool_call(
         self,
@@ -43,16 +125,25 @@ class AuditLogger:
         success: bool | None = None,
         output_preview: str = "",
         source: str = "agent",
+        wall_time_ms: int | None = None,
+        exit_code: int | None = None,
     ) -> None:
-        """Log a tool call with its arguments and result."""
-        self._write({
+        """Log a tool call with its arguments, result, and timing."""
+        entry: dict[str, Any] = {
             "type": "tool_call",
             "tool": tool_name,
             "args": _sanitize_args(arguments or {}),
             "success": success,
             "output": output_preview[:500],
             "source": source,
-        })
+        }
+        if wall_time_ms is not None:
+            entry["wall_time_ms"] = wall_time_ms
+        if exit_code is not None:
+            entry["exit_code"] = exit_code
+        self._write(entry)
+
+    # ── Commands & state ──────────────────────────────────────────────
 
     def log_command(
         self,
@@ -96,6 +187,8 @@ class AuditLogger:
             "severity": severity,
         })
 
+    # ── Read helpers ──────────────────────────────────────────────────
+
     def recent_entries(self, count: int = 20) -> list[dict[str, Any]]:
         """Read the most recent N audit entries."""
         if not self._path.is_file():
@@ -112,10 +205,18 @@ class AuditLogger:
         except OSError:
             return []
 
+    # ── Internal ──────────────────────────────────────────────────────
+
     def _write(self, entry: dict[str, Any]) -> None:
         """Write a single entry to the audit log (thread-safe)."""
-        entry["ts"] = datetime.now().isoformat(timespec="seconds")
+        entry["ts"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
         entry["pid"] = os.getpid()
+
+        # Inject session/turn context into every event
+        if self._session_id and "session_id" not in entry:
+            entry["session_id"] = self._session_id
+        if self._turn_id and "turn_id" not in entry:
+            entry["turn_id"] = self._turn_id
 
         line = json.dumps(entry, default=str, ensure_ascii=True) + "\n"
 

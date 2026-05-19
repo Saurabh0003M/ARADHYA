@@ -21,6 +21,7 @@ from src.aradhya.assistant_models import (
     load_preferences,
 )
 from src.aradhya.assistant_planner import IntentPlanner
+from src.aradhya.audit_logger import get_audit_logger
 from src.aradhya.context_engine import ContextEngine
 from src.aradhya.model_provider import TextModelProvider
 from src.aradhya.session_manager import Session, SessionManager
@@ -36,11 +37,18 @@ from src.aradhya.tools.tool_registry import ToolRegistry
 from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 from src.aradhya.tools.vision_tools import ALL_VISION_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS
+from src.aradhya.turn_context import build_turn_context
+from src.aradhya.context_compressor import (
+    TruncationPolicy,
+    compact_history,
+    estimate_messages_tokens,
+)
 from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
 from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS
 
 MAX_AGENT_CONTEXT_CHARS = 8000
-MAX_AGENT_HISTORY_MESSAGES = 20
+MAX_AGENT_HISTORY_MESSAGES = 40
+DEFAULT_HISTORY_TOKEN_LIMIT = 8000
 
 
 class AradhyaAssistant:
@@ -314,8 +322,25 @@ class AradhyaAssistant:
 
         session = self.session_manager.active_session or self.session_manager.load_or_create("main")
         history = self._build_agent_history(session)
-        system_prompt = self._build_agent_system_prompt(session)
-        registry = self._build_tool_registry(mutation_granted=True)
+
+        # Build runtime policy and turn context (Codex-inspired)
+        policy = self._build_runtime_policy(mutation_granted=True)
+        turn_ctx = build_turn_context(
+            policy=policy,
+            session_id=session.id,
+        )
+
+        # Log turn start via event-sourced audit
+        audit = get_audit_logger()
+        audit.set_session_id(session.id)
+        audit.log_turn_start(
+            user_message=request,
+            turn_id=turn_ctx.turn_id,
+            context=turn_ctx.to_dict(),
+        )
+
+        system_prompt = self._build_agent_system_prompt(session, turn_ctx)
+        registry = self._build_tool_registry_from_policy(policy)
         loop = AgentLoop(
             self.model_provider,
             tool_executor=registry,
@@ -325,6 +350,18 @@ class AradhyaAssistant:
 
         turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
+
+        # Log turn end
+        success = not final_text.startswith("[Error") and not final_text.startswith(
+            "[Agent loop"
+        )
+        audit.log_turn_end(
+            turn_id=turn_ctx.turn_id,
+            iterations=turn.iterations,
+            tool_calls_count=len(turn.tool_calls_made),
+            success=success,
+            final_response_preview=final_text,
+        )
 
         session.add_message(
             "user",
@@ -345,21 +382,22 @@ class AradhyaAssistant:
         failed_tool_names = tuple(
             result.name for result in turn.tool_results if not result.success
         )
-        success = not final_text.startswith("[Error") and not final_text.startswith(
-            "[Agent loop"
-        )
         return ExecutionResult(
             success=success,
             message=final_text,
             artifacts=failed_tool_names,
         )
 
-    def _build_tool_registry(self, *, mutation_granted: bool) -> ToolRegistry:
-        policy = ToolRuntimePolicy(
+    def _build_runtime_policy(self, *, mutation_granted: bool) -> ToolRuntimePolicy:
+        """Build a ToolRuntimePolicy from current preferences."""
+        return ToolRuntimePolicy(
             allowed_roots=self.preferences.user_roots,
             live_execution_enabled=self.preferences.allow_live_execution,
             mutation_granted=mutation_granted,
         )
+
+    def _build_tool_registry_from_policy(self, policy: ToolRuntimePolicy) -> ToolRegistry:
+        """Build a tool registry from an existing policy."""
         registry = ToolRegistry(policy=policy)
         for tool in (
             *ALL_FILE_TOOLS,
@@ -380,7 +418,16 @@ class AradhyaAssistant:
 
         return registry
 
-    def _build_agent_system_prompt(self, session: Session | None) -> str:
+    def _build_tool_registry(self, *, mutation_granted: bool) -> ToolRegistry:
+        """Build a tool registry (backward compatible entry point)."""
+        policy = self._build_runtime_policy(mutation_granted=mutation_granted)
+        return self._build_tool_registry_from_policy(policy)
+
+    def _build_agent_system_prompt(
+        self,
+        session: Session | None,
+        turn_ctx: "object | None" = None,
+    ) -> str:
         parts = [
             (
                 "You are Aradhya, a local model-driven Windows assistant. "
@@ -394,7 +441,11 @@ class AradhyaAssistant:
                 "and file writes are controlled by runtime policy."
             ),
         ]
-        if not self.preferences.allow_live_execution:
+
+        # Inject per-turn context (Codex-style permission matrix)
+        if turn_ctx is not None and hasattr(turn_ctx, "to_prompt_block"):
+            parts.append(turn_ctx.to_prompt_block())
+        elif not self.preferences.allow_live_execution:
             parts.append(
                 "Current policy: allow_live_execution is false, so machine-changing "
                 "tools will be blocked even after task confirmation. Explain policy "
@@ -433,10 +484,17 @@ class AradhyaAssistant:
         return "\n\n".join(parts)
 
     def _build_agent_history(self, session: Session | None) -> list[dict[str, str]]:
+        """Build agent history with token-aware context compression.
+
+        Applies the Codex-inspired truncation policy: if the history
+        exceeds the token budget, older messages are summarized into
+        a compact system message.
+        """
         if session is None:
             return []
 
-        history: list[dict[str, str]] = []
+        # Collect raw messages
+        raw_messages: list[dict[str, str]] = []
         for message in session.recent_messages(MAX_AGENT_HISTORY_MESSAGES):
             role = message.role
             if role == "summary":
@@ -445,5 +503,25 @@ class AradhyaAssistant:
                 continue
             if not message.content.strip():
                 continue
-            history.append({"role": role, "content": message.content})
-        return history
+            raw_messages.append({"role": role, "content": message.content})
+
+        if not raw_messages:
+            return []
+
+        # Apply token-aware compaction
+        policy = TruncationPolicy(
+            mode="tokens",
+            limit=DEFAULT_HISTORY_TOKEN_LIMIT,
+        )
+        compacted, result = compact_history(raw_messages, policy=policy)
+
+        if result.compacted:
+            logger.info(
+                "History compacted: {} → {} messages ({} → {} est. tokens)",
+                result.original_messages,
+                result.kept_messages + 1,
+                result.estimated_tokens_before,
+                result.estimated_tokens_after,
+            )
+
+        return compacted

@@ -1,8 +1,11 @@
 """Session management for persistent conversation history.
 
-Sessions are stored as JSON files in ``~/.aradhya/sessions/``.  Each session
-captures the chronological list of messages exchanged between the user and
-Aradhya, along with metadata for compaction and pruning.
+Sessions are stored in SQLite via ``StateStore``.  The manager keeps a
+lightweight in-memory ``Session`` object for fast access during a
+conversation and flushes it to the database on ``save()``.
+
+For backward compatibility, the manager can still read legacy JSON
+session files (and will auto-migrate them on first access).
 """
 
 from __future__ import annotations
@@ -15,6 +18,8 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+
+from src.aradhya.state_store import StateStore
 
 DEFAULT_SESSIONS_DIR = Path.home() / ".aradhya" / "sessions"
 MAX_FULL_MESSAGES = 40
@@ -96,20 +101,47 @@ class Session:
 class SessionManager:
     """Manages session persistence and lifecycle.
 
-    Sessions are stored as individual JSON files named ``<session-id>.json``.
+    Primary backend: SQLite via ``StateStore``.
+    Legacy JSON files are auto-migrated on first access.
     """
 
-    def __init__(self, sessions_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        sessions_dir: Path | None = None,
+        state_store: StateStore | None = None,
+    ) -> None:
         self.sessions_dir = sessions_dir or DEFAULT_SESSIONS_DIR
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self._active_session: Session | None = None
+
+        # SQLite backend
+        self._store = state_store or StateStore(self.sessions_dir.parent)
+        self._migrated = False
 
     @property
     def active_session(self) -> Session | None:
         return self._active_session
 
+    @property
+    def store(self) -> StateStore:
+        """Expose the underlying StateStore for direct queries."""
+        return self._store
+
+    def _ensure_migrated(self) -> None:
+        """Auto-migrate legacy JSON sessions on first access."""
+        if self._migrated:
+            return
+        self._migrated = True
+        try:
+            count = self._store.migrate_json_sessions(self.sessions_dir)
+            if count > 0:
+                logger.info("Auto-migrated {} JSON session(s) to SQLite", count)
+        except Exception as error:
+            logger.debug("JSON migration skipped: {}", error)
+
     def create_session(self, session_id: str | None = None) -> Session:
         """Create and activate a new session."""
+        self._ensure_migrated()
         if session_id is None:
             session_id = f"session_{int(time.time() * 1000)}"
         session = Session(id=session_id)
@@ -119,20 +151,56 @@ class SessionManager:
         return session
 
     def load_session(self, session_id: str) -> Session | None:
-        """Load a session from disk and make it active."""
+        """Load a session from SQLite and make it active."""
+        self._ensure_migrated()
+
+        # Try SQLite first
+        meta = self._store.get_session(session_id)
+        if meta is not None:
+            raw_messages = self._store.get_messages(session_id)
+            messages = [
+                Message(
+                    role=m["role"],
+                    content=m["content"],
+                    timestamp=m.get("timestamp", ""),
+                    metadata=m.get("metadata", {}),
+                )
+                for m in raw_messages
+            ]
+            session = Session(
+                id=meta["id"],
+                messages=messages,
+                created_at=meta.get("created_at", ""),
+                updated_at=meta.get("updated_at", ""),
+                title=meta.get("title", ""),
+                compacted=meta.get("compacted", False),
+            )
+            self._active_session = session
+            logger.info(
+                "Loaded session '{}' with {} messages (SQLite)",
+                session_id,
+                session.message_count,
+            )
+            return session
+
+        # Fallback: try loading from legacy JSON
+        return self._load_json_session(session_id)
+
+    def _load_json_session(self, session_id: str) -> Session | None:
+        """Load from legacy JSON file (backward compat)."""
         session_path = self.sessions_dir / f"{session_id}.json"
         if not session_path.is_file():
             return None
-
         try:
             raw = session_path.read_text(encoding="utf-8")
             data = json.loads(raw)
             session = Session.from_dict(data)
             self._active_session = session
+            # Migrate to SQLite on load
+            self.save(session)
             logger.info(
-                "Loaded session '{}' with {} messages",
+                "Loaded session '{}' from JSON and migrated to SQLite",
                 session_id,
-                session.message_count,
             )
             return session
         except (json.JSONDecodeError, KeyError) as error:
@@ -140,44 +208,46 @@ class SessionManager:
             return None
 
     def save(self, session: Session | None = None) -> None:
-        """Persist a session to disk."""
+        """Persist a session to SQLite."""
         session = session or self._active_session
         if session is None:
             return
 
-        session_path = self.sessions_dir / f"{session.id}.json"
-        session_path.write_text(
-            json.dumps(session.to_dict(), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
+        # Upsert session metadata
+        self._store.upsert_session(
+            session_id=session.id,
+            title=session.title,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            compacted=session.compacted,
         )
 
+        # Replace all messages atomically
+        messages_data = [
+            {
+                "role": m.role,
+                "content": m.content,
+                "timestamp": m.timestamp,
+                "metadata": m.metadata,
+            }
+            for m in session.messages
+        ]
+        self._store.replace_messages(session.id, messages_data)
+
     def list_sessions(self, limit: int = 20) -> list[dict[str, str]]:
-        """Return metadata for recent sessions, sorted by last update."""
-        sessions: list[dict[str, str]] = []
-        for session_file in sorted(
-            self.sessions_dir.glob("*.json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        ):
-            try:
-                raw = session_file.read_text(encoding="utf-8")
-                data = json.loads(raw)
-                sessions.append({
-                    "id": data.get("id", session_file.stem),
-                    "title": data.get("title", ""),
-                    "updated_at": data.get("updated_at", ""),
-                    "messages": str(len(data.get("messages", []))),
-                })
-            except (json.JSONDecodeError, KeyError):
-                continue
+        """Return metadata for recent sessions from SQLite."""
+        self._ensure_migrated()
+        return self._store.list_sessions(limit)
 
-            if len(sessions) >= limit:
-                break
-
-        return sessions
+    def search_sessions(self, query: str, limit: int = 10) -> list[dict[str, str]]:
+        """Search session titles in SQLite."""
+        self._ensure_migrated()
+        return self._store.search_sessions(query, limit)
 
     def load_or_create(self, session_id: str | None = None) -> Session:
         """Load the most recent session, or create one if none exist."""
+        self._ensure_migrated()
+
         if session_id:
             loaded = self.load_session(session_id)
             if loaded:

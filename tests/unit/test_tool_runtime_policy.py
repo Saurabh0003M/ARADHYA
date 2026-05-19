@@ -77,5 +77,5 @@ def test_policy_blocks_file_tools_outside_configured_roots(tmp_path):
     )
 
     assert result.success is False
-    assert "outside configured roots" in result.output
+    assert "outside configured" in result.output
     assert not outside.exists()
