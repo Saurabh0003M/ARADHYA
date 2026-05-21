@@ -47,6 +47,10 @@ from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
 from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS
 from src.aradhya.tools.scheduler_tool import ALL_SCHEDULER_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS, set_active_network_policy
+from src.aradhya.hooks.hook_config import load_hooks
+from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
+from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
+from src.aradhya.permission_rules import PermissionEngine, load_permissions
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 40
@@ -96,6 +100,11 @@ class AradhyaAssistant:
             for phrase in self.preferences.confirmation_phrases
         }
 
+        # ── Parasite OS subsystems ────────────────────────────────────
+        self.hook_engine = self._load_hook_engine()
+        self.agent_registry = self._load_agent_registry()
+        self.permission_engine = self._load_permission_engine()
+
         self.mcp_manager = self._load_mcp_manager()
 
     @classmethod
@@ -114,6 +123,41 @@ class AradhyaAssistant:
             session_manager=session_manager,
             project_root=root,
         )
+
+    def _load_hook_engine(self) -> HookEngine:
+        """Load hooks from user and project-level config."""
+        try:
+            engine = load_hooks(project_root=self.project_root)
+            if engine.total_hooks > 0:
+                logger.info(
+                    "Parasite OS: {} hook(s) armed",
+                    engine.total_hooks,
+                )
+                # Fire SessionStart hook
+                engine.fire(HookEvent.SESSION_START, {
+                    "session_name": "main",
+                    "project_root": str(self.project_root),
+                })
+            return engine
+        except Exception as exc:
+            logger.warning("Hook engine failed to load (non-fatal): {}", exc)
+            return HookEngine()
+
+    def _load_agent_registry(self) -> AgentRegistry:
+        """Load agent definitions from user and project directories."""
+        try:
+            return load_agents(project_root=self.project_root)
+        except Exception as exc:
+            logger.warning("Agent registry failed to load (non-fatal): {}", exc)
+            return AgentRegistry()
+
+    def _load_permission_engine(self) -> PermissionEngine:
+        """Load permission rules from user and project config."""
+        try:
+            return load_permissions(project_root=self.project_root)
+        except Exception as exc:
+            logger.warning("Permission engine failed to load (non-fatal): {}", exc)
+            return PermissionEngine()
 
     def _load_mcp_manager(self):
         try:
@@ -374,6 +418,7 @@ class AradhyaAssistant:
             confirmation_gate=_cli_gate,
             max_iterations=10,
             max_repeated_tool_calls=3,
+            hook_engine=self.hook_engine,
         )
 
         # Gap E: set active network policy so web_fetch/web_search can check it
