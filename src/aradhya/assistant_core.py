@@ -51,6 +51,7 @@ from src.aradhya.hooks.hook_config import load_hooks
 from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
 from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
 from src.aradhya.permission_rules import PermissionEngine, load_permissions
+from src.aradhya.history_processors import default_pipeline
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 40
@@ -419,6 +420,7 @@ class AradhyaAssistant:
             max_iterations=10,
             max_repeated_tool_calls=3,
             hook_engine=self.hook_engine,
+            history_pipeline=default_pipeline(),
         )
 
         # Gap E: set active network policy so web_fetch/web_search can check it

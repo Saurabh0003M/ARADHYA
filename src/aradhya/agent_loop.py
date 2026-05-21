@@ -31,6 +31,7 @@ from src.aradhya.model_provider import ModelChatResult, ModelResult, ModelToolCa
 
 if TYPE_CHECKING:
     from src.aradhya.hooks.hook_engine import HookEngine
+    from src.aradhya.history_processors import HistoryProcessorPipeline
 
 
 class ThinkingLevel(Enum):
@@ -106,6 +107,7 @@ class AgentLoop:
         max_repeated_tool_calls: int = 3,
         turn_token_budget: int = 6000,
         hook_engine: HookEngine | None = None,
+        history_pipeline: HistoryProcessorPipeline | None = None,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
@@ -114,6 +116,7 @@ class AgentLoop:
         self.max_repeated_tool_calls = max_repeated_tool_calls
         self.turn_token_budget = turn_token_budget
         self.hook_engine = hook_engine
+        self.history_pipeline = history_pipeline
 
     def run(
         self,
@@ -270,7 +273,14 @@ class AgentLoop:
         messages: list[dict[str, Any]],
         stream_handler: Callable[..., str] | None = None,
     ) -> dict[str, Any]:
-        """Call the model provider with messages and available tools."""
+        """Call the model provider with messages and available tools.
+
+        If a history_pipeline is configured, messages are compressed
+        through it before being sent to the model.
+        """
+        # Apply history processing pipeline to compress context
+        if self.history_pipeline is not None:
+            messages = self.history_pipeline(messages)
 
         tools = self._tool_definitions()
 
