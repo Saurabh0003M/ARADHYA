@@ -1,6 +1,8 @@
 # Aradhya OI Roadmap
 
 For the full product thesis and category definition, see `docs/OI_VISION.md`.
+For current Parasite OS build status and migration gates, see
+`docs/PARASITE_OS_PROGRESS.md`.
 
 ## Vision
 

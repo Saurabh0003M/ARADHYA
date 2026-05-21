@@ -1,4 +1,4 @@
-"""ANALYZE stage — extract capabilities from a Hosts/<target> repo.
+"""SWALLOW stage — extract capabilities from a Hosts/<target> repo.
 
 This stage reads the target repo's structure and produces a DIGEST.md
 summarizing what can be extracted and integrated into ARADHYA.

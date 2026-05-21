@@ -25,12 +25,12 @@ PARASITE_DIR = ".parasite"
 CHECKPOINT_FILENAME = "checkpoint.json"
 
 STAGES = (
-    "DISCOVER",
-    "VERIFY",
+    "ENGULF",
     "ISOLATE",
-    "ANALYZE",
-    "INTEGRATE",
-    "VALIDATE",
+    "CHEW",
+    "SWALLOW",
+    "DIGEST",
+    "EXTRACT",
     "ABSORB",
 )
 
@@ -53,7 +53,7 @@ class Checkpoint:
 
     target: str
     source_url: str = ""
-    current_stage: str = "DISCOVER"
+    current_stage: str = "ENGULF"
     completed_stages: list[str] = field(default_factory=list)
     stage_results: dict[str, dict[str, Any]] = field(default_factory=dict)
     started_at: str = ""
@@ -86,7 +86,7 @@ def load_checkpoint(hosts_root: Path, target: str) -> Checkpoint | None:
     return Checkpoint(
         target=str(raw.get("target", target)),
         source_url=str(raw.get("source_url", "")),
-        current_stage=str(raw.get("current_stage", "DISCOVER")),
+        current_stage=str(raw.get("current_stage", "ENGULF")),
         completed_stages=list(raw.get("completed_stages", [])),
         stage_results=dict(raw.get("stage_results", {})),
         started_at=str(raw.get("started_at", "")),

@@ -178,6 +178,13 @@ def render_help() -> None:
     table.add_row("/apis inspect <name>", "Show one API entry and risk label")
     table.add_row("/apis recommend <need>", "Recommend APIs for a stated need")
 
+    # Parasite OS
+    table.add_row("[heading]-- Parasite OS --", "")
+    table.add_row("/parasite status", "Show host repo digestion status")
+    table.add_row("/parasite candidates", "Rank digested host repos for integration")
+    table.add_row("/parasite inspect <repo>", "Inspect one host integration candidate")
+    table.add_row("/parasite ledger", "Write the host integration ledger JSON")
+
     # Federation
     table.add_row("[heading]-- Federation --", "")
     table.add_row("/federation init", "Create local LAN federation identity")

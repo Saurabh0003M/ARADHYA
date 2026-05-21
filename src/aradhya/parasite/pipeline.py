@@ -1,7 +1,7 @@
 """Digestion pipeline — the core of Parasite OS.
 
 Orchestrates the 7-stage pipeline:
-    DISCOVER → VERIFY → ISOLATE → ANALYZE → INTEGRATE → VALIDATE → ABSORB
+    ENGULF → ISOLATE → CHEW → SWALLOW → DIGEST → EXTRACT → ABSORB
 
 Each stage writes a checkpoint so the pipeline can resume after any
 termination (crash, high traffic, user Ctrl+C).
@@ -17,7 +17,6 @@ from typing import Any
 from loguru import logger
 
 from src.aradhya.parasite.checkpoint import (
-    STAGES,
     Checkpoint,
     load_checkpoint,
     next_stage,
@@ -125,12 +124,12 @@ class DigestionPipeline:
     ) -> dict[str, Any]:
         """Dispatch to the correct stage handler."""
         handlers = {
-            "DISCOVER": self._stage_discover,
-            "VERIFY": self._stage_verify,
+            "ENGULF": self._stage_engulf,
             "ISOLATE": self._stage_isolate,
-            "ANALYZE": self._stage_analyze,
-            "INTEGRATE": self._stage_integrate,
-            "VALIDATE": self._stage_validate,
+            "CHEW": self._stage_chew,
+            "SWALLOW": self._stage_swallow,
+            "DIGEST": self._stage_digest,
+            "EXTRACT": self._stage_extract,
             "ABSORB": self._stage_absorb,
         }
         handler = handlers.get(stage)
@@ -138,7 +137,7 @@ class DigestionPipeline:
             raise ValueError(f"Unknown stage: {stage}")
         return handler(target, target_path, cp)
 
-    def _stage_discover(
+    def _stage_engulf(
         self,
         target: str,
         target_path: Path,
@@ -156,7 +155,7 @@ class DigestionPipeline:
             "source_url": cp.source_url,
         }
 
-    def _stage_verify(
+    def _stage_isolate(
         self,
         target: str,
         target_path: Path,
@@ -197,7 +196,7 @@ class DigestionPipeline:
             "trust_score": trust,
         }
 
-    def _stage_isolate(
+    def _stage_chew(
         self,
         target: str,
         target_path: Path,
@@ -215,7 +214,7 @@ class DigestionPipeline:
             "status": "already_isolated",
         }
 
-    def _stage_analyze(
+    def _stage_swallow(
         self,
         target: str,
         target_path: Path,
@@ -246,7 +245,7 @@ class DigestionPipeline:
 
         return analysis
 
-    def _stage_integrate(
+    def _stage_digest(
         self,
         target: str,
         target_path: Path,
@@ -260,13 +259,13 @@ class DigestionPipeline:
         """
         integration_plan: list[str] = []
 
-        # Check if we have a verified catalog from the ANALYZE stage
+        # Check if we have a verified catalog from the SWALLOW stage
         verified_catalog = target_path / ".parasite" / "verified_catalog.json"
         if verified_catalog.is_file():
             integration_plan.append(f"data_catalog:{verified_catalog}")
 
         # Check for MCP in analysis
-        analyze_result = cp.stage_results.get("ANALYZE", {})
+        analyze_result = cp.stage_results.get("SWALLOW", {})
         artifacts = analyze_result.get("artifacts", {})
         if artifacts.get("mcp_detected"):
             integration_plan.append("mcp_server:detected")
@@ -276,7 +275,7 @@ class DigestionPipeline:
             "artifacts_to_move": len(integration_plan),
         }
 
-    def _stage_validate(
+    def _stage_extract(
         self,
         target: str,
         target_path: Path,
@@ -329,7 +328,7 @@ class DigestionPipeline:
         absorbed: list[str] = []
 
         # Check validation passed
-        validate_result = cp.stage_results.get("VALIDATE", {})
+        validate_result = cp.stage_results.get("EXTRACT", {})
         validate_artifacts = validate_result.get("artifacts", {})
         if not validate_artifacts.get("passed", False):
             issues = validate_artifacts.get("issues", [])

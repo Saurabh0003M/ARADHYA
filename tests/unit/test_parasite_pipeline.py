@@ -23,6 +23,11 @@ from src.aradhya.parasite.analyzer import (
     analyze_public_apis_readme,
     generate_digest,
 )
+from src.aradhya.parasite.ledger import (
+    build_integration_ledger,
+    find_candidate,
+    write_integration_ledger,
+)
 
 
 @pytest.fixture
@@ -89,32 +94,32 @@ class TestCheckpoint:
     def test_stage_progression(self, hosts_root: Path):
         cp = Checkpoint(target="test")
 
-        assert next_stage(cp) == "DISCOVER"
+        assert next_stage(cp) == "ENGULF"
 
-        record_stage_start(cp, "DISCOVER")
-        assert cp.current_stage == "DISCOVER"
+        record_stage_start(cp, "ENGULF")
+        assert cp.current_stage == "ENGULF"
 
-        record_stage_complete(cp, "DISCOVER", artifacts={"exists": True})
-        assert "DISCOVER" in cp.completed_stages
-        assert next_stage(cp) == "VERIFY"
+        record_stage_complete(cp, "ENGULF", artifacts={"exists": True})
+        assert "ENGULF" in cp.completed_stages
+        assert next_stage(cp) == "ISOLATE"
 
     def test_stage_failure_and_resume(self, hosts_root: Path):
         cp = Checkpoint(target="test")
-        record_stage_complete(cp, "DISCOVER")
-        record_stage_complete(cp, "VERIFY")
+        record_stage_complete(cp, "ENGULF")
+        record_stage_complete(cp, "ISOLATE")
 
-        record_stage_start(cp, "ISOLATE")
-        record_stage_failure(cp, "ISOLATE", "FileNotFoundError: target missing")
+        record_stage_start(cp, "CHEW")
+        record_stage_failure(cp, "CHEW", "FileNotFoundError: target missing")
 
         assert cp.error == "FileNotFoundError: target missing"
-        assert "ISOLATE" not in cp.completed_stages
+        assert "CHEW" not in cp.completed_stages
 
         # Save and reload
         save_checkpoint(hosts_root, cp)
         loaded = load_checkpoint(hosts_root, "test")
         assert loaded is not None
         assert loaded.error == "FileNotFoundError: target missing"
-        assert next_stage(loaded) == "ISOLATE"
+        assert next_stage(loaded) == "CHEW"
 
     def test_all_stages_complete(self, hosts_root: Path):
         cp = Checkpoint(target="done")
@@ -194,10 +199,10 @@ class TestPipeline:
 
         cp = pipeline.digest("test-repo")
 
-        assert "DISCOVER" in cp.completed_stages
-        assert "VERIFY" in cp.completed_stages
+        assert "ENGULF" in cp.completed_stages
         assert "ISOLATE" in cp.completed_stages
-        assert "ANALYZE" in cp.completed_stages
+        assert "CHEW" in cp.completed_stages
+        assert "SWALLOW" in cp.completed_stages
 
         # Check DIGEST.md was generated
         digest = sample_target / ".parasite" / "DIGEST.md"
@@ -222,12 +227,75 @@ class TestPipeline:
 
         # Simulate a partial run
         cp = Checkpoint(target="test-repo")
-        record_stage_complete(cp, "DISCOVER", artifacts={"exists": True})
-        record_stage_complete(cp, "VERIFY", artifacts={"trust_score": "HIGH"})
+        record_stage_complete(cp, "ENGULF", artifacts={"exists": True})
+        record_stage_complete(cp, "ISOLATE", artifacts={"trust_score": "HIGH"})
         save_checkpoint(hosts_root, cp)
 
-        # Resume should pick up from ISOLATE
+        # Resume should pick up from CHEW
         resumed = pipeline.resume("test-repo")
         assert resumed is not None
-        assert "ISOLATE" in resumed.completed_stages
-        assert "ANALYZE" in resumed.completed_stages
+        assert "CHEW" in resumed.completed_stages
+        assert "SWALLOW" in resumed.completed_stages
+
+
+class TestIntegrationLedger:
+    def test_builds_candidate_from_completed_checkpoint(
+        self,
+        hosts_root: Path,
+        sample_target: Path,
+    ):
+        from src.aradhya.parasite.pipeline import DigestionPipeline
+
+        project_root = hosts_root.parent
+        pipeline = DigestionPipeline(project_root)
+        pipeline.digest("test-repo")
+
+        candidates = build_integration_ledger(project_root)
+        candidate = find_candidate(candidates, "test-repo")
+
+        assert candidate is not None
+        assert candidate.completed_stage_count == 7
+        assert candidate.status == "ready"
+        assert candidate.validate_passed is True
+        assert candidate.absorb_completed is True
+        assert candidate.digest_exists is True
+        assert candidate.score > 0
+
+    def test_writes_ledger_json(self, hosts_root: Path, sample_target: Path):
+        from src.aradhya.parasite.pipeline import DigestionPipeline
+
+        project_root = hosts_root.parent
+        pipeline = DigestionPipeline(project_root)
+        pipeline.digest("test-repo")
+
+        path = write_integration_ledger(project_root)
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+        assert path.is_file()
+        assert data["version"] == 1
+        assert data["candidate_count"] == 1
+        assert data["candidates"][0]["repo"] == "test-repo"
+
+    def test_includes_archived_completed_hosts(
+        self,
+        hosts_root: Path,
+        public_apis_target: Path,
+    ):
+        from src.aradhya.parasite.pipeline import DigestionPipeline
+
+        project_root = hosts_root.parent
+        pipeline = DigestionPipeline(project_root)
+        pipeline.digest("public-apis")
+
+        archived_root = hosts_root / ".archived"
+        archived_root.mkdir()
+        archived = archived_root / "public-apis-archive"
+        public_apis_target.rename(archived)
+
+        candidates = build_integration_ledger(project_root)
+        candidate = find_candidate(candidates, "public-apis")
+
+        assert candidate is not None
+        assert candidate.archived is True
+        assert candidate.absorbed_count == 1
+        assert candidate.priority == "live"

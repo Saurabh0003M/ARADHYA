@@ -2,6 +2,12 @@ from __future__ import annotations
 
 from src.aradhya import main
 from src.aradhya.runtime_profile import build_default_runtime_profile
+from src.aradhya.parasite.checkpoint import (
+    STAGES,
+    Checkpoint,
+    record_stage_complete,
+    save_checkpoint,
+)
 
 
 def test_dispatch_model_workers_command(monkeypatch, tmp_path):
@@ -56,3 +62,39 @@ def test_dispatch_apis_search_command(monkeypatch, tmp_path):
     assert handled is True
     assert "Open-Meteo" in captured["names"]
     assert captured["risks"]["Open-Meteo"] == "low: no auth + HTTPS"
+
+
+def test_dispatch_parasite_candidates_command(monkeypatch, tmp_path):
+    hosts = tmp_path / "Hosts"
+    target = hosts / "demo-agent"
+    target.mkdir(parents=True)
+    (target / ".parasite").mkdir()
+    (target / ".parasite" / "DIGEST.md").write_text("# Digest: demo-agent\n", encoding="utf-8")
+
+    cp = Checkpoint(target="demo-agent", trust_score="HIGH")
+    record_stage_complete(
+        cp,
+        "SWALLOW",
+        artifacts={
+            "type": "node",
+            "files_scanned": 12,
+            "dependencies": ["demo"],
+            "capabilities": [{"kind": "agent_framework", "detail": "agent"}],
+        },
+    )
+    for stage in STAGES:
+        if stage not in cp.completed_stages:
+            artifacts = {}
+            if stage == "EXTRACT":
+                artifacts = {"passed": True}
+            elif stage == "ABSORB":
+                artifacts = {"absorbed": [], "count": 0}
+            record_stage_complete(cp, stage, artifacts=artifacts)
+    save_checkpoint(hosts, cp)
+
+    monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+
+    handled = main._dispatch_command("/parasite candidates")
+
+    assert handled is True
+    assert (tmp_path / "data" / "processed" / "context" / "host_integration_ledger.json").is_file()

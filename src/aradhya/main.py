@@ -637,10 +637,113 @@ def _handle_setup() -> None:
         render_error(f"Setup wizard failed: {error}")
 
 
+def _render_parasite_candidates(candidates, ledger_path: Path) -> None:
+    """Render the host integration queue."""
+
+    from rich import box
+    from rich.table import Table
+
+    if not candidates:
+        render_info("No host integration candidates found.")
+        return
+
+    console.print("\n[bold]  Parasite OS - Integration Candidates[/]\n")
+    table = Table(
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("Repo", style="accent", no_wrap=True)
+    table.add_column("Priority", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("State", no_wrap=True)
+    table.add_column("Capabilities")
+    table.add_column("Recommended action")
+
+    for index, candidate in enumerate(candidates, start=1):
+        caps = ", ".join(candidate.capabilities[:4])
+        if len(candidate.capabilities) > 4:
+            caps += f", +{len(candidate.capabilities) - 4}"
+        if not caps:
+            caps = "[dim]none[/]"
+
+        repo = candidate.repo
+        if candidate.archived:
+            repo = f"{repo} [dim](archived)[/]"
+
+        table.add_row(
+            str(index),
+            repo,
+            candidate.priority,
+            str(candidate.score),
+            f"{candidate.completed_stage_count}/7 {candidate.status}",
+            caps,
+            candidate.recommended_action,
+        )
+
+    console.print(table)
+    console.print(f"  [dim]Ledger: {ledger_path}[/]")
+    console.print("  [dim]Use /parasite inspect <repo> for the exact benefits and next gate.[/]\n")
+
+
+def _render_parasite_inspect(candidate) -> None:
+    """Render one host integration candidate."""
+
+    from rich import box
+    from rich.table import Table
+
+    table = Table(
+        title=f"[heading]Parasite Candidate: {candidate.repo}[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Path", candidate.host_path)
+    table.add_row("Archived", str(candidate.archived))
+    table.add_row("Status", f"{candidate.status} ({candidate.completed_stage_count}/7)")
+    table.add_row("Priority", f"{candidate.priority} / score {candidate.score}")
+    table.add_row("Trust", candidate.trust_score or "unknown")
+    table.add_row("Type", candidate.project_type)
+    table.add_row("Files", str(candidate.files_scanned))
+    table.add_row("Dependencies", str(candidate.dependency_count))
+    table.add_row("Capabilities", ", ".join(candidate.capabilities) or "none")
+    table.add_row("Integration plan", ", ".join(candidate.integration_plan) or "none")
+    table.add_row("Absorbed", str(candidate.absorbed_count))
+    table.add_row("Digest", "yes" if candidate.digest_exists else "no")
+    table.add_row("Validate", "passed" if candidate.validate_passed else "not passed")
+    table.add_row("Absorb", "completed" if candidate.absorb_completed else "not completed")
+    if candidate.error:
+        table.add_row("Error", f"[error]{candidate.error}[/]")
+    table.add_row("Action", candidate.recommended_action)
+    table.add_row("Next gate", candidate.next_gate)
+    if candidate.description:
+        table.add_row("Description", candidate.description)
+
+    console.print(table)
+    if candidate.benefits:
+        console.print("  [accent]Benefits[/]")
+        for benefit in candidate.benefits:
+            console.print(f"  - {benefit}")
+    if candidate.absorbed_artifacts:
+        console.print("  [accent]Absorbed artifacts[/]")
+        for artifact in candidate.absorbed_artifacts:
+            console.print(f"  - {artifact}")
+    console.print()
+
 
 def _handle_parasite(*, command) -> None:
-    """Handle /parasite digest|resume|status commands."""
+    """Handle /parasite digestion and host-integration commands."""
     from src.aradhya.parasite.pipeline import DigestionPipeline
+    from src.aradhya.parasite.ledger import (
+        build_integration_ledger,
+        find_candidate,
+        write_integration_ledger,
+    )
 
     normalized = command.strip().lower()
     pipeline = DigestionPipeline(PROJECT_ROOT)
@@ -650,6 +753,37 @@ def _handle_parasite(*, command) -> None:
             if normalized.startswith(prefix):
                 return command.strip()[len(prefix):].strip()
         return ""
+
+    # /parasite candidates
+    if normalized in {"/parasite candidates", "parasite candidates"}:
+        candidates = build_integration_ledger(PROJECT_ROOT)
+        ledger_path = write_integration_ledger(PROJECT_ROOT, candidates)
+        _render_parasite_candidates(candidates, ledger_path)
+        return
+
+    # /parasite ledger
+    if normalized in {"/parasite ledger", "parasite ledger"}:
+        candidates = build_integration_ledger(PROJECT_ROOT)
+        ledger_path = write_integration_ledger(PROJECT_ROOT, candidates)
+        render_success(f"Host integration ledger written to: {ledger_path}")
+        render_info(f"Candidates indexed: {len(candidates)}")
+        return
+
+    # /parasite inspect <target>
+    if normalized.startswith("/parasite inspect") or normalized.startswith("parasite inspect"):
+        target = _ptail("/parasite inspect", "parasite inspect")
+        if not target:
+            render_error("Usage: /parasite inspect <target>")
+            return
+        candidates = build_integration_ledger(PROJECT_ROOT)
+        ledger_path = write_integration_ledger(PROJECT_ROOT, candidates)
+        candidate = find_candidate(candidates, target)
+        if candidate is None:
+            render_error(f"No host integration candidate found for '{target}'.")
+            render_info(f"Ledger refreshed at: {ledger_path}")
+            return
+        _render_parasite_inspect(candidate)
+        return
 
     # /parasite status
     if normalized in {"/parasite", "/parasite status", "parasite status", "parasite"}:
@@ -726,7 +860,9 @@ def _handle_parasite(*, command) -> None:
             render_success(f"Resumed and completed! {completed}/7 stages passed.")
         return
 
-    render_error("Usage: /parasite [status|digest <target>|resume <target>]")
+    render_error(
+        "Usage: /parasite [status|candidates|inspect <target>|ledger|digest <target>|resume <target>]"
+    )
 
 
 # ── Command dispatch ──────────────────────────────────────────────────
@@ -775,6 +911,9 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     (["/cache", "cache validate"], _handle_cache),
 
     # Parasite OS (longer prefix first)
+    (["/parasite candidates", "parasite candidates"], _handle_parasite),
+    (["/parasite inspect", "parasite inspect"], _handle_parasite),
+    (["/parasite ledger", "parasite ledger"], _handle_parasite),
     (["/parasite digest", "parasite digest"], _handle_parasite),
     (["/parasite resume", "parasite resume"], _handle_parasite),
     (["/parasite status", "parasite status", "/parasite", "parasite"], _handle_parasite),

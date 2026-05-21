@@ -88,6 +88,81 @@ def load_skills(
     return registry
 
 
+def load_skills_for_intent(
+    project_root: Path,
+    user_prompt: str,
+    *,
+    extra_dirs: list[Path] | None = None,
+    max_skills: int = 5,
+) -> SkillRegistry:
+    """Load all skills then return only those matching the user's intent.
+
+    Implements Codex-style dynamic plugin loading: instead of injecting every
+    skill into the system prompt (which wastes tokens and dilutes focus),
+    this function matches the first prompt against each skill's ``intents``
+    list and returns only the top-N most relevant skills.
+
+    Matching is keyword-based: for each skill, we count how many of its
+    intent phrases appear as substrings of the (lowercase) user prompt.
+    Skills with zero matches are excluded unless the registry has fewer
+    than ``max_skills`` candidates.
+
+    Args:
+        project_root: Root of the ARADHYA project.
+        user_prompt: The first message from the user in the session.
+        extra_dirs: Optional additional skill directories to scan.
+        max_skills: Maximum number of skills to inject into context.
+
+    Returns:
+        A ``SkillRegistry`` containing only the matched/selected skills.
+    """
+    full_registry = load_skills(project_root, extra_dirs)
+    all_skills = [s for s in full_registry.all_skills() if s.enabled]
+
+    if not user_prompt or len(all_skills) <= max_skills:
+        # No intent filtering needed — return only enabled skills
+        if len(all_skills) == len(full_registry.all_skills()):
+            return full_registry
+        filtered = SkillRegistry()
+        for skill in all_skills:
+            filtered.register(skill)
+        return filtered
+
+    prompt_lower = user_prompt.lower()
+
+    scored: list[tuple[int, "SkillDefinition"]] = []  # type: ignore[name-defined]  # noqa: F821
+    for skill in all_skills:
+        if not skill.enabled:
+            continue
+        score = 0
+        for intent in skill.intents:
+            if intent.lower() in prompt_lower:
+                score += 1
+        # Always include skills with no intents declared (general-purpose)
+        if not skill.intents:
+            score = 1
+        scored.append((score, skill))
+
+    # Sort by score descending, then by name for determinism
+    scored.sort(key=lambda x: (-x[0], x[1].name))
+
+    # Take top-N, always including at least skills that matched
+    selected = [skill for score, skill in scored if score > 0][:max_skills]
+    if not selected:
+        # Fallback: return the top max_skills by name if nothing matched
+        selected = [skill for _, skill in scored[:max_skills]]
+
+    filtered = SkillRegistry()
+    for skill in selected:
+        filtered.register(skill)
+        logger.info(
+            "Intent-based loader: injecting skill '{}' for prompt",
+            skill.name,
+        )
+
+    return filtered
+
+
 def _build_search_dirs(
     project_root: Path,
     extra_dirs: list[Path] | None,
