@@ -1,0 +1,9 @@
+{
+  "description": "ARADHYA hook configuration — add hooks here to gate tool calls",
+  "hooks": {
+    "PreToolUse": [],
+    "PostToolUse": [],
+    "Stop": [],
+    "SessionStart": []
+  }
+}

@@ -5,7 +5,8 @@ cycle:  prompt → model → tool calls → execute → feed results → loop un
 the model returns a final text response.
 
 The loop respects the confirmation gate for dangerous operations and supports
-streaming responses.
+streaming responses.  Hooks (PreToolUse / PostToolUse) provide event-driven
+gates that can intercept, modify, or block any tool call.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Callable, Protocol
+from typing import Any, Callable, Protocol, TYPE_CHECKING
 
 from loguru import logger
 
@@ -27,6 +28,9 @@ from src.aradhya.utils.json_extractor import (
     extract_json_from_llm_response,
 )
 from src.aradhya.model_provider import ModelChatResult, ModelResult, ModelToolCall
+
+if TYPE_CHECKING:
+    from src.aradhya.hooks.hook_engine import HookEngine
 
 
 class ThinkingLevel(Enum):
@@ -101,6 +105,7 @@ class AgentLoop:
         max_iterations: int = 10,
         max_repeated_tool_calls: int = 3,
         turn_token_budget: int = 6000,
+        hook_engine: HookEngine | None = None,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
@@ -108,6 +113,7 @@ class AgentLoop:
         self.max_iterations = max_iterations
         self.max_repeated_tool_calls = max_repeated_tool_calls
         self.turn_token_budget = turn_token_budget
+        self.hook_engine = hook_engine
 
     def run(
         self,
@@ -461,11 +467,14 @@ class AgentLoop:
     })
 
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
-        """Execute a tool call, applying the confirmation gate if needed.
+        """Execute a tool call, applying hooks and the confirmation gate.
 
         Safety contract
         ---------------
-        Dangerous tools are blocked in two layers:
+        Dangerous tools are blocked in three layers:
+
+        0. **Hook gate** — ``PreToolUse`` hooks can deny/block/modify the call
+           before any other check runs.
 
         1. If a ``confirmation_gate`` is set — the user is asked interactively.
            The tool runs only if they approve.
@@ -481,7 +490,41 @@ class AgentLoop:
         from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
         rules = get_approved_rules()
 
-        # ── Gap 1 fix + Gap A: allow-list + dry-run guard ─────────────
+        # ── Layer 0: Hook gate (PreToolUse) ───────────────────────────
+        if self.hook_engine is not None:
+            from src.aradhya.hooks.hook_engine import HookEvent, HookDecision  # noqa: PLC0415
+            hook_result = self.hook_engine.fire(
+                HookEvent.PRE_TOOL_USE,
+                {
+                    "tool_name": tool_call.name,
+                    "tool_input": tool_call.arguments,
+                },
+            )
+            if hook_result.decision in (HookDecision.DENY, HookDecision.BLOCK):
+                audit.log_security_event(
+                    "tool_blocked_by_hook",
+                    f"Hook denied tool '{tool_call.name}': {hook_result.system_message}",
+                    severity="warning",
+                )
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    name=tool_call.name,
+                    output=(
+                        f"[Tool '{tool_call.name}' was blocked by a PreToolUse hook. "
+                        f"{hook_result.system_message}]"
+                    ),
+                    success=False,
+                    requires_confirmation=False,
+                )
+            # Apply input modifications from hooks
+            if hook_result.updated_input is not None:
+                tool_call = ToolCall(
+                    name=tool_call.name,
+                    arguments=hook_result.updated_input,
+                    id=tool_call.id,
+                )
+
+        # ── Layer 1 fix + Gap A: allow-list + dry-run guard ───────────
         if tool_call.name in self.DANGEROUS_TOOLS:
             # Check allow-list first — skip prompt for pre-approved calls
             if rules.is_approved(tool_call.name, tool_call.arguments):
@@ -552,6 +595,27 @@ class AgentLoop:
                 success=result.success,
                 output_preview=result.output[:200] if result.output else "",
             )
+            # ── PostToolUse hook ──────────────────────────────────────────
+            if self.hook_engine is not None:
+                from src.aradhya.hooks.hook_engine import HookEvent as _HE  # noqa: PLC0415
+                post_event = _HE.POST_TOOL_USE if result.success else _HE.POST_TOOL_USE_FAILURE
+                post_result = self.hook_engine.fire(
+                    post_event,
+                    {
+                        "tool_name": tool_call.name,
+                        "tool_input": tool_call.arguments,
+                        "output": result.output,
+                        "success": result.success,
+                    },
+                )
+                if post_result.updated_output is not None:
+                    result = ToolResult(
+                        tool_call_id=result.tool_call_id,
+                        name=result.name,
+                        output=post_result.updated_output,
+                        success=result.success,
+                        requires_confirmation=result.requires_confirmation,
+                    )
             # ── Gap 2: auto-log tool failures to learnings engine ────────
             if not result.success:
                 self._auto_log_tool_failure(tool_call.name, result.output or "")
