@@ -1,0 +1,48 @@
+# Parasite OS Configuration
+# ─────────────────────────
+# This file makes Aradhya / Parasite OS fully portable.
+# It can live on any drive, inside a VirtualBox/VMware VM, or on an
+# external SSD. Set [paths].home to relocate all state.
+#
+# Override order:
+#   1. ARADHYA_HOME env var (highest priority)
+#   2. This file → [paths].home
+#   3. Default → ~/.aradhya
+
+[identity]
+name = "Aradhya"
+codename = "Parasite OS"
+version = "0.1.0"
+
+[paths]
+# Uncomment and set to relocate all state (sessions, audit, skills, etc.)
+# This is the path that will be used INSTEAD of ~/.aradhya
+#
+# For VM portability (VirtualBox / VMware):
+#   home = "/opt/aradhya"         # Linux guest
+#   home = "D:\\ParasiteOS"       # Windows guest, Samsung T9 SSD
+#
+# For local SSD migration:
+#   home = "D:\\ParasiteOS\\.aradhya"
+#
+# home = ""
+
+# Where digested host repos are archived after promotion
+# repos = "D:\\ParasiteOS\\Repos"
+
+[sandbox]
+# OS-level ACL enforcement (Codex-style)
+# When true, SandboxManager applies icacls rules before tool execution
+enabled = false
+
+# Paths the agent may read (globs supported in future)
+# read_roots = ["C:\\"]
+
+# Paths the agent may write
+# write_roots = []
+
+[digestion]
+# 7-stage lifecycle: ENGULF → ISOLATE → CHEW → SWALLOW → DIGEST → EXTRACT → ABSORB
+# auto_discover = false
+# max_concurrent = 2
+# quarantine_dir = "Hosts/.quarantine"

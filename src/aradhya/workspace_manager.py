@@ -31,7 +31,7 @@ from typing import Any
 
 from loguru import logger
 
-WORKTREE_BASE = Path.home() / ".aradhya" / "worktrees"
+from src.aradhya.paths import worktrees_dir
 
 
 class WorkspaceManager:
@@ -43,7 +43,7 @@ class WorkspaceManager:
     """
 
     def __init__(self, worktree_base: Path | None = None) -> None:
-        self._base = worktree_base or WORKTREE_BASE
+        self._base = worktree_base or worktrees_dir()
 
     # ------------------------------------------------------------------
     # Public API

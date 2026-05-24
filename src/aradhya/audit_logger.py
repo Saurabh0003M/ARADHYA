@@ -28,7 +28,9 @@ from typing import Any
 
 from loguru import logger
 
-DEFAULT_AUDIT_DIR = Path.home() / ".aradhya" / "audit"
+from src.aradhya.paths import audit_dir as _resolve_audit_dir
+
+DEFAULT_AUDIT_DIR: Path | None = None  # resolved lazily via paths.audit_dir()
 MAX_LOG_SIZE_MB = 10
 MAX_LOG_FILES = 5
 
@@ -51,7 +53,7 @@ class AuditLogger:
     """
 
     def __init__(self, audit_dir: Path | None = None) -> None:
-        self._dir = audit_dir or DEFAULT_AUDIT_DIR
+        self._dir = audit_dir or _resolve_audit_dir()
         self._dir.mkdir(parents=True, exist_ok=True)
         self._path = self._dir / "audit.jsonl"
         self._lock = threading.Lock()

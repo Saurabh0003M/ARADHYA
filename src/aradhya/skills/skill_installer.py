@@ -20,18 +20,27 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.aradhya.paths import skills_dir, aradhya_path
 from src.aradhya.tools.tool_registry import tool_definition
 
-SKILLS_DIR = Path.home() / ".aradhya" / "skills"
-TRUST_FILE = Path.home() / ".aradhya" / "trusted_skills.json"
+
+def _skills_dir() -> Path:
+    """Lazy accessor for the skills directory."""
+    return skills_dir()
+
+
+def _trust_file() -> Path:
+    """Lazy accessor for the trusted-skills manifest."""
+    return aradhya_path("trusted_skills.json")
 
 
 def _load_trusted() -> set[str]:
     """Load the set of trusted skill names."""
-    if not TRUST_FILE.is_file():
+    trust = _trust_file()
+    if not trust.is_file():
         return set()
     try:
-        data = json.loads(TRUST_FILE.read_text(encoding="utf-8"))
+        data = json.loads(trust.read_text(encoding="utf-8"))
         return set(data.get("trusted", []))
     except (json.JSONDecodeError, OSError):
         return set()
@@ -39,8 +48,9 @@ def _load_trusted() -> set[str]:
 
 def _save_trusted(names: set[str]) -> None:
     """Persist the trusted skill names."""
-    TRUST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TRUST_FILE.write_text(
+    trust = _trust_file()
+    trust.parent.mkdir(parents=True, exist_ok=True)
+    trust.write_text(
         json.dumps({"trusted": sorted(names)}, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -122,7 +132,7 @@ def install_skill_from_git(git_url: str, skill_name: str = "") -> str:
         return "Error: git_url is required."
 
     name = _sanitize_name(skill_name) if skill_name else _extract_name_from_url(git_url)
-    target_dir = SKILLS_DIR / name
+    target_dir = _skills_dir() / name
 
     if target_dir.exists():
         return (
@@ -130,7 +140,7 @@ def install_skill_from_git(git_url: str, skill_name: str = "") -> str:
             f"Use uninstall_skill('{name}') first to replace it."
         )
 
-    SKILLS_DIR.mkdir(parents=True, exist_ok=True)
+    _skills_dir().mkdir(parents=True, exist_ok=True)
 
     try:
         result = subprocess.run(
@@ -204,7 +214,7 @@ def install_skill_from_url(url: str, skill_name: str) -> str:
     import requests
 
     name = _sanitize_name(skill_name)
-    target_dir = SKILLS_DIR / name
+    target_dir = _skills_dir() / name
 
     if target_dir.exists():
         return f"Skill '{name}' already exists. Uninstall first."
@@ -280,7 +290,7 @@ def install_skill_from_code(
 ) -> str:
     """Create a skill from provided text or code."""
     name = _sanitize_name(skill_name)
-    target_dir = SKILLS_DIR / name
+    target_dir = _skills_dir() / name
 
     if target_dir.exists():
         return f"Skill '{name}' already exists. Uninstall first."
@@ -328,7 +338,7 @@ def install_skill_from_code(
 def uninstall_skill(skill_name: str) -> str:
     """Remove a skill directory from ~/.aradhya/skills/."""
     name = _sanitize_name(skill_name)
-    target_dir = SKILLS_DIR / name
+    target_dir = _skills_dir() / name
 
     if not target_dir.exists():
         return f"Skill '{name}' not found at {target_dir}."
@@ -366,7 +376,7 @@ def uninstall_skill(skill_name: str) -> str:
 def trust_skill(skill_name: str) -> str:
     """Add a skill to the trusted list."""
     name = _sanitize_name(skill_name)
-    target_dir = SKILLS_DIR / name
+    target_dir = _skills_dir() / name
 
     if not target_dir.exists():
         return f"Skill '{name}' not found."

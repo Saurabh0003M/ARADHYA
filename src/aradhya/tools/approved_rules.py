@@ -30,7 +30,9 @@ from typing import Any
 
 from loguru import logger
 
-DEFAULT_RULES_FILE = Path.home() / ".aradhya" / "approved_rules.jsonl"
+from src.aradhya.paths import aradhya_path as _aradhya_path
+
+DEFAULT_RULES_FILE: Path | None = None  # resolved lazily via aradhya_path()
 
 
 def _args_hash(tool_name: str, arguments: dict[str, Any]) -> str:
@@ -51,7 +53,7 @@ class ApprovedRules:
     """
 
     def __init__(self, rules_file: Path | None = None) -> None:
-        self._file = rules_file or DEFAULT_RULES_FILE
+        self._file = rules_file or _aradhya_path("approved_rules.jsonl")
         self._lock = threading.Lock()
 
         # session_cache: set of (tool_name, args_hash) approved this session

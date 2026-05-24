@@ -19,7 +19,9 @@ from typing import Callable
 
 from loguru import logger
 
-DEFAULT_SCHEDULES_FILE = Path.home() / ".aradhya" / "schedules.json"
+from src.aradhya.paths import aradhya_path as _aradhya_path
+
+DEFAULT_SCHEDULES_FILE: Path | None = None  # resolved lazily via aradhya_path()
 
 
 @dataclass
@@ -72,7 +74,7 @@ class TaskScheduler:
         on_message: Callable[[str], None] | None = None,
         on_agent_think: Callable[[str], None] | None = None,
     ) -> None:
-        self.schedules_file = schedules_file or DEFAULT_SCHEDULES_FILE
+        self.schedules_file = schedules_file or _aradhya_path("schedules.json")
         self.on_message = on_message
         self.on_agent_think = on_agent_think
         self._tasks: dict[str, ScheduledTask] = {}

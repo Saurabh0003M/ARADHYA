@@ -26,7 +26,9 @@ from typing import Any, Generator
 
 from loguru import logger
 
-DEFAULT_STATE_DIR = Path.home() / ".aradhya"
+from src.aradhya.paths import state_dir as _resolve_state_dir
+
+DEFAULT_STATE_DIR: Path | None = None  # resolved lazily via paths.state_dir()
 DB_FILENAME = "state.sqlite"
 SCHEMA_VERSION = 1
 
@@ -90,7 +92,7 @@ class StateStore:
     """
 
     def __init__(self, state_dir: Path | None = None) -> None:
-        self._dir = state_dir or DEFAULT_STATE_DIR
+        self._dir = state_dir or _resolve_state_dir()
         self._dir.mkdir(parents=True, exist_ok=True)
         self._db_path = self._dir / DB_FILENAME
         self._local = threading.local()

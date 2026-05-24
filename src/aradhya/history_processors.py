@@ -240,7 +240,7 @@ class ConsecutiveTimeoutTracker:
         self._consecutive_count = 0
         for msg in messages:
             content = msg.get("content", "")
-            if "timeout" in content.lower() and (
+            if ("timeout" in content.lower() or "timed out" in content.lower()) and (
                 msg.get("role") == "tool"
                 or msg.get("message_type") == "tool_result"
             ):

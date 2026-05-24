@@ -10,7 +10,7 @@ Usage
     mgr = SandboxManager(project_root=Path("F:/ARADHYA"))
     mgr.setup_sandbox(
         read_roots=[Path("C:/")],
-        write_roots=[Path("F:/ARADHYA"), Path.home() / ".aradhya"],
+        write_roots=[Path("F:/ARADHYA"), aradhya_home()],
     )
     result = mgr.run_in_sandbox("Get-ChildItem -Force", workdir=Path("F:/ARADHYA"))
 """

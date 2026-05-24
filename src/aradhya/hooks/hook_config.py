@@ -41,9 +41,10 @@ from src.aradhya.hooks.hook_engine import (
     HookEvent,
     HookType,
 )
+from src.aradhya.paths import hooks_dir as _resolve_hooks_dir
 
-# Default user hooks directory
-_USER_HOOKS_DIR = Path.home() / ".aradhya" / "hooks"
+# Default user hooks directory — resolved lazily via paths.hooks_dir()
+_USER_HOOKS_DIR: Path | None = None
 
 
 def load_hooks_from_file(hooks_file: Path) -> list[HookDefinition]:
@@ -121,7 +122,7 @@ def load_hooks(
     2. Project-level: ``<project>/.aradhya/hooks/hooks.json``
     """
     engine = HookEngine()
-    hooks_dir = user_hooks_dir or _USER_HOOKS_DIR
+    hooks_dir = user_hooks_dir or _resolve_hooks_dir()
 
     # 1. User-level hooks
     user_file = hooks_dir / "hooks.json"

@@ -110,6 +110,7 @@ class AgentLoop:
         hook_engine: HookEngine | None = None,
         history_pipeline: HistoryProcessorPipeline | None = None,
         permission_engine: PermissionEngine | None = None,
+        max_consecutive_timeouts: int = 5,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
@@ -120,6 +121,8 @@ class AgentLoop:
         self.hook_engine = hook_engine
         self.history_pipeline = history_pipeline
         self.permission_engine = permission_engine
+        self.max_consecutive_timeouts = max_consecutive_timeouts
+        self._consecutive_timeouts = 0  # reset per run()
 
     def run(
         self,
@@ -200,6 +203,23 @@ class AgentLoop:
                     result = self._execute_with_gate(tool_call)
 
                 turn.tool_results.append(result)
+
+                # ── Consecutive timeout kill switch (SWE-agent P1) ────
+                if result.output and ("timeout" in result.output.lower() or "timed out" in result.output.lower()):
+                    self._consecutive_timeouts += 1
+                    if self._consecutive_timeouts >= self.max_consecutive_timeouts:
+                        turn.final_response = (
+                            f"[Agent loop killed after {self._consecutive_timeouts} "
+                            f"consecutive command timeouts. The current approach is "
+                            f"stuck. Try a completely different strategy.]"
+                        )
+                        logger.error(
+                            "Kill switch: {} consecutive timeouts, aborting turn",
+                            self._consecutive_timeouts,
+                        )
+                        return turn
+                else:
+                    self._consecutive_timeouts = 0
 
                 # ── Per-turn token budget guard (Gap 3) ──────────────────
                 # Count tokens in this tool result and bail if we've

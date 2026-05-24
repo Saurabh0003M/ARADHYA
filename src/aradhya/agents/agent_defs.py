@@ -26,6 +26,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from src.aradhya.paths import agents_dir
 from typing import Any
 
 from loguru import logger
@@ -163,7 +165,7 @@ def load_agents(
     the same name.
     """
     registry = AgentRegistry()
-    user_dir = user_agents_dir or (Path.home() / ".aradhya" / "agents")
+    user_dir = user_agents_dir or agents_dir()
 
     # 1. User-level agents
     if user_dir.is_dir():

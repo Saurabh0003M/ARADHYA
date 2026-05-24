@@ -20,8 +20,9 @@ from typing import Any
 from loguru import logger
 
 from src.aradhya.state_store import StateStore
+from src.aradhya.paths import sessions_dir as _resolve_sessions_dir
 
-DEFAULT_SESSIONS_DIR = Path.home() / ".aradhya" / "sessions"
+DEFAULT_SESSIONS_DIR: Path | None = None  # resolved lazily via paths.sessions_dir()
 MAX_FULL_MESSAGES = 40
 COMPACTION_TRIGGER = 60
 
@@ -110,7 +111,7 @@ class SessionManager:
         sessions_dir: Path | None = None,
         state_store: StateStore | None = None,
     ) -> None:
-        self.sessions_dir = sessions_dir or DEFAULT_SESSIONS_DIR
+        self.sessions_dir = sessions_dir or _resolve_sessions_dir()
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self._active_session: Session | None = None
 

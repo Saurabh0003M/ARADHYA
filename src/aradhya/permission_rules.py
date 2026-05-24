@@ -27,6 +27,8 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from src.aradhya.paths import aradhya_home
 from typing import Any
 
 from loguru import logger
@@ -253,7 +255,7 @@ def load_permissions(
           ]
         }
     """
-    config_dir = user_config_dir or (Path.home() / ".aradhya")
+    config_dir = user_config_dir or aradhya_home()
     allow_rules: list[PermissionRule] = []
     deny_rules: list[PermissionRule] = []
     conditional_blocks: list[ConditionalBlockRule] = []

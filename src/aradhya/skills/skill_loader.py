@@ -19,6 +19,7 @@ from typing import Any
 
 from loguru import logger
 
+from src.aradhya.paths import skills_dir
 from src.aradhya.skills.skill_models import (
     SkillDefinition,
     SkillRegistry,
@@ -171,7 +172,7 @@ def _build_search_dirs(
 
     dirs: list[Path] = [
         project_root / "core" / "skills",
-        Path.home() / ".aradhya" / "skills",
+        skills_dir(),
     ]
     if extra_dirs:
         dirs.extend(extra_dirs)

@@ -6,11 +6,8 @@ user's persistent notes.
 
 from __future__ import annotations
 
-from pathlib import Path
-
+from src.aradhya.paths import notes_dir as _resolve_notes_dir
 from src.aradhya.tools.tool_registry import tool_definition
-
-NOTES_DIR = Path.home() / ".aradhya" / "notes"
 
 
 @tool_definition(
@@ -33,9 +30,9 @@ NOTES_DIR = Path.home() / ".aradhya" / "notes"
 )
 def save_note(title: str, content: str) -> str:
     """Save a note to the user's notes directory."""
-    NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    nd = _resolve_notes_dir()
     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in title)
-    note_path = NOTES_DIR / f"{safe_name.strip()}.md"
+    note_path = nd / f"{safe_name.strip()}.md"
     try:
         note_path.write_text(
             f"# {title}\n\n{content}\n",
@@ -62,18 +59,19 @@ def save_note(title: str, content: str) -> str:
 )
 def recall_note(title: str) -> str:
     """Recall a note from the user's notes directory."""
-    if not NOTES_DIR.is_dir():
+    nd = _resolve_notes_dir()
+    if not nd.is_dir():
         return "No notes directory found."
 
     safe_name = "".join(c if c.isalnum() or c in "-_ " else "_" for c in title)
-    note_path = NOTES_DIR / f"{safe_name.strip()}.md"
+    note_path = nd / f"{safe_name.strip()}.md"
 
     if note_path.is_file():
         return note_path.read_text(encoding="utf-8")
 
     # Fuzzy match
     matches = [
-        p for p in NOTES_DIR.glob("*.md")
+        p for p in nd.glob("*.md")
         if title.lower() in p.stem.lower()
     ]
     if matches:
@@ -89,10 +87,11 @@ def recall_note(title: str) -> str:
 )
 def list_notes() -> str:
     """List all notes in the user's notes directory."""
-    if not NOTES_DIR.is_dir():
+    nd = _resolve_notes_dir()
+    if not nd.is_dir():
         return "No notes directory found."
 
-    notes = sorted(NOTES_DIR.glob("*.md"))
+    notes = sorted(nd.glob("*.md"))
     if not notes:
         return "No notes saved yet."
 
