@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.aradhya.permission_rules import (
+    ConditionalBlockRule,
     PermissionDecision,
     PermissionEngine,
     PermissionRule,
@@ -73,6 +74,94 @@ class TestPermissionRuleMatching:
         rule = PermissionRule(tool_name="run_command", arg_pattern="rm -rf *")
         assert rule.matches("run_command", {"command": "rm -rf /tmp/junk"})
         assert not rule.matches("run_command", {"command": "rm file.txt"})
+
+
+class TestConditionalBlockRule:
+    def test_blocks_when_pattern_does_not_match(self) -> None:
+        rule = ConditionalBlockRule(
+            tool_name="run_command",
+            safe_pattern=r"radare2.*\s+-c\s+",
+            raw="radare2 requires -c flag",
+        )
+        # radare2 without -c should be blocked
+        assert rule.matches("run_command", {"command": "radare2 binary"})
+
+    def test_allows_when_pattern_matches(self) -> None:
+        rule = ConditionalBlockRule(
+            tool_name="run_command",
+            safe_pattern=r"radare2.*\s+-c\s+",
+            raw="radare2 requires -c flag",
+        )
+        # radare2 with -c should pass
+        assert not rule.matches("run_command", {"command": "radare2 -c 'pd 10' binary"})
+
+    def test_does_not_match_other_tools(self) -> None:
+        rule = ConditionalBlockRule(
+            tool_name="run_command",
+            safe_pattern=r"--safe",
+            raw="test",
+        )
+        assert not rule.matches("write_file", {"path": "test.py"})
+
+    def test_wildcard_tool_matches_all(self) -> None:
+        rule = ConditionalBlockRule(
+            tool_name="*",
+            safe_pattern=r"--confirm",
+            raw="all tools need --confirm",
+        )
+        # Without --confirm, should block
+        assert rule.matches("run_command", {"command": "rm file"})
+        # With --confirm, should allow
+        assert not rule.matches("run_command", {"command": "rm file --confirm"})
+
+
+class TestPermissionEngineWithConditionalBlocks:
+    def test_conditional_block_denies(self) -> None:
+        engine = PermissionEngine(
+            conditional_blocks=[
+                ConditionalBlockRule(
+                    tool_name="run_command",
+                    safe_pattern=r"python\s+-c\s+",
+                    raw="python needs -c flag",
+                ),
+            ],
+        )
+        # python without -c should be blocked
+        decision = engine.check("run_command", {"command": "python"})
+        assert decision.allowed is False
+        assert "conditional" in decision.reason.lower()
+
+    def test_conditional_block_allows_safe(self) -> None:
+        engine = PermissionEngine(
+            conditional_blocks=[
+                ConditionalBlockRule(
+                    tool_name="run_command",
+                    safe_pattern=r"python\s+-c\s+",
+                    raw="python needs -c flag",
+                ),
+            ],
+        )
+        # python with -c should pass through
+        decision = engine.check("run_command", {"command": "python -c 'print(1)'"})
+        assert decision.allowed is True
+
+    def test_deny_still_overrides_conditional(self) -> None:
+        engine = PermissionEngine(
+            deny_rules=[
+                PermissionRule(tool_name="run_command", arg_pattern="rm *"),
+            ],
+            conditional_blocks=[
+                ConditionalBlockRule(
+                    tool_name="run_command",
+                    safe_pattern=r"--safe",
+                    raw="needs --safe",
+                ),
+            ],
+        )
+        # deny rule fires before conditional block
+        decision = engine.check("run_command", {"command": "rm file --safe"})
+        assert decision.allowed is False
+        assert "deny rule" in decision.reason.lower()
 
 
 class TestPermissionEngine:
@@ -184,3 +273,21 @@ class TestLoadPermissions:
         (config_dir / "permissions.json").write_text("BAD JSON", encoding="utf-8")
         engine = load_permissions(user_config_dir=config_dir)
         assert len(engine.allow_rules) == 0
+
+    def test_load_block_unless_regex(self, tmp_path: Path) -> None:
+        config_dir = tmp_path / ".aradhya"
+        config_dir.mkdir()
+        (config_dir / "permissions.json").write_text(
+            json.dumps({
+                "allow": [],
+                "deny": [],
+                "block_unless_regex": [
+                    {"tool": "run_command", "safe_pattern": r"python\s+-c\s+"},
+                ],
+            }),
+            encoding="utf-8",
+        )
+        engine = load_permissions(user_config_dir=config_dir)
+        assert len(engine.conditional_blocks) == 1
+        assert engine.conditional_blocks[0].tool_name == "run_command"
+

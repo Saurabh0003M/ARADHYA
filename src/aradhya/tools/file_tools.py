@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.aradhya.tools.tool_registry import tool_definition
+from src.aradhya.preflight_checks import preflight_check
 
 
 @tool_definition(
@@ -153,12 +154,25 @@ def search_files(path: str, pattern: str, max_results: int = 20) -> str:
     requires_confirmation=True,
 )
 def write_file(path: str, content: str) -> str:
-    """Write content to a file."""
+    """Write content to a file, with pre-flight syntax validation."""
     target = Path(path).resolve()
+
+    # Pre-flight check: catch syntax errors before writing
+    check = preflight_check(str(target), content)
+    if not check.ok:
+        return (
+            f"⚠️ Pre-flight check FAILED for {target.name}. "
+            f"File was NOT written.\n\n{check.summary}\n\n"
+            "Please fix the errors and try again."
+        )
+
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        return f"Successfully wrote {len(content)} characters to {target}"
+        result = f"Successfully wrote {len(content)} characters to {target}"
+        if check.warnings:
+            result += f"\n\n{check.summary}"
+        return result
     except Exception as error:
         return f"Error writing file: {error}"
 

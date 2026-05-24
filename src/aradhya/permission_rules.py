@@ -65,6 +65,35 @@ class PermissionRule:
         return fnmatch.fnmatch(arg_str, self.arg_pattern)
 
 
+@dataclass
+class ConditionalBlockRule:
+    """Block a tool UNLESS its arguments match a safe regex pattern.
+
+    Inspired by SWE-agent's ``block_unless_regex``.
+
+    Example: block ``run_command(radare2 ...)`` unless it includes ``-c``::
+
+        ConditionalBlockRule(
+            tool_name="run_command",
+            safe_pattern=r"radare2.*\\s+-c\\s+",
+            raw="run_command:radare2 requires -c flag",
+        )
+    """
+    tool_name: str
+    safe_pattern: str  # regex that MUST match for the call to proceed
+    raw: str = ""
+
+    def matches(self, tool_name: str, arguments: dict[str, Any]) -> bool:
+        """Return True if the tool matches AND args do NOT satisfy the safe pattern."""
+        if self.tool_name != tool_name and self.tool_name != "*":
+            return False
+        arg_str = _arguments_to_match_string(tool_name, arguments)
+        # If the safe pattern matches, the call is OK (not blocked)
+        if re.search(self.safe_pattern, arg_str):
+            return False
+        return True  # blocked — args don't match safe pattern
+
+
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
@@ -127,10 +156,12 @@ class PermissionEngine:
         self,
         allow_rules: list[PermissionRule] | None = None,
         deny_rules: list[PermissionRule] | None = None,
+        conditional_blocks: list[ConditionalBlockRule] | None = None,
         default_requires_confirmation: bool = True,
     ) -> None:
         self.allow_rules = allow_rules or []
         self.deny_rules = deny_rules or []
+        self.conditional_blocks = conditional_blocks or []
         self.default_requires_confirmation = default_requires_confirmation
 
     def check(
@@ -155,6 +186,23 @@ class PermissionEngine:
                     allowed=False,
                     reason=f"Blocked by deny rule: {rule.raw}",
                     matched_rule=rule.raw,
+                )
+
+        # 1.5. Conditional blocks (block unless safe pattern matches)
+        for cblock in self.conditional_blocks:
+            if cblock.matches(tool_name, arguments):
+                logger.debug(
+                    "Permission DENIED: tool={} failed conditional block '{}'",
+                    tool_name,
+                    cblock.raw,
+                )
+                return PermissionDecision(
+                    allowed=False,
+                    reason=(
+                        f"Blocked by conditional rule: {cblock.raw}. "
+                        f"Arguments must match pattern: {cblock.safe_pattern}"
+                    ),
+                    matched_rule=cblock.raw,
                 )
 
         # 2. Allow rules
@@ -208,9 +256,10 @@ def load_permissions(
     config_dir = user_config_dir or (Path.home() / ".aradhya")
     allow_rules: list[PermissionRule] = []
     deny_rules: list[PermissionRule] = []
+    conditional_blocks: list[ConditionalBlockRule] = []
 
     # Load from user-level
-    _load_from_file(config_dir / "permissions.json", allow_rules, deny_rules)
+    _load_from_file(config_dir / "permissions.json", allow_rules, deny_rules, conditional_blocks)
 
     # Load from project-level (additive)
     if project_root is not None:
@@ -218,18 +267,21 @@ def load_permissions(
             project_root / ".aradhya" / "permissions.json",
             allow_rules,
             deny_rules,
+            conditional_blocks,
         )
 
     engine = PermissionEngine(
         allow_rules=allow_rules,
         deny_rules=deny_rules,
+        conditional_blocks=conditional_blocks,
     )
 
-    if allow_rules or deny_rules:
+    if allow_rules or deny_rules or conditional_blocks:
         logger.info(
-            "Permission engine loaded: {} allow rules, {} deny rules",
+            "Permission engine loaded: {} allow, {} deny, {} conditional block rules",
             len(allow_rules),
             len(deny_rules),
+            len(conditional_blocks),
         )
 
     return engine
@@ -239,6 +291,7 @@ def _load_from_file(
     filepath: Path,
     allow_rules: list[PermissionRule],
     deny_rules: list[PermissionRule],
+    conditional_blocks: list[ConditionalBlockRule],
 ) -> None:
     """Load rules from a single permissions.json file."""
     if not filepath.is_file():
@@ -259,3 +312,12 @@ def _load_from_file(
         rule = parse_rule(raw)
         if rule:
             deny_rules.append(rule)
+
+    # Load conditional blocks: {"tool": "name", "safe_pattern": "regex"}
+    for entry in data.get("block_unless_regex", []):
+        if isinstance(entry, dict) and "tool" in entry and "safe_pattern" in entry:
+            conditional_blocks.append(ConditionalBlockRule(
+                tool_name=entry["tool"],
+                safe_pattern=entry["safe_pattern"],
+                raw=f"{entry['tool']}:block_unless({entry['safe_pattern']})",
+            ))

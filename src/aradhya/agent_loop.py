@@ -32,6 +32,7 @@ from src.aradhya.model_provider import ModelChatResult, ModelResult, ModelToolCa
 if TYPE_CHECKING:
     from src.aradhya.hooks.hook_engine import HookEngine
     from src.aradhya.history_processors import HistoryProcessorPipeline
+    from src.aradhya.permission_rules import PermissionEngine
 
 
 class ThinkingLevel(Enum):
@@ -108,6 +109,7 @@ class AgentLoop:
         turn_token_budget: int = 6000,
         hook_engine: HookEngine | None = None,
         history_pipeline: HistoryProcessorPipeline | None = None,
+        permission_engine: PermissionEngine | None = None,
     ) -> None:
         self.model_provider = model_provider
         self.tool_executor = tool_executor
@@ -117,6 +119,7 @@ class AgentLoop:
         self.turn_token_budget = turn_token_budget
         self.hook_engine = hook_engine
         self.history_pipeline = history_pipeline
+        self.permission_engine = permission_engine
 
     def run(
         self,
@@ -284,19 +287,13 @@ class AgentLoop:
 
         tools = self._tool_definitions()
 
-        if stream_handler and hasattr(self.model_provider, "chat_stream"):
-            system_prompt = ""
-            if tools:
-                system_prompt = (
-                    "Available tools are provided as JSON Schema definitions below. "
-                    "You MUST wrap any internal thoughts or reasoning in <thought> tags before calling a tool. "
-                    "To call a tool, reply with JSON like "
-                    '{"name":"tool_name","arguments":{...}} outside the thought tags.\n'
-                    + json.dumps(tools, indent=2)
-                )
+        if stream_handler and hasattr(self.model_provider, "chat_stream") and not tools:
+            # Streaming is only safe when NO tools are registered.
+            # When tools exist, streaming returns tool_calls: [] which
+            # breaks the agent loop.  Fall through to structured chat.
             stream = self.model_provider.chat_stream(
                 messages=messages,
-                system_prompt=system_prompt,
+                system_prompt="",
             )
             # Pass style="dim" to stream handler for thoughts
             response_text = stream_handler(stream, "dim")
@@ -471,9 +468,11 @@ class AgentLoop:
         "browser_click",
         "browser_type",
         "browser_submit",
+        "browser_execute_js",
         "open_path",
         "open_url",
         "clipboard_write",
+        "schedule_task",
     })
 
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
@@ -532,6 +531,28 @@ class AgentLoop:
                     name=tool_call.name,
                     arguments=hook_result.updated_input,
                     id=tool_call.id,
+                )
+
+        # ── Layer 0.5: PermissionEngine (deny/allow/conditional rules) ──
+        if self.permission_engine is not None:
+            decision = self.permission_engine.check(
+                tool_call.name, tool_call.arguments
+            )
+            if not decision.allowed:
+                audit.log_security_event(
+                    "tool_blocked_by_permission",
+                    f"Permission engine denied tool '{tool_call.name}': {decision.reason}",
+                    severity="warning",
+                )
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    name=tool_call.name,
+                    output=(
+                        f"[Tool '{tool_call.name}' was blocked by permission policy. "
+                        f"{decision.reason}]"
+                    ),
+                    success=False,
+                    requires_confirmation=False,
                 )
 
         # ── Layer 1 fix + Gap A: allow-list + dry-run guard ───────────

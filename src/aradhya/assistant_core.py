@@ -52,6 +52,7 @@ from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
 from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
 from src.aradhya.permission_rules import PermissionEngine, load_permissions
 from src.aradhya.history_processors import default_pipeline
+from src.aradhya.confirmation_gates import CliConfirmationGate
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 40
@@ -393,34 +394,18 @@ class AradhyaAssistant:
         system_prompt = self._build_agent_system_prompt(session, turn_ctx)
         registry = self._build_tool_registry_from_policy(policy)
 
-        # ── Gap A: CLI confirmation gate with allow-list (Codex prefix_rule) ──
-        def _cli_gate(tool_name: str, arguments: dict) -> tuple[bool, bool]:
-            from src.aradhya.cli_ui import render_warning, prompt_input  # noqa: PLC0415
-            args_preview = ", ".join(
-                f"{k}={str(v)[:60]}" for k, v in list(arguments.items())[:3]
-            )
-            render_warning(
-                f"Tool [bold]{tool_name}[/bold] wants to run"
-                + (f": {args_preview}" if args_preview else "")
-            )
-            try:
-                answer = prompt_input("  Approve? [y]es / [a]lways / [n]o: ").strip().lower()
-            except (EOFError, KeyboardInterrupt):
-                return (False, False)
-            if answer in ("y", "yes"):
-                return (True, False)
-            if answer in ("a", "always"):
-                return (True, True)
-            return (False, False)
+        # ── Gap A: CLI confirmation gate (now a reusable typed class) ──
+        gate = CliConfirmationGate()
 
         loop = AgentLoop(
             self.model_provider,
             tool_executor=registry,
-            confirmation_gate=_cli_gate,
+            confirmation_gate=gate,
             max_iterations=10,
             max_repeated_tool_calls=3,
             hook_engine=self.hook_engine,
             history_pipeline=default_pipeline(),
+            permission_engine=self.permission_engine,
         )
 
         # Gap E: set active network policy so web_fetch/web_search can check it
