@@ -204,7 +204,8 @@ class AradhyaAssistant:
         return AssistantResponse(spoken_response="Aradhya is going idle.")
 
     def handle_transcript(
-        self, transcript: str, stream_handler: Callable[..., str] | None = None
+        self, transcript: str, stream_handler: Callable[..., str] | None = None,
+        session_name: str | None = None,
     ) -> AssistantResponse:
         logger.info("Handling transcript: {}", transcript)
         if not self.state.is_awake:
@@ -235,7 +236,7 @@ class AradhyaAssistant:
             self.state.pending_plan = None
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
-            result = self._execute_plan(plan, stream_handler=stream_handler)
+            result = self._execute_plan(plan, stream_handler=stream_handler, session_name=session_name)
             logger.info("Executed confirmed plan {} with success={}", plan.kind, result.success)
             return AssistantResponse(
                 spoken_response=result.message,
@@ -281,7 +282,7 @@ class AradhyaAssistant:
                 index_snapshot=snapshot,
             )
 
-        result = self._execute_plan(plan, stream_handler=stream_handler)
+        result = self._execute_plan(plan, stream_handler=stream_handler, session_name=session_name)
         logger.info("Executed immediate plan {} with success={}", plan.kind, result.success)
         return AssistantResponse(
             spoken_response=result.message,
