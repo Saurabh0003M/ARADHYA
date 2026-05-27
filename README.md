@@ -1,59 +1,49 @@
-# Aradhya
+<div align="center">
+  <h1>✨ Aradhya</h1>
+  <p><strong>A Local-First Operating Intelligence (OI) Assistant for Windows</strong></p>
 
-Aradhya is a local-first Operating Intelligence assistant for Windows. It runs
-on the user's machine, prefers Ollama for local inference, keeps private data
-local by default, and routes device-affecting actions through explicit
-confirmation and runtime policy.
+  [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+  [![Windows](https://img.shields.io/badge/OS-Windows_10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/en-us/windows/)
+  [![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?logo=ollama&logoColor=black)](https://ollama.com/)
+</div>
 
-The project is not just a chatbot wrapper. Aradhya is becoming a Windows OI
-layer: intent routing, local context, model orchestration, skills, tool use,
-audit trails, sessions, hooks, permissions, and safe execution.
+<br />
 
-## Current Capabilities
+> **Aradhya** is not just another chatbot wrapper. It is evolving into a comprehensive **Windows Operating Intelligence (OI) layer**—featuring intent routing, local context, model orchestration, dynamic skills, safe tool execution, and session management.
 
-- Rich terminal assistant with slash commands and natural language requests.
-- Ollama-first local model provider with health checks and direct model prompts.
-- Optional OpenRouter worker support behind a cloud privacy assessment gate.
-- Deterministic planner for common local tasks plus model-driven agent fallback.
-- Tool registry for files, shell, web, browser, vision, power, sessions,
-  scheduler, skill installation, and learnings.
-- Confirmation gate for risky tools and dry-run behavior when live execution is
-  disabled.
-- Pattern-based permission rules with deny rules taking priority over allow
-  rules.
-- JSONL audit logging for turns, commands, security events, and tool calls.
-- Session storage, history compression, and SQLite-backed state primitives.
-- Local directory indexing and cache validation for path-aware responses.
-- Voice inbox processing, manual transcripts, optional local transcription,
-  live voice activation, and wake-word support.
-- Local `SKILL.md` loading from bundled and user/project skill locations.
-- User/project hook configuration for session and tool lifecycle events.
-- Agent definition loading from Markdown files with YAML-style frontmatter.
-- Public API catalog search, inspection, category browsing, and recommendation.
-- Topology and LAN federation foundation commands.
-- Parasite OS host-repo digestion, candidate ranking, inspection, and ledger
-  generation.
-- Portable path resolution through `ARADHYA_HOME`, `parasite.toml`, and
-  `~/.aradhya` defaults.
+---
 
-Browser operation, screen guidance, full LAN transport, and drive migration are
-still planned or partial. They are not complete product surfaces yet.
+## 🚀 Key Features
 
-## Requirements
+* **🧠 Local-First Inference**: Prefers Ollama for local model execution, keeping your data completely private.
+* **🛡️ Sovereign Safety**: Routes all device-affecting actions through explicit confirmation gates. "Dry-run" is the default behavior.
+* **💻 Rich Terminal UI**: Interactive assistant with slash commands and natural language understanding.
+* **🛠️ Extensive Tool Registry**: Built-in tools for file management, shell execution, web browsing, vision, power management, scheduling, and more.
+* **📜 Audit Trails**: Every turn, command, security event, and tool call is logged in JSONL format for complete transparency.
+* **🎙️ Voice Integration**: Supports voice inbox processing, optional local transcription, and wake-word activation.
+* **🔌 Dynamic Skills & Agents**: Easily extend capabilities using Markdown-based `SKILL.md` files or YAML-frontmatter agent definitions.
+* **🌐 Local API Catalog**: Browse, search, and utilize a local public API catalog directly from the CLI.
+* **🕸️ Network Topology**: Foundation for LAN federation and topology discovery.
 
-- Windows 10 or 11
-- Python 3.10+
-- Git
-- Ollama
-- At least one local Ollama model
+*(Browser operations, screen guidance, full LAN transport, and drive migration are currently in development!)*
 
-The active model configuration is loaded from `core/config/profile.local.json`
-first, then `core/config/profile.json`, with legacy fallbacks under
-`core/memory/`.
+---
 
-## First Run
+## 📋 Requirements
 
-From PowerShell:
+Before you begin, ensure you have the following installed:
+- **Windows 10 or 11**
+- **Python 3.10+**
+- **Git**
+- **[Ollama](https://ollama.com/)** (with at least one local model downloaded)
+
+---
+
+## 🛠️ Quick Start
+
+### 1. Installation
+
+Open PowerShell and clone the repository:
 
 ```powershell
 git clone https://github.com/Saurabh0003M/ARADHYA.git ARADHYA
@@ -61,231 +51,171 @@ cd ARADHYA
 scripts\first_run.bat
 ```
 
-Then verify the environment:
+### 2. Verify Environment
 
+Ensure everything is configured correctly:
 ```powershell
 scripts\doctor.bat
 ```
 
-## Launch
+### 3. Launch Aradhya
 
+Start the assistant:
 ```powershell
 .\arise.bat
 ```
+*(The launcher automatically prefers the virtual environment's Python if available).*
 
-The launcher prefers `venv\Scripts\python.exe` when the virtual environment has
-the required packages. If the venv is incomplete, it falls back to `python` on
-`PATH` and tells you to rerun setup.
-
-Direct launch:
-
+Alternatively, you can launch it directly:
 ```powershell
 venv\Scripts\python.exe -m src.aradhya.main
 ```
 
-## First Commands
+---
 
-Inside Aradhya:
+## 💬 Command Reference
 
-```text
-/help
-/status
-/model
-/model workers
-/skills
-/voice
-/cache
-/audit
-open README.md
-yes proceed
-find the folder with the highest concentration of .txt files
-exit
-```
+Once Aradhya is running, try these commands:
 
-## Command Reference
+### Core Commands
+| Command | Description |
+|---|---|
+| `/help` | Display all available commands |
+| `/status` | Show model, voice, skills, wake state, and live execution state |
+| `/topology` | Show local topology (use `/topology rescan` to regenerate) |
+| `/sleep` | Send Aradhya to idle mode |
+| `exit` | Shut down the CLI |
 
-Core:
+### Model & Skills
+| Command | Description |
+|---|---|
+| `/model` | Check configured model health |
+| `/model ask <prompt>` | Send a direct prompt to the configured model |
+| `/model workers` | List local and optional cloud workers |
+| `/skills` | List loaded skills |
+| `/skills enable/disable <name>`| Toggle specific skills on or off |
 
-- `/help` - show commands.
-- `/status` - show model, voice, skills, wake state, and live execution state.
-- `/topology` and `/topology rescan` - show or regenerate local topology.
-- `/sleep` - send Aradhya to idle.
-- `exit` - shut down the CLI.
+### Tools & Integration
+| Command | Description |
+|---|---|
+| `/icon on/off` | Control the floating quick-access icon |
+| `/cache` | Validate and benchmark the local context cache |
+| `/apis search <query>` | Use the local public API catalog |
+| `/parasite status` | Operate Parasite OS host-repo digestion |
+| `/federation status` | Use the current LAN federation foundation |
+| `/telegram start/stop` | Control the Telegram channel (if configured) |
+| `/audit` | Show recent audit log entries |
 
-Voice:
+### Voice Commands
+| Command | Description |
+|---|---|
+| `/voice` | Show voice pipeline status |
+| `/voice process` | Process pending audio from `audio/inbox` |
+| `/voice activate` | Start live microphone capture |
+| `/wake-word on` | Enable wake-word detection |
 
-- `/voice` - show voice pipeline status.
-- `/voice process` - process pending audio from `audio/inbox`.
-- `/voice activate` and `/voice stop` - start or stop live microphone capture.
-- `/wake-word on` and `/wake-word off` - control wake-word detection.
+### Natural Language Examples
+You can just talk to Aradhya!
+> *"open README.md"*
+> *"yes proceed"*
+> *"find the folder with the highest concentration of .txt files"*
 
-Model and skills:
+---
 
-- `/model` - check configured model health.
-- `/model ask <prompt>` - send a direct prompt to the configured model.
-- `/model workers` - list local and optional cloud workers.
-- `/model workers assess <text>` - check whether text is safe for cloud
-  routing.
-- `/skills` - list loaded skills.
-- `/skills enable <name>` and `/skills disable <name>` - toggle a skill.
+## 🔒 Safety First
 
-Tools and integration:
+Aradhya is designed around **User Sovereignty**:
+- **Confirmation Gates**: Risky tools require your explicit approval before execution.
+- **Dry-Run Default**: `allow_live_execution` is disabled by default. Machine-changing actions are previewed unless explicitly enabled.
+- **Strict Permissions**: Pattern-based rules (e.g., `write_file(*.py)`) govern access, with "deny" rules always taking precedence.
+- **Privacy Gate**: Optional cloud model workers are gated behind a privacy assessment.
 
-- `/icon on` and `/icon off` - control the floating quick-access icon.
-- `/cache` - validate and benchmark the local context cache.
-- `/apis`, `/apis search <query>`, `/apis category <name>`,
-  `/apis inspect <name>`, `/apis recommend <need>` - use the local public API
-  catalog.
-- `/parasite status`, `/parasite candidates`, `/parasite inspect <repo>`,
-  `/parasite ledger`, `/parasite digest <repo>`, `/parasite resume <repo>` -
-  operate the Parasite OS host-repo digestion and integration ledger.
-- `/federation init`, `/federation status`, `/federation doctor` - use the
-  current LAN federation foundation.
-- `/telegram start` and `/telegram stop` - control the Telegram channel when
-  configured.
-- `/daemon start` and `/daemon stop` - control the background daemon.
-- `/setup` - run the interactive setup wizard.
-- `/audit` - show recent audit log entries.
+---
 
-## Safety Model
+## ⚙️ Configuration
 
-Aradhya is designed around user sovereignty:
+Aradhya uses a flexible configuration hierarchy. The active model config is loaded from:
+1. `core/config/profile.local.json` *(Primary)*
+2. `core/config/profile.json`
+3. Legacy fallbacks under `core/memory/`
 
-- Risky tools require confirmation before execution.
-- `allow_live_execution` is false by default, so confirmed machine-changing
-  actions become dry-run previews unless live execution is enabled.
-- Permission rules can allow or deny specific tool calls by pattern; deny rules
-  always win.
-- Tool runtime policy constrains allowed roots, mutation grants, and live
-  execution.
-- Shell, file writes, deletes, moves, opens, browser actions, and clipboard
-  writes stay behind the confirmation/policy path.
-- Tool calls, turns, commands, and security events are audited.
-- Local models and local tools are preferred; cloud model workers are optional
-  and checked by the privacy gate.
+**Key Configuration Fields:**
+- `model.provider`: Usually `ollama`
+- `model.model_name`: Your local Ollama model name
+- `model.base_url`: Ollama API URL (default: `http://127.0.0.1:11434`)
+- `allow_live_execution`: Toggle live execution vs dry-runs
+- `user_roots`: Define specific search roots instead of scanning the entire home folder
 
-## Configuration
-
-Primary config:
-
-- `core/config/profile.json`
-- `core/config/profile.local.json`
-- `core/config/preferences.json`
-
-Legacy fallback config:
-
-- `core/memory/profile.json`
-- `core/memory/profile.local.json`
-- `core/memory/preferences.json`
-
-Common fields:
-
-- `model.provider`: model provider, usually `ollama`.
-- `model.model_name`: local Ollama model name.
-- `model.base_url`: Ollama API URL, usually `http://127.0.0.1:11434`.
-- `allow_live_execution`: when false, machine-changing actions are blocked or
-  previewed.
-- `user_roots`: optional local search roots. If omitted, Aradhya uses common
-  user folders and the repo root instead of scanning the entire home folder.
-
-Portable runtime state resolves through:
-
+**Portable Runtime State resolves through:**
 1. `ARADHYA_HOME`
 2. `[paths].home` in `parasite.toml`
 3. `~/.aradhya`
 
-## Voice
+---
 
-Default voice provider: `manual_transcript`.
+## 🎙️ Advanced Voice Settings
 
-Manual transcript flow:
+**Default Voice Provider**: `manual_transcript`
+1. Put audio in `audio/inbox` (e.g., `task.wav`)
+2. Put matching text in `audio/manual_transcripts` (e.g., `task.txt`)
+3. Run `/voice process`
 
-1. Put audio in `audio/inbox`, for example `task.wav`.
-2. Put matching text in `audio/manual_transcripts`, for example `task.txt`.
-3. Run `/voice process`.
-
-Optional local transcription:
-
+**Optional Local Transcription Setup:**
 ```powershell
 venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 ```
 
-Optional live microphone activation:
-
+**Optional Live Microphone Activation:**
 ```powershell
 venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 ```
 
-## Skills, Agents, Hooks, And Permissions
+---
 
-Skills:
+## 🧩 Skills, Agents, Hooks, And Permissions
 
-- Bundled skills live under `core/skills/<name>/SKILL.md`.
-- Additional skill loading is handled by the skill framework.
-- Use `/skills` to inspect loaded skills.
+- **Skills**: Bundled skills live under `core/skills/<name>/SKILL.md`. Use `/skills` to manage them.
+- **Agents**: Define custom agents in `~/.aradhya/agents` or `.aradhya/agents` using YAML-frontmatter Markdown files.
+- **Hooks**: Customize lifecycles (e.g., `PreToolUse`, `SessionStart`) via `hooks.json`.
+- **Permissions**: Control tool access patterns via `permissions.json`.
 
-Agents:
+---
 
-- User agents can be defined as Markdown files in `~/.aradhya/agents`.
-- Project agents can be defined under `.aradhya/agents`.
-- Agent files use YAML-style frontmatter for fields such as `name`,
-  `description`, `tools`, `model`, `max_turns`, and `isolation`.
-
-Hooks:
-
-- User hooks load from `~/.aradhya/hooks/hooks.json`.
-- Project hooks load from `.aradhya/hooks/hooks.json`.
-- Supported hook events include `SessionStart`, `PreToolUse`, `PostToolUse`,
-  and `Stop`.
-
-Permissions:
-
-- User permission rules load from `~/.aradhya/permissions.json`.
-- Project permission rules load from `.aradhya/permissions.json`.
-- Rules can allow, deny, or require confirmation for tool patterns such as
-  `run_command(git *)` or `write_file(*.py)`.
-
-## Project Structure
+## 🏗️ Project Architecture
 
 ```text
-core/
-  config/        Runtime configuration
-  memory/        User context and legacy config fallback
-  skills/        Bundled SKILL.md files
-docs/            Roadmaps, vision, and progress notes
-scripts/         Setup, doctor, and launch helpers
-src/aradhya/
-  main.py        CLI entry point and slash-command dispatch
-  assistant_core.py
-  agent_loop.py
-  model_provider.py
-  tools/
-  hooks/
-  agents/
-  voice/
-tests/unit/      Unit tests
+📦 ARADHYA
+ ┣ 📂 core
+ ┃ ┣ 📂 config       # Runtime configuration
+ ┃ ┣ 📂 memory       # User context & legacy configs
+ ┃ ┗ 📂 skills       # Bundled SKILL.md files
+ ┣ 📂 docs           # Roadmaps, vision & progress
+ ┣ 📂 scripts        # Setup & launch helpers
+ ┣ 📂 src/aradhya    # Core application source
+ ┃ ┣ 📜 main.py               # CLI entry & dispatch
+ ┃ ┣ 📜 assistant_core.py     # State machine & tools
+ ┃ ┣ 📜 agent_loop.py         # Agent execution loop
+ ┃ ┗ 📂 tools                 # Tool implementations
+ ┗ 📂 tests/unit     # Pytest unit tests
 ```
 
-## Development Workflow
+---
 
-Run unit tests without the default coverage addopts:
+## 👨‍💻 Development
 
+Run unit tests (without default coverage addopts):
 ```powershell
 venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts="
 ```
 
-Use a dedicated base temp directory outside the Git worktree when validating
-cleanup-sensitive changes:
-
+Use a dedicated base temp directory outside the Git worktree when validating cleanup-sensitive changes:
 ```powershell
 venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts=" --basetemp C:\tmp\aradhya_readme_cleanup
 ```
 
-Run the environment doctor:
-
+Run the environment doctor to diagnose issues:
 ```powershell
 scripts\doctor.bat
 ```
 
-Generated pytest/runtime artifacts under `data/processed/pytest_*` are ignored
-and should not be committed.
+> **Note**: Generated pytest runtime artifacts under `data/processed/pytest_*` are ignored and should not be committed.
