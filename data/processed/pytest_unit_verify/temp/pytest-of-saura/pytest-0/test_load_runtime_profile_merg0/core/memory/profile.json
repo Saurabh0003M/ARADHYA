@@ -1,1 +1,0 @@
-{"model": {"provider": "ollama", "model_name": "gemma4:e4b", "base_url": "http://127.0.0.1:11434"}, "voice": {"provider": "manual_transcript", "audio_inbox_dir": "audio/inbox"}, "voice_output": {"enabled": false, "provider": "pyttsx3"}}

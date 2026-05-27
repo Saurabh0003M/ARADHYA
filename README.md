@@ -1,17 +1,43 @@
 # Aradhya
 
-Aradhya is a local-first Operating Intelligence assistant for Windows. It uses Ollama for local model inference, keeps user data on the machine, and routes risky system actions through explicit confirmation.
+Aradhya is a local-first Operating Intelligence assistant for Windows. It runs
+on the user's machine, prefers Ollama for local inference, keeps private data
+local by default, and routes device-affecting actions through explicit
+confirmation and runtime policy.
 
-## What It Can Do Today
+The project is not just a chatbot wrapper. Aradhya is becoming a Windows OI
+layer: intent routing, local context, model orchestration, skills, tool use,
+audit trails, sessions, hooks, permissions, and safe execution.
 
-- Start a Rich terminal assistant.
-- Use a local Ollama model for chat and fallback planning.
-- Build safe plans before opening files, folders, apps, or URLs.
-- Require confirmation before device-affecting actions.
-- Keep a local directory cache and summary in `project_tree.txt`.
-- Process dropped voice files through the audio inbox.
-- Optionally use push-to-talk microphone capture.
-- Load local `SKILL.md` instruction packs from `core/skills`.
+## Current Capabilities
+
+- Rich terminal assistant with slash commands and natural language requests.
+- Ollama-first local model provider with health checks and direct model prompts.
+- Optional OpenRouter worker support behind a cloud privacy assessment gate.
+- Deterministic planner for common local tasks plus model-driven agent fallback.
+- Tool registry for files, shell, web, browser, vision, power, sessions,
+  scheduler, skill installation, and learnings.
+- Confirmation gate for risky tools and dry-run behavior when live execution is
+  disabled.
+- Pattern-based permission rules with deny rules taking priority over allow
+  rules.
+- JSONL audit logging for turns, commands, security events, and tool calls.
+- Session storage, history compression, and SQLite-backed state primitives.
+- Local directory indexing and cache validation for path-aware responses.
+- Voice inbox processing, manual transcripts, optional local transcription,
+  live voice activation, and wake-word support.
+- Local `SKILL.md` loading from bundled and user/project skill locations.
+- User/project hook configuration for session and tool lifecycle events.
+- Agent definition loading from Markdown files with YAML-style frontmatter.
+- Public API catalog search, inspection, category browsing, and recommendation.
+- Topology and LAN federation foundation commands.
+- Parasite OS host-repo digestion, candidate ranking, inspection, and ledger
+  generation.
+- Portable path resolution through `ARADHYA_HOME`, `parasite.toml`, and
+  `~/.aradhya` defaults.
+
+Browser operation, screen guidance, full LAN transport, and drive migration are
+still planned or partial. They are not complete product surfaces yet.
 
 ## Requirements
 
@@ -21,7 +47,9 @@ Aradhya is a local-first Operating Intelligence assistant for Windows. It uses O
 - Ollama
 - At least one local Ollama model
 
-The current configured model is read from `core/config/profile.local.json` first, then `core/config/profile.json`.
+The active model configuration is loaded from `core/config/profile.local.json`
+first, then `core/config/profile.json`, with legacy fallbacks under
+`core/memory/`.
 
 ## First Run
 
@@ -33,7 +61,7 @@ cd ARADHYA
 scripts\first_run.bat
 ```
 
-Then verify:
+Then verify the environment:
 
 ```powershell
 scripts\doctor.bat
@@ -45,7 +73,9 @@ scripts\doctor.bat
 .\arise.bat
 ```
 
-The launcher prefers `venv\Scripts\python.exe` when the venv has the required runtime packages. If the venv is incomplete, it falls back to `python` on `PATH` and tells you to rerun setup.
+The launcher prefers `venv\Scripts\python.exe` when the virtual environment has
+the required packages. If the venv is incomplete, it falls back to `python` on
+`PATH` and tells you to rerun setup.
 
 Direct launch:
 
@@ -61,14 +91,78 @@ Inside Aradhya:
 /help
 /status
 /model
+/model workers
 /skills
 /voice
 /cache
+/audit
 open README.md
 yes proceed
 find the folder with the highest concentration of .txt files
 exit
 ```
+
+## Command Reference
+
+Core:
+
+- `/help` - show commands.
+- `/status` - show model, voice, skills, wake state, and live execution state.
+- `/topology` and `/topology rescan` - show or regenerate local topology.
+- `/sleep` - send Aradhya to idle.
+- `exit` - shut down the CLI.
+
+Voice:
+
+- `/voice` - show voice pipeline status.
+- `/voice process` - process pending audio from `audio/inbox`.
+- `/voice activate` and `/voice stop` - start or stop live microphone capture.
+- `/wake-word on` and `/wake-word off` - control wake-word detection.
+
+Model and skills:
+
+- `/model` - check configured model health.
+- `/model ask <prompt>` - send a direct prompt to the configured model.
+- `/model workers` - list local and optional cloud workers.
+- `/model workers assess <text>` - check whether text is safe for cloud
+  routing.
+- `/skills` - list loaded skills.
+- `/skills enable <name>` and `/skills disable <name>` - toggle a skill.
+
+Tools and integration:
+
+- `/icon on` and `/icon off` - control the floating quick-access icon.
+- `/cache` - validate and benchmark the local context cache.
+- `/apis`, `/apis search <query>`, `/apis category <name>`,
+  `/apis inspect <name>`, `/apis recommend <need>` - use the local public API
+  catalog.
+- `/parasite status`, `/parasite candidates`, `/parasite inspect <repo>`,
+  `/parasite ledger`, `/parasite digest <repo>`, `/parasite resume <repo>` -
+  operate the Parasite OS host-repo digestion and integration ledger.
+- `/federation init`, `/federation status`, `/federation doctor` - use the
+  current LAN federation foundation.
+- `/telegram start` and `/telegram stop` - control the Telegram channel when
+  configured.
+- `/daemon start` and `/daemon stop` - control the background daemon.
+- `/setup` - run the interactive setup wizard.
+- `/audit` - show recent audit log entries.
+
+## Safety Model
+
+Aradhya is designed around user sovereignty:
+
+- Risky tools require confirmation before execution.
+- `allow_live_execution` is false by default, so confirmed machine-changing
+  actions become dry-run previews unless live execution is enabled.
+- Permission rules can allow or deny specific tool calls by pattern; deny rules
+  always win.
+- Tool runtime policy constrains allowed roots, mutation grants, and live
+  execution.
+- Shell, file writes, deletes, moves, opens, browser actions, and clipboard
+  writes stay behind the confirmation/policy path.
+- Tool calls, turns, commands, and security events are audited.
+- Local models and local tools are preferred; cloud model workers are optional
+  and checked by the privacy gate.
 
 ## Configuration
 
@@ -84,12 +178,21 @@ Legacy fallback config:
 - `core/memory/profile.local.json`
 - `core/memory/preferences.json`
 
-Important fields:
+Common fields:
 
-- `model.model_name`: Ollama model name.
+- `model.provider`: model provider, usually `ollama`.
+- `model.model_name`: local Ollama model name.
 - `model.base_url`: Ollama API URL, usually `http://127.0.0.1:11434`.
-- `allow_live_execution`: false by default. When false, confirmed opens and launches are dry-run previews.
-- `user_roots`: optional search roots. If omitted, Aradhya uses Desktop, Documents, Downloads, and the repo root instead of scanning the entire home folder.
+- `allow_live_execution`: when false, machine-changing actions are blocked or
+  previewed.
+- `user_roots`: optional local search roots. If omitted, Aradhya uses common
+  user folders and the repo root instead of scanning the entire home folder.
+
+Portable runtime state resolves through:
+
+1. `ARADHYA_HOME`
+2. `[paths].home` in `parasite.toml`
+3. `~/.aradhya`
 
 ## Voice
 
@@ -113,28 +216,76 @@ Optional live microphone activation:
 venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 ```
 
+## Skills, Agents, Hooks, And Permissions
+
+Skills:
+
+- Bundled skills live under `core/skills/<name>/SKILL.md`.
+- Additional skill loading is handled by the skill framework.
+- Use `/skills` to inspect loaded skills.
+
+Agents:
+
+- User agents can be defined as Markdown files in `~/.aradhya/agents`.
+- Project agents can be defined under `.aradhya/agents`.
+- Agent files use YAML-style frontmatter for fields such as `name`,
+  `description`, `tools`, `model`, `max_turns`, and `isolation`.
+
+Hooks:
+
+- User hooks load from `~/.aradhya/hooks/hooks.json`.
+- Project hooks load from `.aradhya/hooks/hooks.json`.
+- Supported hook events include `SessionStart`, `PreToolUse`, `PostToolUse`,
+  and `Stop`.
+
+Permissions:
+
+- User permission rules load from `~/.aradhya/permissions.json`.
+- Project permission rules load from `.aradhya/permissions.json`.
+- Rules can allow, deny, or require confirmation for tool patterns such as
+  `run_command(git *)` or `write_file(*.py)`.
+
 ## Project Structure
 
 ```text
 core/
-  config/       Runtime configuration
-  memory/       User context and legacy config fallback
-  skills/       Bundled SKILL.md files
+  config/        Runtime configuration
+  memory/        User context and legacy config fallback
+  skills/        Bundled SKILL.md files
+docs/            Roadmaps, vision, and progress notes
+scripts/         Setup, doctor, and launch helpers
 src/aradhya/
-  main.py       CLI entry point
+  main.py        CLI entry point and slash-command dispatch
   assistant_core.py
-  assistant_indexer.py
+  agent_loop.py
   model_provider.py
+  tools/
+  hooks/
+  agents/
   voice/
-scripts/
-  first_run.bat
-  doctor.bat
-  run_agent.bat
+tests/unit/      Unit tests
 ```
 
-## Safety Model
+## Development Workflow
 
-- Risky tools require explicit confirmation.
-- Live execution is disabled by default.
-- Tool calls are audited.
-- Local tools and local models are preferred.
+Run unit tests without the default coverage addopts:
+
+```powershell
+venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts="
+```
+
+Use a dedicated base temp directory outside the Git worktree when validating
+cleanup-sensitive changes:
+
+```powershell
+venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts=" --basetemp C:\tmp\aradhya_readme_cleanup
+```
+
+Run the environment doctor:
+
+```powershell
+scripts\doctor.bat
+```
+
+Generated pytest/runtime artifacts under `data/processed/pytest_*` are ignored
+and should not be committed.

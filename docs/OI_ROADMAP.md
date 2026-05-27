@@ -28,36 +28,58 @@ intelligence that can:
 
 - Swappable local model configuration through Ollama
 - Model diagnostics and startup model selection flow
+- Optional OpenRouter workers behind cloud privacy assessment
 - Safe planner with explicit confirmation for device-affecting tasks
+- Model-driven agent fallback with registered local tools
 - Local directory index refresh through `project_tree.txt`
+- Cache validation and bounded local path heuristics
 - Path opening and local filesystem heuristics
 - Voice inbox and transcript pipeline
 - Push-to-talk live voice activation
+- Wake-word detection support
 - Optional spoken replies through a local TTS provider
 - Debate AI mode toggle and planner route
+- Slash-command surfaces for topology, public API catalog, audit log, daemon,
+  Telegram, and setup
+- Tool runtime policy, pattern permission rules, deny-first safety checks, and
+  reusable CLI confirmation gates
+- JSONL audit trail plus SQLite-backed session/state primitives
+- Session history compression and turn context injection for model-driven work
+- User/project `SKILL.md`, hook, and agent-definition loaders
+- Scheduler, session, learnings, web, browser, vision, power, shell, and file
+  tools registered through the tool registry
+- Parasite OS host-repo digestion, integration candidate ranking, and ledger
+  generation
+- Portable path resolution through `ARADHYA_HOME`, `parasite.toml`, and
+  `~/.aradhya`
+- LAN federation foundation commands for identity, status, and doctor checks
 
 ### Core OI Features To Build
 
 1. Model engine layer
-- keep model selection declarative in `profile.json`
-- support future Ollama engines without rewriting planner logic
-- expose model capability metadata later if routing depends on model strengths
+- keep model selection declarative in runtime profile files
+- keep local Ollama as the default engine
+- route optional cloud workers only after explicit privacy assessment
+- expand capability metadata when routing depends on model strengths
 
 2. Context engine
-- maintain filesystem context without expensive full rescans on every step
+- move from repeated whole-tree thinking toward watcher-backed invalidation
 - track active app, active browser tab, and future screen snapshots
-- add a user-owned personal context folder for custom commands, notes, and rules
+- continue using sessions, compressed history, user context, skills, and local
+  indexes as the active context substrate
 
 3. Action engine
 - open apps, folders, files, and URLs
 - execute bounded shell actions
-- operate browser workflows and form drafting
+- operate browser workflows and form drafting after the browser operator ships
 - add future UI automation for guided clicking and typed input
 
 4. Safety and policy engine
-- distinguish low-risk read/state operations from device-affecting actions
-- require approval before launches, submissions, mutations, installs, deletes, or clicks
-- keep audit-friendly previews of planned work
+- preserve deny-first permission rules and confirmation gates
+- distinguish low-risk reads/state from device-affecting actions
+- require approval before launches, submissions, mutations, installs, deletes,
+  clicks, or clipboard writes
+- keep audit-friendly previews and JSONL event history
 
 5. External handoff engine
 - route large PDF summary, file conversion, OCR, and similar tasks to stronger external tools
@@ -66,6 +88,11 @@ intelligence that can:
 6. Debate AI and diagnostics
 - add multi-model compare/critique/rebuttal workflows
 - add health checks for context feeds, executors, browser adapters, and voice adapters
+
+7. Parasite OS and federation
+- keep host-repo digestion and integration ledgers as the research intake path
+- finish LAN pairing, signed identity exchange, and transport
+- prove drive/VM portability from a copied workspace before moving the active repo
 
 ## Build Order
 
@@ -262,9 +289,14 @@ To keep Aradhya scalable as an OI system:
 
 ## Immediate Next Targets
 
-1. Add a personal context folder for custom commands and user-owned rules.
-2. Replace naive frequent tree thinking with watcher-driven context refresh design.
-3. Expand safe local commands for app launching and named Windows targets.
+1. Finish watcher-backed context invalidation so local lookups avoid repeated
+   full refreshes.
+2. Add migration dry-run and storage profile commands for the `D:\ParasiteOS`
+   staging path.
+3. Complete federation pairing and local transport with explicit trust prompts.
 4. Add browser workflow planning with review-before-submit behavior.
-5. Design the first screen-guidance mode around screenshots instead of full live streams.
-6. Define a bounded Debate AI protocol with round limits and summary compression.
+5. Design the first screen-guidance mode around screenshots instead of full live
+   streams.
+6. Define a bounded Debate AI protocol with round limits and summary
+   compression.
+7. Keep generated pytest/runtime artifacts ignored and out of commits.

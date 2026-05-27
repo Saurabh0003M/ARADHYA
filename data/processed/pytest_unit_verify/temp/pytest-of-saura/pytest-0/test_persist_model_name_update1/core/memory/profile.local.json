@@ -1,6 +1,0 @@
-{
-  "model": {
-    "provider": "ollama",
-    "model_name": "phi4-mini"
-  }
-}

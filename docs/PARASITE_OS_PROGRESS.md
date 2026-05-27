@@ -1,6 +1,6 @@
 # Parasite OS Progress Tracker
 
-Last updated: 2026-05-19
+Last updated: 2026-05-27
 
 This tracker records build status, storage decisions, and acceptance gates for
 the Parasite OS direction on top of Aradhya.
@@ -71,9 +71,16 @@ Better sequence:
 | Host integration ledger | Done | `/parasite candidates`, `/parasite inspect <repo>`, and ledger JSON ranking are implemented |
 | First agency skill promotion | Done | `agency-engineering-review` is a text-only skill promoted from `agency-agents` engineering notes |
 | Topology manifest | Done | Local device capability scaffold |
+| Path portability layer | Done | `ARADHYA_HOME`, `parasite.toml`, and `~/.aradhya` resolution now centralize runtime paths |
+| Runtime permission rules | Done | User/project allow and deny rules load through the permission engine; deny rules win |
+| Hook engine foundation | Done | User/project hook configs support session and tool lifecycle events |
+| Agent definitions | Done | User/project Markdown agent definitions load with frontmatter metadata |
+| Session/state hardening | Done | Session management, history compression, and SQLite state primitives are in place |
+| Timeout kill switch | Done | Agent loop guardrails include iteration and repeated-tool limits |
 | LAN federation foundation | Started | Identity, peer registry, doctor command; transport is not complete |
 | Opus coordination notes | Done | `docs/OPUS_HANDOFF.md` |
-| Full user acceptance loop | Partial | Unit and doctor pass; interactive launcher smoke still needs manual/new-terminal verification |
+| Generated artifact cleanup | Started | `data/processed/pytest_*` artifacts are being removed from tracking and ignored |
+| Full user acceptance loop | Partial | Unit and doctor checks are required before push; interactive launcher smoke still needs manual/new-terminal verification |
 
 ## Host Repo Digestion Run - 2026-05-19
 
@@ -124,13 +131,14 @@ First promoted artifact:
 | Area | Status | Next gate |
 | --- | --- | --- |
 | Drive migration | Not started | Copy repo to `D:\ParasiteOS\Repos\ARADHYA`, run doctor/tests from there |
-| Portable runtime profile | Partial | Remove remaining absolute-path assumptions from generated local files |
+| Portable runtime profile | Partial | Validate copied-workspace behavior and remove any remaining generated absolute-path assumptions |
 | LAN discovery and pairing | Not started | Signed peer handshake and trust prompt |
 | Federation transport | Not started | Local-only message envelope with replay protection |
 | Watcher-driven context index | Not started | Replace repeated full scans with dirty-root invalidation |
 | Browser operator | Not started | Draft-before-submit workflow with confirmation |
 | Screen guidance | Not started | Screenshot-guided mode, no continuous frame stream |
 | Open-source OS base | Deferred | Revisit after OI loop and federation are useful |
+| Production packaging | Not started | Installer/startup integration after local OI loop stabilizes |
 
 ## Migration Acceptance Gates
 
@@ -148,21 +156,25 @@ Move the active workspace to `D:` only after all gates pass from a copied repo:
 
 ## Next Build Slice
 
-1. Add a storage profile command:
+1. Finish repository hygiene:
+   - keep `data/processed/pytest_*` ignored
+   - keep runtime caches and local state out of Git
+   - verify docs, unit tests, and doctor before push
+2. Add a storage profile command:
    - show current repo path
    - detect available drives
    - recommend storage roles
    - warn when active drive free space is low
-2. Add a migration dry-run command:
+3. Add a migration dry-run command:
    - inspect tracked/untracked files
    - list ignored runtime files
    - produce a copy plan for `D:\ParasiteOS\Repos\ARADHYA`
    - do not move files automatically
-3. Add federation pairing:
+4. Add federation pairing:
    - local peer discovery scaffold
    - signed identity envelope
    - explicit trust prompt
-4. Add watcher-backed context invalidation:
+5. Add watcher-backed context invalidation:
    - dirty roots
    - miss debouncing
    - targeted refresh before full refresh

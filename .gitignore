@@ -29,6 +29,7 @@ pytest-cache-files-*/
 pytest_tmp*/
 pytest_basetemp*/
 .pytest_*/
+data/processed/pytest_*/
 
 # Generated runtime artifacts
 .tmp/
