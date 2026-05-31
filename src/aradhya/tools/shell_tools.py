@@ -62,7 +62,6 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         from src.aradhya.assistant_models import load_preferences
         prefs = load_preferences()
 
-        final_command = command
         # Sandboxing support (ZeroClaw feature)
         import shlex
         final_command_args = shlex.split(command)
@@ -77,7 +76,7 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
                     capture_output=True,
                     check=True
                 )
-                escaped_cmd = shlex.quote(command)
+                shlex.quote(command)
                 # Mount the working directory to /workspace and run the command securely
                 final_command_args = [
                     "docker", "run", "--rm",
