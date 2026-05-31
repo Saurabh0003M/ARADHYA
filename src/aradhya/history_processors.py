@@ -19,7 +19,6 @@ while freeing context space.
 from __future__ import annotations
 
 import re
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -297,10 +296,12 @@ class HistoryProcessorPipeline:
             before_chars = sum(len(m.get("content", "")) for m in messages)
             if before != len(result):
                 logger.debug(
-                    "History processor {}: {} -> {} messages",
+                    "History processor {}: {} -> {} messages ({} -> {} chars)",
                     type(processor).__name__,
                     before,
                     len(result),
+                    before_chars,
+                    after_chars
                 )
         return result
 
