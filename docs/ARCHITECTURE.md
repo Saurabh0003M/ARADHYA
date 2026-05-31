@@ -2,108 +2,86 @@
 
 ## Product Direction
 
-Aradhya is being built as a personal AI laptop assistant that can understand natural-language requests about the machine itself, plan a safe action, and then execute only after the user explicitly confirms. The design favors system control, workflow acceleration, and coordination over generic text generation.
+Aradhya is an **Operating Intelligence (OI)**: a personal AI laptop assistant that understands natural-language requests about the machine itself, aggregates context, plans a safe action, and executes only after the user explicitly confirms. The design favors system control, workflow acceleration, and coordination over generic text generation.
 
 ## Core Principles
 
-1. Wake explicitly through a floating icon or the `Ctrl + Win` hotkey.
-2. Echo the transcript so the user can verify what Aradhya heard.
+1. Wake explicitly through a floating icon, the `Ctrl + Win` hotkey, or Telegram.
+2. Echo the transcript/request so the user can verify what Aradhya heard.
 3. Plan before acting.
-4. Require an explicit confirmation phrase such as `yes proceed` for device-affecting actions.
-5. Refresh local context whenever Aradhya wakes or is asked about local data.
-6. Keep Debate AI mode optional and off by default.
+4. Require an explicit confirmation phrase (such as `yes proceed`) for device-affecting actions.
+5. Provide multi-layered safety via Hook Engines and Permission Rules.
+6. Refresh local context dynamically (clipboard, active windows, fast file indices).
 
 ## Runtime Layers
 
-### 1. Wake Layer
+### 1. Wake & Entry Layer
 
-- Trigger sources: floating icon, hotkey, and later voice wake if desired.
-- Responsibility: move the assistant from idle to active state.
-- Side effect: refresh the local directory index according to policy.
+- **Trigger sources**: Desktop Floating Icon (via Tkinter/IPC), global hotkeys, background Daemon API, and remote Telegram bots.
+- **Responsibility**: Move the assistant from idle to active state and accept inputs securely.
+- **Side effect**: Refresh the local directory index according to policy.
 
-### 2. Perception Layer
+### 2. Perception & Context Layer
 
-- Whisper will handle speech-to-text.
-- Optional live microphone activation can capture speech from a global hotkey and feed it into the same voice inbox pipeline.
-- Optional local speech output can read Aradhya's live voice replies aloud without changing the planning or execution model.
-- Future screen-reading adapters will inspect visible UI elements.
-- The current repo simulates this with direct CLI text input.
-- A folder-based voice inbox now exists so audio files can be dropped into `audio/inbox` and processed through a transcription pipeline.
+- **Vision Tools**: Aradhya possesses visual context capabilities, able to capture the screen and read textual content via OCR.
+- **Speech-to-Text**: Whisper integration captures speech from a global hotkey, feeding into a background voice inbox pipeline.
+- **System Telemetry**: Captures active window titles (via `ctypes`), clipboard content, and recent system files.
+- **State Store**: Uses a thread-safe, WAL-mode SQLite database to automatically compress older message contexts while preserving robust session continuity.
 
 ### 3. Planner Layer
 
-- Converts transcripts into structured plans.
+- Converts user transcripts into structured ReAct execution plans.
 - Uses deterministic routing first for crisp local commands.
-- Falls back to the configured local model only when the rules cannot classify the request.
-- Requires the model to return a strict JSON shape instead of free-form instructions.
-- Knows which requests need local file awareness, external-tool handoff, or Debate AI.
+- Falls back to the configured local model only when rules cannot classify the request.
+- Requires the model to output strict JSON tool calls.
+- Determines when local file awareness, external-tool handoff, or specific SKILL contexts are required.
 
 ### 4. Confirmation Gate
 
-- Every device-affecting system task must pause behind an explicit approval phrase.
-- Pending plans can be confirmed or canceled.
-- Low-risk internal assistant state changes can execute immediately.
-- This replaces the earlier confidence-based auto-open behavior.
+- **Safety Pipeline**: Tool execution passes through the Parasite OS `HookEngine` (which can modify or block calls) and the `PermissionEngine` (deny-first rules).
+- **User Approval**: Every device-affecting system task must pause behind an explicit approval phrase (`yes proceed`).
+- **Dry-run Mode**: Operates entirely in a read-only testing environment unless live execution is explicitly enabled.
 
 ### 5. Executor Layer
 
-- Opens files, folders, and URLs when live execution is enabled.
-- Defaults to dry-run mode for safe testing.
-- Future adapters will cover UI automation, file conversion pipelines, and external browser workflows.
+- Leverages the extensive Tool Registry (`Browser`, `File`, `Power`, `Scheduler`, `Session`, `Shell`, `System`, `Vision`, `Web`).
+- Supports complex, stateful workflows such as autonomous browser navigation, automated form interactions, and scheduled background tasks.
+- Integrates gracefully with external `SKILL.md` definitions and custom agents (e.g. `AutoGPT`, `Agentless` frameworks).
 
-### Model Layer
+### 6. Model Layer
 
-- The local reasoning model is configured through `core/config/profile.json`,
-  with machine-local overrides in `core/config/profile.local.json`.
-- The current default provider is Ollama.
-- The current default model is `gemma4:e4b`.
-- Future model swaps should happen by changing the profile, not the code.
-
-### 6. Debate AI Layer
-
-- Optional reasoning mode.
-- Intended behavior: send the prompt to multiple advanced systems, force critique/rebuttal rounds, and stop once consensus is reached.
-- Current repo status: planned and represented in the planner, but not yet integrated with external providers.
+- The local reasoning model is configured through `core/config/profile.local.json`.
+- **Default Provider**: Ollama.
+- **Fallback Provider**: OpenRouter. Cloud workers are gated behind a strict `CloudPrivacyGate` to ensure sensitive local context does not leak.
+- Future model swaps happen exclusively by changing the profile, not the code logic.
 
 ## Local Data Strategy
 
-Aradhya maintains a text snapshot of the visible directory tree in `project_tree.txt`.
+Aradhya maintains a text snapshot of the visible directory tree in `project_tree.txt`, augmented by fast path-heuristics.
 
-- Refresh on wake.
-- Refresh on local-data requests.
-- Apply skip rules for noisy directories such as `venv`, `node_modules`, `.git`, and caches.
-- Use a node cap so refreshes stay responsive on large disks.
-
-This index is a support artifact for context and auditing. Local task previews still use live filesystem heuristics when needed.
+- Refresh on wake or on specific local-data requests.
+- Skip rules ignore noisy directories such as `venv`, `node_modules`, `.git`, and caches.
+- Utilizes node caps to maintain responsiveness on exceptionally large disks.
+- Employs token-aware history compaction (e.g. merging 60 older messages into a synthesized context block) to preserve LLM token budgets.
 
 ## Current Supported Task Types
 
-- Open a named path.
-- Open preferred security blogs.
-- Find the folder with the strongest `.txt` concentration.
-- Reopen yesterday's active project.
-- Attempt to identify the most recently played game if game-library roots are configured.
-- Toggle Debate AI mode.
-
-## Planned Integrations
-
-- Whisper for speech recognition.
-- Ollama for the local model.
-- Screen OCR plus UI automation for contextual control of tools such as Google Meet.
-- External handoff orchestration for heavy document operations.
-- Open-source assistant and agentic system components where reuse is stronger than rebuilding from scratch.
+- Comprehensive browser automation (navigating, typing, clicking, capturing DOM elements).
+- Vision-assisted screen reading and interpretation.
+- Opening paths, launching applications, managing sleep/power states, and managing the system clipboard.
+- Interrogating project environments using localized Git and dependency awareness.
+- Executing detailed, structured engineering sprints (via the Sprint Factory).
+- Scheduling recurring background system tasks.
 
 ## Voice Workflow Today
 
 1. Drop audio into `audio/inbox`.
-2. Process it through the configured voice provider.
+2. Process it through the configured voice provider (e.g. `manual_transcript` or `faster_whisper`).
 3. Save the transcript into `audio/transcripts`.
 4. Route the transcript into the assistant planner when Aradhya is awake.
 
-The default provider is currently `manual_transcript`, which lets the repo work immediately even before Whisper is installed. The current repo also supports an optional `faster_whisper` provider for real local file transcription, while keeping `manual_transcript` as the zero-setup default. A `whisper_command` provider remains available for external command-based workflows.
-
-When live voice activation is enabled, microphone captures are written into the same inbox/transcript/archive workflow instead of introducing a separate transcription path. That keeps debugging, transcript inspection, and safety behavior consistent.
+When live voice activation is enabled via push-to-talk hotkeys or wake-word listeners ("wakeup", "arise"), microphone captures are routed transparently into the same inbox/transcript/archive workflow. This ensures that debugging, transcript inspection, and safety behaviors remain entirely consistent across text and voice.
 
 ## Long-Term Vision
 
-The long-term target is Aradhya OS: an operating environment designed around the assistant instead of embedding the assistant inside a conventional desktop workflow.
+The long-term target is **Aradhya OS**: an operating environment designed fundamentally around the assistant, replacing the concept of embedding an assistant inside a conventional desktop workflow. The operating system *is* the intelligence.

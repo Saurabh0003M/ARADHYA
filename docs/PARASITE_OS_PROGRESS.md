@@ -1,6 +1,6 @@
 # Parasite OS Progress Tracker
 
-Last updated: 2026-05-27
+Last updated: 2026-05-31
 
 This tracker records build status, storage decisions, and acceptance gates for
 the Parasite OS direction on top of Aradhya.
@@ -63,80 +63,49 @@ Better sequence:
 | Confirmation gate | Done | Dangerous tools stay behind confirmation |
 | Audit logging | Done | Tool calls are logged through audit infrastructure |
 | Ollama model provider | Done | Default local model path remains supported |
-| OpenRouter provider | Done | Optional cloud provider through env key |
-| Cloud privacy gate | Done | Blocks secrets, local paths, and private runtime markers before OpenRouter calls |
+| OpenRouter provider | Done | Includes robust HTTP 429 failover chaining |
+| Cloud privacy gate | Done | Blocks secrets, local paths, and private runtime markers |
 | Model worker registry | Done | `/model workers` and `/model workers assess <text>` |
 | Public API catalog | Done | `/apis`, search, category, inspect, recommend |
-| Host repo digestion batch | Done | 14 active host repos completed the 7-stage Parasite pipeline after fast-forward pulls |
-| Host integration ledger | Done | `/parasite candidates`, `/parasite inspect <repo>`, and ledger JSON ranking are implemented |
-| First agency skill promotion | Done | `agency-engineering-review` is a text-only skill promoted from `agency-agents` engineering notes |
+| Hook engine foundation | Done | PreToolUse/PostToolUse interceptors via stdin/stdout |
+| Runtime permission rules | Done | Pattern matching allow/deny gates, conditional blocks |
+| Agent definitions | Done | Parsed via Markdown YAML frontmatter |
+| Host repo digestion batch | Done | 7-stage state machine (`ENGULF` -> `ABSORB`) with checkpoints |
+| Host integration ledger | Done | `/parasite candidates`, `/parasite inspect`, deduplicator |
+| First agency skill promotion | Done | `agency-engineering-review` absorbed into native skills |
+| Learnings Engine | Done | Auto-promotes repeating insights (3+ hits) to `rules.md` |
+| Dynamic Skill loading | Done | Git/Web skill absorption, intent-based token conservation |
 | Topology manifest | Done | Local device capability scaffold |
-| Path portability layer | Done | `ARADHYA_HOME`, `parasite.toml`, and `~/.aradhya` resolution now centralize runtime paths |
-| Runtime permission rules | Done | User/project allow and deny rules load through the permission engine; deny rules win |
-| Hook engine foundation | Done | User/project hook configs support session and tool lifecycle events |
-| Agent definitions | Done | User/project Markdown agent definitions load with frontmatter metadata |
-| Session/state hardening | Done | Session management, history compression, and SQLite state primitives are in place |
-| Timeout kill switch | Done | Agent loop guardrails include iteration and repeated-tool limits |
-| LAN federation foundation | Started | Identity, peer registry, doctor command; transport is not complete |
+| Path portability layer | Done | `ARADHYA_HOME`, `parasite.toml`, and `~/.aradhya` resolution |
+| Session/state hardening | Done | Session management via SQLite WAL state store |
+| Timeout kill switch | Done | Agent loop guardrails for iteration limits |
+| LAN federation foundation | Done | SHA-256 fingerprint identity, peer registry, doctor |
 | Opus coordination notes | Done | `docs/OPUS_HANDOFF.md` |
-| Generated artifact cleanup | Started | `data/processed/pytest_*` artifacts are being removed from tracking and ignored |
-| Full user acceptance loop | Partial | Unit and doctor checks are required before push; interactive launcher smoke still needs manual/new-terminal verification |
+| Generated artifact cleanup | Done | `data/processed/pytest_*` artifacts removed and ignored |
+| Full user acceptance loop | Partial | Unit/doctor checks pass; UI smoke testing ongoing |
 
-## Host Repo Digestion Run - 2026-05-19
+## Host Repo Digestion Architecture
 
-Refresh result: all undigested clean host repos were pulled with `--ff-only`.
-`public-apis` was skipped during pull because its verified catalog had already
-been absorbed.
+The Parasite OS ingestion architecture has evolved into a fully resilient, 7-stage state-machine pipeline that analyzes downloaded code repositories (`Hosts/`) and extracts safe capabilities into Aradhya:
 
-Archive result: `public-apis` was moved to
-`Hosts\.archived\public-apis-20260519-224407` after confirming that
-`data\processed\context\public_apis_catalog.json` existed and matched the
-verified catalog hash.
+1. **ENGULF**: Identifies target and records basic metadata.
+2. **ISOLATE**: Quick trust check (README, LICENSE, GitHub stars) to assign a `trust_score`.
+3. **CHEW**: Confirms target isolation in the `Hosts/` directory.
+4. **SWALLOW (`analyzer.py`)**: Deep analysis of project structure, dependencies, extracting capabilities (MCP servers, API clients, agents). Runs `CloudPrivacyGate` against documentation. Produces `.parasite/DIGEST.md`.
+5. **DIGEST**: Plans integration artifacts.
+6. **EXTRACT**: Validates generated artifacts (Quality Gate).
+7. **ABSORB**: Pushes validated artifacts into Aradhya's live tree (producing `SKILL.md` files).
 
-Digestion result: these active host repos completed `7/7` stages with empty
-errors, `VALIDATE.artifacts.passed = true`, `ABSORB.status = completed`, and a
-generated `.parasite\DIGEST.md`:
-
-`claude-code`, `nanoclaw`, `picoclaw`, `agency-agents`, `Scrapegraph-ai`,
-`owl`, `nanobot`, `career-ops`, `gstack`, `zeroclaw`, `openhuman`,
-`agent-teams-ai`, `ruflo`, `openclaw`.
-
-Deletion state: keep the newly digested code repos in `Hosts\` for now. Their
-checkpoints and digests are complete, but they need a second-pass artifact
-review before archive/delete decisions because most did not copy live code
-artifacts into Aradhya.
-
-## Host Integration Ledger - 2026-05-19
-
-Implemented commands:
-
-- `/parasite candidates` ranks active and archived host repos for second-pass
-  integration and writes
-  `data\processed\context\host_integration_ledger.json`.
-- `/parasite inspect <repo>` shows one repo's capabilities, expected benefits,
-  absorbed artifacts, and next review gate.
-- `/parasite ledger` refreshes the JSON ledger without showing the full table.
-
-First promoted artifact:
-
-- `core\skills\agency-engineering-review\SKILL.md`
-- Source: `Hosts\agency-agents` engineering review, minimal-change,
-  architecture, and technical-writing notes.
-- Mode: text-only; no imported executable code.
-- Purpose: improve code review, minimal diffs, architecture tradeoff analysis,
-  and developer documentation quality.
+This is backed by `checkpoint.py` for resumable state and `deduplicator.py` to merge overlapping skills using LLM-assisted verification.
 
 ## Not Done Yet
 
 | Area | Status | Next gate |
 | --- | --- | --- |
 | Drive migration | Not started | Copy repo to `D:\ParasiteOS\Repos\ARADHYA`, run doctor/tests from there |
-| Portable runtime profile | Partial | Validate copied-workspace behavior and remove any remaining generated absolute-path assumptions |
-| LAN discovery and pairing | Not started | Signed peer handshake and trust prompt |
+| Portable runtime profile | Partial | Validate copied-workspace behavior |
 | Federation transport | Not started | Local-only message envelope with replay protection |
 | Watcher-driven context index | Not started | Replace repeated full scans with dirty-root invalidation |
-| Browser operator | Not started | Draft-before-submit workflow with confirmation |
-| Screen guidance | Not started | Screenshot-guided mode, no continuous frame stream |
 | Open-source OS base | Deferred | Revisit after OI loop and federation are useful |
 | Production packaging | Not started | Installer/startup integration after local OI loop stabilizes |
 
@@ -156,35 +125,20 @@ Move the active workspace to `D:` only after all gates pass from a copied repo:
 
 ## Next Build Slice
 
-1. Finish repository hygiene:
-   - keep `data/processed/pytest_*` ignored
-   - keep runtime caches and local state out of Git
-   - verify docs, unit tests, and doctor before push
-2. Add a storage profile command:
+1. Add a storage profile command:
    - show current repo path
    - detect available drives
    - recommend storage roles
    - warn when active drive free space is low
-3. Add a migration dry-run command:
+2. Add a migration dry-run command:
    - inspect tracked/untracked files
    - list ignored runtime files
    - produce a copy plan for `D:\ParasiteOS\Repos\ARADHYA`
    - do not move files automatically
-4. Add federation pairing:
-   - local peer discovery scaffold
-   - signed identity envelope
-   - explicit trust prompt
-5. Add watcher-backed context invalidation:
+3. Complete Federation Transport:
+   - implement signed identity envelopes
+   - implement peer trust prompts
+4. Add watcher-backed context invalidation:
    - dirty roots
    - miss debouncing
    - targeted refresh before full refresh
-
-## Manual User Tasks
-
-Current user tasks:
-
-1. Keep the new OpenRouter keys only in environment variables.
-2. Create the `D:\ParasiteOS` folder layout when ready.
-3. Do not install a separate OS for Parasite OS yet.
-4. Keep the Samsung T9 connected during any migration test.
-5. Run migration tests only on a copied repo until all gates pass.

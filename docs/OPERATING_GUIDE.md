@@ -1,6 +1,6 @@
 # Aradhya Operating Guide
 
-This guide reflects the current Windows repo state.
+This guide reflects the current Windows repo state for the Aradhya Operating Intelligence.
 
 ## 1. First Setup
 
@@ -12,14 +12,12 @@ scripts\first_run.bat
 ```
 
 What this does:
-
 - creates or repairs `venv`
 - installs `requirements.txt`
 - installs `requirements-dev.txt`
 - runs `scripts\doctor.bat`
 
 Optional feature packs:
-
 ```powershell
 venv\Scripts\python.exe -m pip install -r requirements-voice.txt
 venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
@@ -29,38 +27,46 @@ venv\Scripts\python.exe -m pip install -r requirements-windows.txt
 ## 2. Health Check
 
 Run:
-
 ```powershell
 scripts\doctor.bat
 ```
 
 Doctor checks:
-
 - Python 3.10+
 - local venv health
 - core runtime imports such as `rich`, `mcp`, `loguru`, `requests`, `pandas`, and `numpy`
 - development test dependencies
 - configured Ollama model availability
+- Local LAN federation and topology state
 
-## 3. Launch
+## 3. Launching Interfaces
 
-Recommended:
+Aradhya supports multiple robust interfaces.
 
+### Rich Terminal CLI
+Recommended start:
 ```powershell
 .\arise.bat
 ```
+*(Provides live-streaming text, thought-block rendering, and dashboard tables).*
 
-Direct module form:
-
+### Background Daemon & Floating Icon
+Launch the background daemon (with the system tray and floating icon overlay):
 ```powershell
-venv\Scripts\python.exe -m src.aradhya.main
+venv\Scripts\python.exe -m src.aradhya.daemon
 ```
+The Floating Icon is a drag-and-drop overlay with quick-toggles for the Microphone, Screen Watch, and Debate AI. It communicates with the Daemon via an IPC file queue (`.aradhya_ipc_queue`).
 
-The launcher prefers the local venv when it has the required runtime packages. If the venv is incomplete, it falls back to `python` on `PATH` and tells you to rerun `scripts\first_run.bat`.
+### Telegram Bot
+To start secure remote access:
+```text
+/telegram start
+```
+*(Only accessible to the first registered user; simulates live token generation via throttled message edits).*
 
 ## 4. First Commands To Try
 
-Inside Aradhya:
+Inside the Aradhya CLI:
 
 ```text
 /help
@@ -69,6 +75,7 @@ Inside Aradhya:
 /skills
 /voice
 /cache
+/topology
 open README.md
 yes proceed
 find the folder with the highest concentration of .txt files
@@ -80,8 +87,7 @@ exit
 ```
 
 Notes:
-
-- `/model` checks Ollama health.
+- `/model` checks Ollama/OpenRouter health.
 - `/voice` shows the audio inbox status.
 - `/cache` validates the directory cache.
 - Opening files, folders, apps, and URLs waits for confirmation.
@@ -90,25 +96,17 @@ Notes:
 ## 5. Configuration Files
 
 Current primary config path:
-
 - `core/config/profile.json`
 - `core/config/profile.local.json`
 - `core/config/preferences.json`
 
-Legacy fallback path:
-
-- `core/memory/profile.json`
-- `core/memory/profile.local.json`
-- `core/memory/preferences.json`
-
 Machine-local model selections should go in `profile.local.json`.
 
-## 6. Model Setup
+## 6. Model Setup & OpenRouter Fallback
 
-Aradhya uses Ollama by default.
+Aradhya uses **Ollama** by default, but has robust **OpenRouter** integration for fallback or cloud reasoning.
 
-The current model comes from:
-
+### Local Ollama Config:
 ```json
 {
   "model": {
@@ -118,71 +116,59 @@ The current model comes from:
   }
 }
 ```
-
 To change models:
-
-1. Pull the model with Ollama, for example `ollama pull qwen2.5-coder:7b`.
+1. Pull the model with Ollama, e.g. `ollama pull qwen2.5-coder:7b`.
 2. Update `core/config/profile.local.json`.
 3. Restart Aradhya.
 
-## 7. Voice Workflow
+### OpenRouter Config:
+To use cloud workers (like DeepSeek, Llama 3, etc.):
+1. Export `ARADHYA_OPENROUTER_API_KEY`.
+2. Set provider to `openrouter` in `profile.local.json`.
+3. Aradhya will automatically route requests through the `CloudPrivacyGate` to ensure no sensitive local secrets are leaked, and it provides an HTTP 429 failover chain if a model is rate-limited.
 
-Default voice provider: `manual_transcript`.
+## 7. Voice & Audio Workflow
 
-Manual flow:
-
-1. Put audio in `audio/inbox`, for example `task.wav`.
-2. Put matching text in `audio/manual_transcripts`, for example `task.txt`.
+### Default Flow (Manual / Inbox)
+1. Put audio in `audio/inbox`, e.g., `task.wav`.
+2. Put matching text in `audio/manual_transcripts`, e.g., `task.txt`.
 3. Run `/voice process`.
 
-Aradhya then:
-
-- reads the matching transcript
-- moves audio to `audio/processed`
-- writes final text to `audio/transcripts`
-- routes the transcript into the planner if Aradhya is awake
-
-Real local transcription:
-
+### Real Local Transcription (`faster_whisper`)
 1. Install `requirements-voice.txt`.
-2. Set `voice.provider` to `faster_whisper` in `core/config/profile.json` or `profile.local.json`.
-3. Run `/voice process`.
+2. Set `voice.provider` to `faster_whisper` in `core/config/profile.local.json`.
+3. Audio dropped in the inbox is automatically transcribed locally.
 
-Live microphone activation:
-
+### Live Voice Activation (Push-To-Talk)
 1. Install `requirements-voice-activation.txt`.
-2. Set `voice.provider` to `faster_whisper` or `whisper_command`.
-3. Run `/voice activate`.
+2. Ensure `voice.provider` is `faster_whisper` or `whisper_command`.
+3. Run `/voice activate` or use the global keyboard hotkey. Aradhya records until silence, transcribes, processes the command, and replies using `pyttsx3` text-to-speech.
 
-## 8. Directory Cache
+### Continuous Wake-Word Detection
+Toggle background listening via:
+```text
+/wake-word on
+```
+Aradhya listens in 2.5-second chunks for "wakeup" or "arise".
 
-Aradhya writes a human-readable summary to:
+## 8. Directory Cache & State Store
 
-- `project_tree.txt`
-
-The cache source of truth is:
-
-- `data/processed/context/manifest.json`
-- `data/processed/context/drive_*.json`
+Aradhya writes a human-readable summary to `project_tree.txt`.
+However, core session memory, message history, and audit events are managed by a robust, thread-safe **SQLite WAL Database** (`state.sqlite`).
 
 Default roots are intentionally bounded for first-run responsiveness:
+- Desktop, Documents, Downloads (if they exist)
+- The cloned project root
 
-- Desktop, if it exists
-- Documents, if it exists
-- Downloads, if it exists
-- the cloned project root
+*(Do not point `user_roots` at all of `C:\Users\<you>` unless you accept slower startup scans).*
 
-Do not point `user_roots` at all of `C:\Users\<you>` unless you accept slower startup scans.
+## 9. Important Code Subsystems
 
-## 9. Important Code Files
-
-- `src/aradhya/main.py`: CLI entry point
-- `src/aradhya/assistant_core.py`: wake, idle, confirmation, and planning flow
-- `src/aradhya/assistant_indexer.py`: directory cache and `project_tree.txt`
-- `src/aradhya/assistant_planner.py`: deterministic planner
-- `src/aradhya/llm_planner.py`: local-model fallback planner
-- `src/aradhya/model_provider.py`: Ollama provider
-- `src/aradhya/runtime_profile.py`: model and voice config loader
-- `src/aradhya/voice/pipeline.py`: audio inbox and transcript handling
-- `src/aradhya/voice/transcriber.py`: transcription providers
-- `src/aradhya/voice/activation.py`: live microphone activation
+- `src/aradhya/main.py`: CLI entry point & rich rendering loop.
+- `src/aradhya/daemon.py`: Background tray icon & HTTP API.
+- `src/aradhya/agent_loop.py`: ReAct execution, context boundaries, and kill switches.
+- `src/aradhya/state_store.py`: SQLite session and history compaction logic.
+- `src/aradhya/tools/`: Capabilities (Browser, File, Shell, Vision, Scheduler).
+- `src/aradhya/hooks/` & `src/aradhya/permission_rules.py`: The Parasite OS safety gates and interception engines.
+- `src/aradhya/parasite/`: The 7-stage host-repo ingestion state-machine.
+- `src/aradhya/voice/`: Transcriber, synthesizer, hotkey activation, and wake-word listeners.

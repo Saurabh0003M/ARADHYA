@@ -7,26 +7,28 @@
 ## What is Aradhya?
 
 Aradhya is a **local-first Operating Intelligence (OI)** assistant for
-Windows.  It runs on the user's machine using Ollama for LLM inference,
-meaning all data stays local and no cloud API keys are required.
+Windows. It runs on the user's machine using Ollama for LLM inference
+by default, with cloud fallbacks via OpenRouter gated by privacy checks.
+It is an autonomous orchestrator managing files, web browsing, screen vision,
+and persistent background tasks.
 
 ## Architecture
 
 ```
-User Input (CLI / Voice / Telegram / Floating Icon)
+User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
        |
        v
-   main.py  ──>  Command Dispatch (/help, /status, /voice, etc.)
+   main.py / daemon.py ──> Command Dispatch (/help, /voice, /telegram, etc.)
        |
-       v  (natural language input)
-   assistant_core.py  ──>  Context Engine + Session Manager
+       v  (natural language / raw input)
+   assistant_core.py   ──> Intent Planner + Context Engine (SQLite State Store)
        |
        v
-   agent_loop.py  ──>  Tool Registry + Confirmation Gate
-       |                    |
-       v                    v
-   model_provider.py    tools/ (file, shell, web, browser, vision, power)
-   (Ollama API)
+   agent_loop.py       ──> Hook Engine -> Permission Rules -> Confirmation Gate
+       |                           |
+       v                           v
+   model_provider.py       tools/ (browser, file, power, scheduler, session, shell, system, vision, web)
+   (Ollama/OpenRouter)     skills/ (dynamic behavioral extensions via SKILL.md)
 ```
 
 ## Key Files
@@ -34,36 +36,35 @@ User Input (CLI / Voice / Telegram / Floating Icon)
 | File | Purpose |
 |------|---------|
 | `src/aradhya/main.py` | CLI entry point, slash-command dispatch |
-| `src/aradhya/assistant_core.py` | State machine, planner, tool orchestration |
-| `src/aradhya/agent_loop.py` | Agentic execution loop (prompt -> model -> tool -> result) |
-| `src/aradhya/cli_ui.py` | Rich terminal rendering (all user-facing output) |
-| `src/aradhya/model_provider.py` | Ollama API integration |
-| `src/aradhya/tools/` | Tool implementations (read_file, run_command, etc.) |
-| `src/aradhya/skills/` | Skill framework (SKILL.md loader, registry) |
-| `src/aradhya/audit_logger.py` | JSONL audit trail for all tool executions |
-| `src/aradhya/telegram_bot.py` | Telegram bot for remote access |
-| `core/memory/profile.json` | Model and voice configuration |
-| `core/memory/preferences.json` | Behavior preferences (execution policy, index settings) |
-| `core/skills/` | Bundled SKILL.md files |
+| `src/aradhya/daemon.py` | Persistent background process, HTTP API, System Tray |
+| `src/aradhya/assistant_core.py` | State machine, context aggregation, planner orchestration |
+| `src/aradhya/agent_loop.py` | ReAct execution loop (prompt -> model -> tools) |
+| `src/aradhya/state_store.py` | Thread-safe SQLite backend for sessions and audit |
+| `src/aradhya/hooks/hook_engine.py` | Lifecycle interception and dynamic input/output rules |
+| `src/aradhya/permission_rules.py` | Pattern-based allow/deny execution policies |
+| `src/aradhya/ui/floating_icon.py` | Tkinter desktop overlay for quick Mic/Vision activation |
+| `src/aradhya/channels/telegram.py` | Remote access proxy mimicking live streaming |
+| `src/aradhya/tools/` | Tool implementations (Browser, Vision, Scheduler, etc.) |
+| `src/aradhya/skills/` | Skill framework (`SKILL.md` parser, registry, active context) |
 
 ## Safety Rules — NEVER VIOLATE
 
-1. **Confirmation gate**: The tools `run_command`, `write_file`, `delete_file`,
+1. **Confirmation Gate**: The tools `run_command`, `write_file`, `delete_file`,
    `move_file`, `open_path`, `open_url`, `browser_click`, `browser_type`,
-   `browser_submit`, `clipboard_write` require explicit user confirmation
-   before execution.
+   `browser_submit`, `clipboard_write`, and `schedule_task` require explicit 
+   user confirmation before execution.
 
 2. **Dry-run by default**: `allow_live_execution` is `false` by default.
    Plans are generated but not executed until the user approves.
 
-3. **Audit everything**: All tool calls are logged to `~/.aradhya/audit/audit.jsonl`.
-   Never disable or bypass the audit logger.
+3. **Audit Everything**: All tool calls are automatically logged to 
+   `~/.aradhya/audit/audit.jsonl` via event-sourcing. Never bypass the logger.
 
-4. **No auto-submit**: Never auto-execute destructive operations.
-   The user is always the final decision maker.
+4. **Hooks and Permissions**: Respect the Parasite OS engines. `PreToolUse`
+   and `PostToolUse` rules may deny, modify, or block actions prior to user gating.
 
-5. **Local-first**: Prefer local tools and local models.
-   Cloud APIs are optional fallbacks, never defaults.
+5. **Local-first**: Prefer local tools and local models. Cloud APIs (OpenRouter) 
+   are strictly fallback mechanisms subject to `CloudPrivacyGate` evaluation.
 
 ## Coding Conventions
 
@@ -84,10 +85,11 @@ User Input (CLI / Voice / Telegram / Floating Icon)
 
 ## How to Add a New Tool
 
-1. Create function in appropriate `src/aradhya/tools/<category>.py`
-2. Register in `assistant_core.py` `_build_tool_registry()` method
-3. If dangerous, add to `dangerous_tools` set in `agent_loop.py`
-4. Add unit test in `tests/unit/`
+1. Create a function in the appropriate `src/aradhya/tools/<category>.py`
+2. Decorate it with `@tool_definition`
+3. Register it inside `assistant_core.py` `_build_tool_registry()` method
+4. If dangerous, the tool is naturally gated via `agent_loop.py`'s `DANGEROUS_TOOLS` set
+5. Add a unit test in `tests/unit/`
 
 ## Project Philosophy (from ETHOS)
 
