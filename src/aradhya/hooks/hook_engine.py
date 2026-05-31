@@ -249,13 +249,14 @@ class HookEngine:
         """Execute a shell command hook with JSON stdin/stdout protocol."""
         input_json = json.dumps(payload, default=str)
 
+        import shlex
         proc = subprocess.run(
-            command,
+            shlex.split(command),
             input=input_json,
             capture_output=True,
             text=True,
             timeout=timeout,
-            shell=True,
+            shell=False,
         )
 
         if proc.returncode == 2:

@@ -66,7 +66,6 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         # Sandboxing support (ZeroClaw feature)
         import shlex
         final_command_args = shlex.split(command)
-        is_sandboxed = False
 
         if getattr(prefs, "use_docker_sandbox", False):
             try:
@@ -86,7 +85,6 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
                     "python:3.10-slim",
                     "bash", "-c", command
                 ]
-                is_sandboxed = True
             except subprocess.CalledProcessError:
                 # Docker not installed/running, gracefully fallback to local execution
                 pass
@@ -97,7 +95,7 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
             shell=False,
             capture_output=True,
             text=True,
-            cwd=None if is_sandboxed else str(work_dir),
+            cwd=str(work_dir) if "docker" not in final_command_args else None,
             timeout=timeout,
         )
         wall_time = time.perf_counter() - start_time
