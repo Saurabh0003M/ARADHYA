@@ -27,7 +27,11 @@ _terminal_buffer: collections.deque[str] = collections.deque(maxlen=_MAX_TERMINA
 
 @tool_definition(
     name="run_command",
-    description="Execute a shell command and return its output. Requires user confirmation.",
+    description=(
+        "Execute a shell command and return its output. Requires user confirmation. "
+        "Note: Shell features like pipes (|) or redirection (>) will no longer work "
+        "as commands are executed safely without a shell."
+    ),
     parameters={
         "type": "object",
         "properties": {
@@ -58,27 +62,41 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         from src.aradhya.assistant_models import load_preferences
         prefs = load_preferences()
 
-        final_command = command
         # Sandboxing support (ZeroClaw feature)
+        import shlex
+        final_command_args = shlex.split(command)
+        is_sandboxed = False
+
         if getattr(prefs, "use_docker_sandbox", False):
             try:
                 # Check if docker is available
-                subprocess.run("docker --version", shell=True, capture_output=True, check=True)
-                import shlex
-                escaped_cmd = shlex.quote(command)
+                subprocess.run(
+                    ["docker", "--version"],
+                    shell=False,
+                    capture_output=True,
+                    check=True
+                )
+                quoted_command = shlex.quote(command)
                 # Mount the working directory to /workspace and run the command securely
-                final_command = f'docker run --rm -v "{work_dir}:/workspace" -w /workspace python:3.10-slim bash -c {escaped_cmd}'
+                final_command_args = [
+                    "docker", "run", "--rm",
+                    "-v", f"{work_dir}:/workspace",
+                    "-w", "/workspace",
+                    "python:3.10-slim",
+                    "bash", "-c", quoted_command
+                ]
+                is_sandboxed = True
             except subprocess.CalledProcessError:
                 # Docker not installed/running, gracefully fallback to local execution
                 pass
 
         start_time = time.perf_counter()
         result = subprocess.run(
-            final_command,
-            shell=True,
+            final_command_args,
+            shell=False,
             capture_output=True,
             text=True,
-            cwd=str(work_dir) if final_command == command else None,
+            cwd=None if is_sandboxed else str(work_dir),
             timeout=timeout,
         )
         wall_time = time.perf_counter() - start_time

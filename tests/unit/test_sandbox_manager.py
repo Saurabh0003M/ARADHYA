@@ -39,7 +39,7 @@ class TestSandboxManagerPolicy:
 
 
 class TestSandboxManagerRunCommand:
-    @patch("subprocess.run")
+    @patch("src.aradhya.sandbox_manager.subprocess.run")
     def test_run_echo_command(self, mock_run: MagicMock, tmp_path: Path) -> None:
         mock_run.return_value = MagicMock(returncode=0, stdout="hello\n", stderr="")
         mgr = SandboxManager(project_root=tmp_path)
@@ -48,16 +48,16 @@ class TestSandboxManagerRunCommand:
         assert "hello" in result["stdout"]
         assert result["wall_time_ms"] >= 0
 
-    @patch("subprocess.run")
+    @patch("src.aradhya.sandbox_manager.subprocess.run")
     def test_run_failing_command(self, mock_run: MagicMock, tmp_path: Path) -> None:
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
         mgr = SandboxManager(project_root=tmp_path)
         result = mgr.run_in_sandbox(
             "exit 1", workdir=tmp_path
         )
         assert result["exit_code"] != 0
 
-    @patch("subprocess.run")
+    @patch("src.aradhya.sandbox_manager.subprocess.run")
     def test_timeout_returns_error(self, mock_run: MagicMock, tmp_path: Path) -> None:
         import subprocess
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="Start-Sleep", timeout=0.2)
@@ -79,10 +79,13 @@ class TestSandboxManagerRunCommand:
 
 
 class TestSandboxACLConstruction:
-    def test_apply_acls_calls_icacls(self, tmp_path: Path) -> None:
+    @patch("os.environ.get")
+    def test_apply_acls_calls_icacls(self, mock_getenv: MagicMock, tmp_path: Path) -> None:
         """ACL application should call icacls for each path."""
+        # Provide a fake USERNAME so the icacls logic executes
+        mock_getenv.return_value = "TestUser"
         mgr = SandboxManager(project_root=tmp_path)
-        with patch("subprocess.run") as mock_run, patch("os.environ.get", return_value="fakeuser"):
+        with patch("src.aradhya.sandbox_manager.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stderr="", stdout="")
             mgr._apply_acls([], [tmp_path])
         # icacls should have been called for the write root

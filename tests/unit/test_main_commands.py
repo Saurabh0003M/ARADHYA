@@ -94,7 +94,10 @@ def test_dispatch_parasite_candidates_command(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
 
-    handled = main._dispatch_command("/parasite candidates")
+    from unittest.mock import patch
+    # Mock rich console print to avoid emoji rendering errors in Windows CI
+    with patch("src.aradhya.ui.cli.console.print"):
+        handled = main._dispatch_command("/parasite candidates")
 
     assert handled is True
     assert (tmp_path / "data" / "processed" / "context" / "host_integration_ledger.json").is_file()
