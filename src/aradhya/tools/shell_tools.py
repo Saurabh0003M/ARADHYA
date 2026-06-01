@@ -76,14 +76,14 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
                     capture_output=True,
                     check=True
                 )
-                shlex.quote(command)
+                quoted_command = shlex.quote(command)
                 # Mount the working directory to /workspace and run the command securely
                 final_command_args = [
                     "docker", "run", "--rm",
                     "-v", f"{work_dir}:/workspace",
                     "-w", "/workspace",
                     "python:3.10-slim",
-                    "bash", "-c", command
+                    "bash", "-c", quoted_command
                 ]
                 is_sandboxed = True
             except subprocess.CalledProcessError:
