@@ -292,14 +292,16 @@ class HistoryProcessorPipeline:
             before = len(result)
             result = processor(result)
             # Calculate compression stats
-            sum(len(m.get("content", "")) for m in result)
-            sum(len(m.get("content", "")) for m in messages)
+            after_chars = sum(len(m.get("content", "")) for m in result)
+            before_chars = sum(len(m.get("content", "")) for m in messages)
             if before != len(result):
                 logger.debug(
-                    "History processor {}: {} -> {} messages",
+                    "History processor {}: {} -> {} messages ({} -> {} chars)",
                     type(processor).__name__,
                     before,
                     len(result),
+                    before_chars,
+                    after_chars
                 )
         return result
 
