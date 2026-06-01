@@ -984,7 +984,7 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
     remaining = think_pattern.sub("", remaining)
 
     if thoughts:
-        console.print(f"  [dim italic][~] <thought> (hidden for brevity)[/]")
+        console.print("  [dim italic][~] <thought> (hidden for brevity)[/]")
         console.print()
 
     # 3. Render the main body

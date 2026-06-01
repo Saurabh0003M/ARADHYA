@@ -19,7 +19,6 @@ while freeing context space.
 from __future__ import annotations
 
 import re
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -293,8 +292,8 @@ class HistoryProcessorPipeline:
             before = len(result)
             result = processor(result)
             # Calculate compression stats
-            after_chars = sum(len(m.get("content", "")) for m in result)
-            before_chars = sum(len(m.get("content", "")) for m in messages)
+            sum(len(m.get("content", "")) for m in result)
+            sum(len(m.get("content", "")) for m in messages)
             if before != len(result):
                 logger.debug(
                     "History processor {}: {} -> {} messages",

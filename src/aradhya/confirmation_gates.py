@@ -16,7 +16,6 @@ Usage::
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import Any, Protocol
 
 
@@ -101,7 +100,7 @@ class TelegramConfirmationGate:
         args_preview = ", ".join(
             f"{k}={str(v)[:60]}" for k, v in list(arguments.items())[:3]
         )
-        prompt = (
+        (
             f"🔧 Tool '{tool_name}' wants to execute"
             + (f":\n{args_preview}" if args_preview else "")
             + "\n\nReply 'yes' to approve, 'always' to always approve, or 'no' to deny."

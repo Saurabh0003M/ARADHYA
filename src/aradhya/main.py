@@ -1026,7 +1026,7 @@ def _run_cli_loop(handler_kwargs: dict):
 
         # ── Natural language input ────────────────────────────────
         # Everything that isn't a command goes to the assistant planner.
-        resp = assistant.handle_transcript(command, stream_handler=render_stream, session_name=session_name)
+        resp = assistant.handle_transcript(command, stream_handler=render_stream, session_name=handler_kwargs["session_name"])
 
         spoken = "" if _response_was_streamed(resp) else resp.spoken_response
         if resp.transcript_echo or resp.awaiting_confirmation or spoken:
