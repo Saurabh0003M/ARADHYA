@@ -430,7 +430,7 @@ class OpenRouterTextModelProvider:
             return
 
         if used_model != self.profile.model_name:
-            yield f"[Routed to {used_model} — primary model was rate-limited]\n\n"
+            yield f"[Routed to {used_model} - primary model was rate-limited]\n\n"
 
         # Stream with safety valve — truncate runaway/gibberish responses
         total_chars = 0

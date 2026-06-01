@@ -68,7 +68,9 @@ class TestSandboxManagerRunCommand:
         assert result["exit_code"] == -1
         assert "timed out" in result["stderr"].lower()
 
-    def test_format_output_includes_exit_code(self, tmp_path: Path) -> None:
+    @patch("subprocess.run")
+    def test_format_output_includes_exit_code(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        mock_run.return_value = MagicMock(returncode=0, stdout="formatted\n", stderr="")
         mgr = SandboxManager(project_root=tmp_path)
         result = mgr.run_in_sandbox("echo formatted", workdir=tmp_path)
         output = mgr.format_output(result)

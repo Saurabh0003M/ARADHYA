@@ -31,6 +31,7 @@ from rich.text import Text
 from rich.theme import Theme
 from rich.live import Live
 from rich import box
+from rich.markup import escape
 
 # ── Global theme ──────────────────────────────────────────────────────
 ARADHYA_THEME = Theme(
@@ -66,7 +67,7 @@ def render_banner(model_name: str, voice_inbox: str, skills_active: int,
     console.print(
         Panel(
             f"[bold #00d4aa]{banner_text}[/]\n"
-            "[dim]       Operating Intelligence  v1.0[/]",
+            "[dim]       Operating Intelligence  v1.1[/]",
             border_style="#00d4aa",
             padding=(0, 4),
         )
@@ -120,99 +121,118 @@ def render_response(spoken: str, transcript_echo: str | None = None,
 
 
 # ── Help command ──────────────────────────────────────────────────────
-def render_help() -> None:
+def render_help(topic: str | None = None) -> None:
     """Show categorized command reference."""
-    table = Table(
-        title="[heading]Aradhya Commands[/]",
-        box=box.ROUNDED,
-        border_style="dim",
-        title_style="heading",
-        show_lines=True,
-        expand=False,
-    )
-    table.add_column("Command", style="accent", no_wrap=True, min_width=22)
-    table.add_column("Description")
+    categories = {
+        "Core": [
+            ("/help [topic]", "Show this command reference (or specific topic)"),
+            ("/status", "Show system status (model, voice, skills, state)"),
+            ("/topology", "Show detected local device topology"),
+            ("/topology rescan", "Regenerate topology for this machine"),
+            ("/sleep", "Send Aradhya to idle"),
+            ("exit", "Shut down Aradhya"),
+        ],
+        "Voice": [
+            ("/voice", "Show voice pipeline status"),
+            ("/voice process", "Process pending audio files from inbox"),
+            ("/voice activate", "Start live microphone capture"),
+            ("/voice stop", "Stop live microphone capture"),
+            ("/wake-word on", "Start continuous wake word detection"),
+            ("/wake-word off", "Stop wake word detection"),
+        ],
+        "Model": [
+            ("/model", "Check configured model health"),
+            ("/model workers", "List local and optional cloud model workers"),
+            ("/model workers assess <text>", "Check if text is safe for cloud routing"),
+            ("/model ask <prompt>", "Send a direct prompt to the local model"),
+        ],
+        "Skills": [
+            ("/skills", "List all loaded skills with status"),
+            ("/skills enable <name>", "Enable a skill"),
+            ("/skills disable <name>", "Disable a skill"),
+        ],
+        "Tools": [
+            ("/icon on", "Launch the floating quick-access icon"),
+            ("/icon off", "Close the floating icon"),
+            ("/cache", "Rebuild and benchmark the context cache"),
+        ],
+        "APIs": [
+            ("/apis", "Show API catalog source and categories"),
+            ("/apis search <query>", "Search the local public API catalog"),
+            ("/apis category <name>", "List APIs in a category"),
+            ("/apis inspect <name>", "Show one API entry and risk label"),
+            ("/apis recommend <need>", "Recommend APIs for a stated need"),
+        ],
+        "Parasite": [
+            ("/parasite status", "Show host repo digestion status"),
+            ("/parasite candidates", "Rank digested host repos for integration"),
+            ("/parasite inspect <repo>", "Inspect one host integration candidate"),
+            ("/parasite ledger", "Write the host integration ledger JSON"),
+        ],
+        "Federation": [
+            ("/federation init", "Create local LAN federation identity"),
+            ("/federation status", "Show local federation status"),
+            ("/federation doctor", "Run federation foundation diagnostics"),
+        ],
+        "Telegram": [
+            ("/telegram start", "Start Telegram bot for remote access"),
+            ("/telegram stop", "Stop Telegram bot"),
+        ],
+        "Safety": [
+            ("/audit", "Show recent audit log entries"),
+        ],
+        "Daemon": [
+            ("/daemon start", "Start background daemon"),
+            ("/daemon stop", "Stop background daemon"),
+        ],
+        "Setup": [
+            ("/setup", "Run the interactive setup wizard"),
+        ]
+    }
 
-    # Core
-    table.add_row("[heading]── Core ──", "")
-    table.add_row("/help", "Show this command reference")
-    table.add_row("/status", "Show system status (model, voice, skills, state)")
-    table.add_row("/topology", "Show detected local device topology")
-    table.add_row("/topology rescan", "Regenerate topology for this machine")
-    table.add_row("/sleep", "Send Aradhya to idle")
-    table.add_row("exit", "Shut down Aradhya")
+    if topic:
+        topic_normalized = topic.strip().lower()
+        matched_cat = next((k for k in categories.keys() if k.lower() == topic_normalized), None)
+        if not matched_cat:
+            console.print(f"  [error]Unknown help topic '{topic}'.[/]")
+            console.print(f"  [dim]Available topics: {', '.join(categories.keys())}[/]")
+            console.print()
+            return
 
-    # Voice
-    table.add_row("[heading]── Voice ──", "")
-    table.add_row("/voice", "Show voice pipeline status")
-    table.add_row("/voice process", "Process pending audio files from inbox")
-    table.add_row("/voice activate", "Start live microphone capture")
-    table.add_row("/voice stop", "Stop live microphone capture")
-    table.add_row("/wake-word on", "Start continuous wake word detection")
-    table.add_row("/wake-word off", "Stop wake word detection")
+        table = Table(
+            title=f"[heading]Aradhya Commands: {matched_cat}[/]",
+            box=box.ROUNDED,
+            border_style="dim",
+            title_style="heading",
+            expand=False,
+        )
+        table.add_column("Command", style="accent", no_wrap=True, min_width=22)
+        table.add_column("Description")
+        for cmd, desc in categories[matched_cat]:
+            table.add_row(cmd, desc)
+        console.print(table)
+    else:
+        # Show all topics in grouped tables, but compactly
+        for cat_name, commands in categories.items():
+            table = Table(
+                title=f"[heading]-- {cat_name} --[/]",
+                box=box.SIMPLE,
+                border_style="dim",
+                title_style="heading",
+                expand=False,
+                show_header=False,
+                pad_edge=False,
+            )
+            table.add_column("Command", style="accent", no_wrap=True, min_width=26)
+            table.add_column("Description")
+            for cmd, desc in commands:
+                table.add_row(f"  {cmd}", desc)
+            console.print(table)
 
-    # Model
-    table.add_row("[heading]── Model ──", "")
-    table.add_row("/model", "Check configured model health")
-    table.add_row("/model workers", "List local and optional cloud model workers")
-    table.add_row("/model workers assess <text>", "Check if text is safe for cloud routing")
-    table.add_row("/model ask <prompt>", "Send a direct prompt to the local model")
-
-    # Skills
-    table.add_row("[heading]-- Skills --", "")
-    table.add_row("/skills", "List all loaded skills with status")
-    table.add_row("/skills enable <name>", "Enable a skill")
-    table.add_row("/skills disable <name>", "Disable a skill")
-
-    # Tools
-    table.add_row("[heading]-- Tools --", "")
-    table.add_row("/icon on", "Launch the floating quick-access icon")
-    table.add_row("/icon off", "Close the floating icon")
-    table.add_row("/cache", "Rebuild and benchmark the context cache")
-
-    # API catalog
-    table.add_row("[heading]-- Public APIs --", "")
-    table.add_row("/apis", "Show API catalog source and categories")
-    table.add_row("/apis search <query>", "Search the local public API catalog")
-    table.add_row("/apis category <name>", "List APIs in a category")
-    table.add_row("/apis inspect <name>", "Show one API entry and risk label")
-    table.add_row("/apis recommend <need>", "Recommend APIs for a stated need")
-
-    # Parasite OS
-    table.add_row("[heading]-- Parasite OS --", "")
-    table.add_row("/parasite status", "Show host repo digestion status")
-    table.add_row("/parasite candidates", "Rank digested host repos for integration")
-    table.add_row("/parasite inspect <repo>", "Inspect one host integration candidate")
-    table.add_row("/parasite ledger", "Write the host integration ledger JSON")
-
-    # Federation
-    table.add_row("[heading]-- Federation --", "")
-    table.add_row("/federation init", "Create local LAN federation identity")
-    table.add_row("/federation status", "Show local federation status")
-    table.add_row("/federation doctor", "Run federation foundation diagnostics")
-
-    # Telegram
-    table.add_row("[heading]-- Telegram --", "")
-    table.add_row("/telegram start", "Start Telegram bot for remote access")
-    table.add_row("/telegram stop", "Stop Telegram bot")
-
-    # Safety
-    table.add_row("[heading]-- Safety --", "")
-    table.add_row("/audit", "Show recent audit log entries")
-
-    # Daemon
-    table.add_row("[heading]-- Daemon --", "")
-    table.add_row("/daemon start", "Start background daemon (survives terminal close)")
-    table.add_row("/daemon stop", "Stop background daemon")
-
-    # Setup
-    table.add_row("[heading]-- Setup --", "")
-    table.add_row("/setup", "Run the interactive setup wizard")
-
-    console.print(table)
     console.print()
     console.print(
-        "[dim]  Tip: Or just type naturally -- Aradhya understands plain English.[/]"
+        "[dim]  Tip: Type `/help <topic>` to view a specific category. "
+        "Or just type naturally![/]"
     )
     console.print()
 
@@ -221,6 +241,7 @@ def render_help() -> None:
 def render_status(
     *,
     is_awake: bool,
+    model_provider_name: str,
     model_name: str,
     model_ok: bool | None,
     pending_plan: Any,
@@ -241,33 +262,48 @@ def render_status(
     table.add_column("", style="accent", no_wrap=True)
     table.add_column("")
 
+    # 1. State
     state_icon = "[+]" if is_awake else "[~]"
     state_text = "[success]Awake[/]" if is_awake else "[warning]Idle[/]"
     table.add_row(f"{state_icon} State", state_text)
 
+    # 2. Safety / Execution
+    exec_icon = "[!]" if live_execution else "[~]"
+    exec_text = "[error]Live Execution Enabled[/]" if live_execution else "[success]Dry-run Mode[/]"
+    table.add_row(f"{exec_icon} Safety", exec_text)
+
+    # 3. Pending Plan
+    if pending_plan:
+        plan_text = f"[warning]{pending_plan.kind.value}[/] awaiting confirmation"
+        table.add_row("[!] Action", plan_text)
+    else:
+        table.add_row("[ ] Action", "[dim]None pending[/]")
+
+    # 4. Model Health
     model_icon = "[+]" if model_ok else ("[!]" if model_ok is False else "[?]")
     model_status = "[success]Ready[/]" if model_ok else (
         "[error]Not ready[/]" if model_ok is False else "[dim]Unknown[/]"
     )
-    table.add_row(f"{model_icon} Model", f"{model_name} — {model_status}")
+    table.add_row(f"{model_icon} Model", f"{model_name} - {model_status}")
 
-    plan_text = (
-        f"[warning]{pending_plan.kind.value}[/] awaiting confirmation"
-        if pending_plan else "[dim]None[/]"
+    # 5. Privacy / Cloud Fallback
+    cloud_icon = "[!]" if model_provider_name != "ollama" else "[+]"
+    cloud_text = (
+        "[warning]Cloud API (Privacy Gate Active)[/]"
+        if model_provider_name != "ollama"
+        else "[success]Local Inference Only[/]"
     )
-    table.add_row("Pending Plan", plan_text)
+    table.add_row(f"{cloud_icon} Privacy", cloud_text)
 
+    # 6. Voice
     voice_icon = "[+]" if voice_running else "[ ]"
     voice_text = f"{voice_provider}" + (
-        " — [success]listening[/]" if voice_running else ""
+        " - [success]listening[/]" if voice_running else ""
     )
     table.add_row(f"{voice_icon} Voice", voice_text)
 
-    table.add_row("Skills", f"{skills_active} active / {skills_total} loaded")
-
-    exec_icon = "[+]" if live_execution else "[x]"
-    exec_text = "[success]Enabled[/]" if live_execution else "[warning]Dry-run[/]"
-    table.add_row(f"{exec_icon} Execution", exec_text)
+    # 7. Skills
+    table.add_row("[~] Skills", f"{skills_active} active / {skills_total} loaded")
 
     console.print(table)
     console.print()
@@ -503,6 +539,192 @@ def render_api_entries(title: str, entries: list[Any], risk_labels: dict[str, st
     console.print()
 
 
+def render_audit(entries: list[dict[str, Any]], last_session: str, tool_ok: int, tool_fail: int, security_count: int) -> None:
+    """Render recent audit log events."""
+    console.print()
+    console.print("[heading]  Audit Log - Last 20 Events[/]")
+    console.print(
+        f"  Tools: [success]{tool_ok} OK[/]  [error]{tool_fail} FAIL[/]  "
+        f"|  Security events: [warning]{security_count}[/]  "
+        f"|  Session: [dim]{last_session[:12]}[/]"
+    )
+    console.print()
+
+    for entry in entries:
+        raw_ts = entry.get("ts", "")
+        if raw_ts and "T" in raw_ts:
+            ts = raw_ts[5:19].replace("T", " ")   # "MM-DD HH:MM:SS"
+        else:
+            ts = raw_ts[-8:] if raw_ts else "??:??:??"
+        etype = entry.get("type", "?")
+
+        if etype == "tool_call":
+            tool = entry.get("tool", "?")
+            ok = entry.get("success", False)
+            status_tag = "[success]OK  [/]" if ok else "[error]FAIL[/]"
+            preview = (entry.get("output_preview", "") or "")[:60]
+            console.print(
+                f"  [dim]{ts}[/] {status_tag} [accent]{tool:<22}[/]"
+                + (f" [dim]{preview}[/]" if preview else "")
+            )
+        elif etype == "turn_start":
+            msg = (entry.get("user_message", "") or "")[:50]
+            console.print(f"  [dim]{ts}[/] [accent]> TURN[/]  [dim]{msg}[/]")
+        elif etype == "turn_end":
+            iters = entry.get("iterations", "?")
+            calls = entry.get("tool_calls_count", 0)
+            ok = entry.get("success", True)
+            status_tag = "[success]OK[/]" if ok else "[error]X[/]"
+            console.print(
+                f"  [dim]{ts}[/] {status_tag} [accent]END[/]    "
+                f"[dim]iter={iters} tools={calls}[/]"
+            )
+        elif etype == "command":
+            cmd = entry.get("command", "?")
+            console.print(f"  [dim]{ts}[/] [accent]CMD[/]    {cmd}")
+        elif etype in ("security", "tool_blocked_dry_run"):
+            evt = entry.get("event", entry.get("message", "?"))
+            console.print(f"  [dim]{ts}[/] [warning]! SEC[/]  {evt}")
+        else:
+            console.print(f"  [dim]{ts}[/] [dim]{etype}[/]")
+
+    console.print()
+    console.print(
+        "  [dim]Showing 20 of latest events. "
+        "Full log: ~/.aradhya/audit/audit.jsonl[/]"
+    )
+    console.print()
+
+def render_parasite_candidates(candidates: list[Any], ledger_path: str) -> None:
+    """Render the host integration queue."""
+    if not candidates:
+        render_info("No host integration candidates found.")
+        return
+
+    console.print("\n[bold]  Parasite OS - Integration Candidates[/]\n")
+    table = Table(
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=True,
+        expand=False,
+    )
+    table.add_column("#", justify="right", no_wrap=True)
+    table.add_column("Repo", style="accent", no_wrap=True)
+    table.add_column("Priority", no_wrap=True)
+    table.add_column("Score", justify="right", no_wrap=True)
+    table.add_column("State", no_wrap=True)
+    table.add_column("Capabilities")
+    table.add_column("Recommended action")
+
+    for index, candidate in enumerate(candidates, start=1):
+        caps = ", ".join(candidate.capabilities[:4])
+        if len(candidate.capabilities) > 4:
+            caps += f", +{len(candidate.capabilities) - 4}"
+        if not caps:
+            caps = "[dim]none[/]"
+
+        repo = candidate.repo
+        if candidate.archived:
+            repo = f"{repo} [dim](archived)[/]"
+
+        table.add_row(
+            str(index),
+            repo,
+            candidate.priority,
+            str(candidate.score),
+            f"{candidate.completed_stage_count}/7 {candidate.status}",
+            caps,
+            candidate.recommended_action,
+        )
+
+    console.print(table)
+    console.print(f"  [dim]Ledger: {ledger_path}[/]")
+    console.print("  [dim]Use /parasite inspect <repo> for the exact benefits and next gate.[/]\n")
+
+
+def render_parasite_inspect(candidate: Any) -> None:
+    """Render one host integration candidate."""
+    table = Table(
+        title=f"[heading]Parasite Candidate: {candidate.repo}[/]",
+        box=box.ROUNDED,
+        border_style="dim",
+        show_header=False,
+        expand=False,
+    )
+    table.add_column("", style="accent", no_wrap=True)
+    table.add_column("")
+    table.add_row("Path", candidate.host_path)
+    table.add_row("Archived", str(candidate.archived))
+    table.add_row("Status", f"{candidate.status} ({candidate.completed_stage_count}/7)")
+    table.add_row("Priority", f"{candidate.priority} / score {candidate.score}")
+    table.add_row("Trust", candidate.trust_score or "unknown")
+    table.add_row("Type", candidate.project_type)
+    table.add_row("Files", str(candidate.files_scanned))
+    table.add_row("Dependencies", str(candidate.dependency_count))
+    table.add_row("Capabilities", ", ".join(candidate.capabilities) or "none")
+    table.add_row("Integration plan", ", ".join(candidate.integration_plan) or "none")
+    table.add_row("Absorbed", str(candidate.absorbed_count))
+    table.add_row("Digest", "yes" if candidate.digest_exists else "no")
+    table.add_row("Validate", "passed" if candidate.validate_passed else "not passed")
+    table.add_row("Absorb", "completed" if candidate.absorb_completed else "not completed")
+    if candidate.error:
+        table.add_row("Error", f"[error]{candidate.error}[/]")
+    table.add_row("Action", candidate.recommended_action)
+    table.add_row("Next gate", candidate.next_gate)
+    if candidate.description:
+        table.add_row("Description", candidate.description)
+
+    console.print(table)
+    if candidate.benefits:
+        console.print("  [accent]Benefits[/]")
+        for benefit in candidate.benefits:
+            console.print(f"  - {benefit}")
+    if candidate.absorbed_artifacts:
+        console.print("  [accent]Absorbed artifacts[/]")
+        for artifact in candidate.absorbed_artifacts:
+            console.print(f"  - {artifact}")
+    console.print()
+
+
+def render_parasite_status(targets: list[dict[str, Any]]) -> None:
+    """Render digestion pipeline status."""
+    if not targets:
+        render_info("No targets in Hosts/ yet. Clone a repo there or use /parasite digest <name>.")
+        return
+    console.print("\n[bold]  Parasite OS - Digestion Pipeline Status[/]\n")
+    for t in targets:
+        stage = t["current_stage"]
+        completed = len(t["completed_stages"])
+        trust = t.get("trust_score") or "-"
+        error = t.get("error")
+        if error:
+            status_icon = "[error][X][/]"
+        elif completed == 7:
+            status_icon = "[success][OK][/]"
+        elif completed > 0:
+            status_icon = "[warning][~][/]"
+        else:
+            status_icon = "[dim][ ][/]"
+        console.print(
+            f"  {status_icon} [bold]{t['name']:25s}[/] "
+            f"stage: {stage:12s}  "
+            f"done: {completed}/7  "
+            f"trust: {trust}"
+        )
+        if error:
+            console.print(f"     [error]Error: {error}[/]")
+    console.print()
+
+
+def render_model_ask_result(text: str) -> None:
+    """Render a direct response from the model."""
+    console.print(f"  [accent]Model >[/] {text}")
+    console.print()
+
+def render_daemon_start_success(pid: int, url: str = "http://127.0.0.1:19842") -> None:
+    """Render daemon start success message."""
+    render_success(f"Daemon started in background (PID: {pid}). API on {url}")
+
 def render_api_entry(entry: Any, risk_label: str) -> None:
     """Render one API catalog entry."""
 
@@ -649,6 +871,58 @@ def render_warning(message: str) -> None:
 def render_error(message: str) -> None:
     console.print(f"  [error][!][/] {message}")
 
+def render_tool_confirmation_prompt(tool_name: str, arguments: dict[str, Any]) -> None:
+    """Render a detailed security confirmation panel for a dangerous tool."""
+
+    # Extract common dangerous arguments
+    command = escape(str(arguments.get("command", "")))
+    path = escape(str(arguments.get("path", "")))
+    cwd = escape(str(arguments.get("cwd", "")))
+    url = escape(str(arguments.get("url", "")))
+
+    details = Table(box=box.SIMPLE, show_header=False, pad_edge=False, expand=False)
+    details.add_column("Key", style="accent")
+    details.add_column("Value")
+
+    details.add_row("Tool", f"[bold]{escape(tool_name)}[/]")
+    if command:
+        details.add_row("Command", f"[highlight]{command}[/]")
+    if path:
+        details.add_row("Path", path)
+    if cwd:
+        details.add_row("CWD", cwd)
+    if url:
+        details.add_row("URL", url)
+
+    # Any other arguments not handled above
+    for k, v in arguments.items():
+        if k not in ("command", "path", "cwd", "url"):
+            val_str = str(v)
+            if len(val_str) > 100:
+                val_str = val_str[:100] + "..."
+            details.add_row(escape(k.capitalize()), escape(val_str))
+
+    # Risk level heuristics
+    risk_level = "High"
+    border_style = "error"
+    if tool_name in ("browser_click", "browser_type"):
+        risk_level = "Medium"
+        border_style = "warning"
+    elif tool_name in ("write_file", "delete_file", "move_file", "run_command", "open_url"):
+        risk_level = "Critical"
+        border_style = "error"
+
+    details.add_row("Risk", f"[{border_style}]{risk_level}[/]")
+
+    panel = Panel(
+        details,
+        title="[!] Security Gate",
+        border_style=border_style,
+        padding=(0, 2),
+    )
+    console.print(panel)
+    console.print(r"  Approve? [success]\[y]es[/] / [success]\[a]lways[/] / [error]\[n]o[/]")
+
 def get_prompt() -> str:
     """Return styled user prompt text for input()."""
     return "[user]You >[/user] "
@@ -693,12 +967,12 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
     remaining = text
 
     # 1. Extract and render routing notices
-    routing_pattern = re.compile(r"\[Routed to (.+?) \u2014 (.+?)\]\n*")
+    routing_pattern = re.compile(r"\[Routed to (.+?) - (.+?)\]\n*")
     for match in routing_pattern.finditer(remaining):
         model_name = match.group(1)
         reason = match.group(2)
         console.print(
-            f"  [dim]\u27f3 Routed \u2192 [accent]{model_name}[/accent] ({reason})[/]"
+            f"  [dim][~] Routed -> [accent]{model_name}[/accent] ({reason})[/]"
         )
     remaining = routing_pattern.sub("", remaining)
 
@@ -711,12 +985,7 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
     remaining = think_pattern.sub("", remaining)
 
     if thoughts:
-        for thought in thoughts:
-            cleaned = thought.strip()
-            if cleaned:
-                if len(cleaned) > 200:
-                    cleaned = cleaned[:200] + "\u2026"
-                console.print(f"  [dim italic]\U0001f4ad {cleaned}[/]")
+        console.print("  [dim italic][~] <thought> (hidden for brevity)[/]")
         console.print()
 
     # 3. Render the main body
@@ -731,7 +1000,9 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
 
     if has_markdown:
         console.print(prefix.rstrip())
-        console.print(Markdown(body, code_theme="monokai"), width=100)
+        # Cap markdown width to 100 or console width, whichever is smaller, to fit narrow terminals
+        render_width = min(console.width, 100) if console.width else 100
+        console.print(Markdown(body, code_theme="monokai"), width=render_width)
     else:
         console.print(f"{prefix}{body}")
 
