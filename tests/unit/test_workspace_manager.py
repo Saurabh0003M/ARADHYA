@@ -31,13 +31,13 @@ class TestIsGitRepo:
     def test_git_repo_detected(self, tmp_path: Path) -> None:
         mgr = WorkspaceManager(worktree_base=tmp_path)
 
-        def fake_git_is_repo(cwd: Path, args: list) -> dict:
-            if args[0] == "rev-parse":
-                return {"returncode": 0, "stdout": ".git", "stderr": ""}
-            return {"returncode": 1, "stdout": "", "stderr": ""}
+        # Create a real git repo in tmp_path since _is_git_repo calls `git rev-parse`
+        fake_repo = tmp_path / "fake_repo"
+        fake_repo.mkdir()
+        import subprocess
+        subprocess.run(["git", "init"], cwd=str(fake_repo), capture_output=True, check=True)
 
-        mgr._git = fake_git_is_repo  # type: ignore[method-assign]
-        result = mgr._is_git_repo(Path("F:/ARADHYA"))
+        result = mgr._is_git_repo(fake_repo)
         assert result is True
 
     def test_non_git_dir_not_detected(self, tmp_path: Path) -> None:

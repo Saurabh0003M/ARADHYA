@@ -15,46 +15,45 @@ Aradhya is an **Operating Intelligence (OI)**: a personal AI laptop assistant th
 
 ## Runtime Layers
 
-```mermaid
-flowchart TD
-    A[Wake & Entry Layer] --> B[Perception & Context Layer]
-    B --> C[Planner Layer]
-    C --> D[Model Layer]
-    D -. JSON Tool Call .-> C
-    C --> E[Confirmation Gate]
-    E -- Allowed & Approved --> F[Executor Layer]
-```
-
 ### 1. Wake & Entry Layer
-* **Trigger sources:** Floating Icon, global hotkeys, Daemon API, Telegram bots.
-* **Responsibility:** Move from idle to active state; accept inputs.
-* **Side effect:** Refresh local directory index.
+
+- **Trigger sources**: Desktop Floating Icon (via Tkinter/IPC), global hotkeys, background Daemon API, and remote Telegram bots.
+- **Responsibility**: Move the assistant from idle to active state and accept inputs securely.
+- **Side effect**: Refresh the local directory index according to policy.
 
 ### 2. Perception & Context Layer
-* **Vision:** Screen capture and OCR.
-* **Speech-to-Text:** Whisper integration into a voice inbox pipeline.
-* **Telemetry:** Active window titles, clipboard, recent files.
-* **State Store:** Thread-safe WAL SQLite for memory and continuity.
+
+- **Vision Tools**: Aradhya possesses visual context capabilities, able to capture the screen and read textual content via OCR.
+- **Speech-to-Text**: Whisper integration captures speech from a global hotkey, feeding into a background voice inbox pipeline.
+- **System Telemetry**: Captures active window titles (via `ctypes`), clipboard content, and recent system files.
+- **State Store**: Uses a thread-safe, WAL-mode SQLite database to automatically compress older message contexts while preserving robust session continuity.
 
 ### 3. Planner Layer
-* Converts transcripts into structured ReAct execution plans.
-* Uses deterministic routing for crisp commands, falls back to local models.
-* Requires model to output strict JSON tool calls.
-* Determines context required (local files, external tools, SKILLs).
+
+- Converts user transcripts into structured ReAct execution plans.
+- Uses deterministic routing first for crisp local commands.
+- Falls back to the configured local model only when rules cannot classify the request.
+- Requires the model to output strict JSON tool calls.
+- Determines when local file awareness, external-tool handoff, or specific SKILL contexts are required.
 
 ### 4. Confirmation Gate
-* **Safety Pipeline:** Passes through `HookEngine` and `PermissionEngine`.
-* **User Approval:** Pauses behind explicit approval (`yes proceed`).
-* **Dry-run:** Operates read-only unless live execution enabled.
+
+- **Safety Pipeline**: Tool execution passes through the Parasite OS `HookEngine` (which can modify or block calls) and the `PermissionEngine` (deny-first rules).
+- **User Approval**: Every device-affecting system task must pause behind an explicit approval phrase (`yes proceed`).
+- **Dry-run Mode**: Operates entirely in a read-only testing environment unless live execution is explicitly enabled.
 
 ### 5. Executor Layer
-* **Tool Registry:** Browser, File, Power, Scheduler, Session, Shell, System, Vision, Web.
-* Supports stateful workflows (browser automation, background tasks).
-* Integrates with `SKILL.md` definitions and custom agents.
+
+- Leverages the extensive Tool Registry (`Browser`, `File`, `Power`, `Scheduler`, `Session`, `Shell`, `System`, `Vision`, `Web`).
+- Supports complex, stateful workflows such as autonomous browser navigation, automated form interactions, and scheduled background tasks.
+- Integrates gracefully with external `SKILL.md` definitions and custom agents (e.g. `AutoGPT`, `Agentless` frameworks).
 
 ### 6. Model Layer
-* Configured in `profile.local.json`.
-* **Providers:** Ollama (default), OpenRouter (fallback behind `CloudPrivacyGate`).
+
+- The local reasoning model is configured through `core/config/profile.local.json`.
+- **Default Provider**: Ollama.
+- **Fallback Provider**: OpenRouter. Cloud workers are gated behind a strict `CloudPrivacyGate` to ensure sensitive local context does not leak.
+- Future model swaps happen exclusively by changing the profile, not the code logic.
 
 ## Local Data Strategy
 
@@ -75,20 +74,6 @@ Aradhya maintains a text snapshot of the visible directory tree in `project_tree
 - Scheduling recurring background system tasks.
 
 ## Voice Workflow Today
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Mic/Inbox as Audio Inbox
-    participant VoiceProvider as Voice Provider
-    participant Transcript as Transcript Store
-    participant Planner as Assistant Planner
-
-    User->>Mic/Inbox: Drop Audio / Speak (Push-to-talk)
-    Mic/Inbox->>VoiceProvider: Process Audio
-    VoiceProvider->>Transcript: Save Text Transcript
-    Transcript->>Planner: Route Transcript (if Awake)
-```
 
 1. Drop audio into `audio/inbox`.
 2. Process it through the configured voice provider (e.g. `manual_transcript` or `faster_whisper`).
