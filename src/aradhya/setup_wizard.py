@@ -110,8 +110,8 @@ def step_model(profile: dict) -> dict:
         if models:
             console.print(f"  [dim]Found {len(models)} model(s):[/]")
             table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
-            table.add_column("#", style="bold cyan", width=4)
-            table.add_column("Model", style="cyan")
+            table.add_column("#", style="accent", width=4)
+            table.add_column("Model", style="accent")
             for i, m in enumerate(models, 1):
                 table.add_row(str(i), m)
             console.print(table)
@@ -277,7 +277,7 @@ def step_finish(profile: dict, preferences: dict) -> None:
         f"  🔒 Execution: [highlight]{preferences.get('execution_policy', 'careful')}[/]\n\n"
         "Start Aradhya with:\n\n"
         "  [dim]python -m src.aradhya.main[/]\n\n"
-        "Type [cyan]/help[/cyan] to see all commands,\n"
+        "Type [accent]/help[/accent] to see all commands,\n"
         "or just type naturally — Aradhya understands plain English.",
         border_style="#00d4aa",
         padding=(1, 4),

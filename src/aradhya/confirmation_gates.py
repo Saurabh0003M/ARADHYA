@@ -54,16 +54,9 @@ class CliConfirmationGate:
     def __call__(
         self, tool_name: str, arguments: dict[str, Any]
     ) -> tuple[bool, bool]:
-        from src.aradhya.ui.cli import render_warning, prompt_input  # noqa: PLC0415
+        from src.aradhya.ui.cli import render_tool_confirmation_prompt, prompt_input  # noqa: PLC0415
 
-        args_preview = ", ".join(
-            f"{k}={str(v)[:60]}" for k, v in list(arguments.items())[:3]
-        )
-        render_warning(
-            f"Tool [bold]{tool_name}[/bold] wants to run"
-            + (f": {args_preview}" if args_preview else "")
-            + "\n  Approve? [y]es / [a]lways / [n]o"
-        )
+        render_tool_confirmation_prompt(tool_name, arguments)
         try:
             answer = prompt_input().strip().lower()
         except (EOFError, KeyboardInterrupt):

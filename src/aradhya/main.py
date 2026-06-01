@@ -47,6 +47,12 @@ from src.aradhya.ui.cli import (
     render_warning,
     prompt_input,
     render_stream,
+    render_audit,
+    render_parasite_candidates,
+    render_parasite_inspect,
+    render_parasite_status,
+    render_model_ask_result,
+    render_daemon_start_success,
 )
 from src.aradhya.utils.logging import configure_logging
 from src.aradhya.model_setup import bootstrap_runtime_profile, render_model_health
@@ -134,7 +140,7 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
     checks.append((
         "Python",
         ok,
-        f"{v.major}.{v.minor}.{v.micro}" + ("" if ok else " — need 3.10+"),
+        f"{v.major}.{v.minor}.{v.micro}" + ("" if ok else " - need 3.10+"),
     ))
 
     # 2. Ollama reachability + model
@@ -146,9 +152,9 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
             checks.append(("Ollama", True, f"Ready - {model_name}"))
         else:
             msg = getattr(health, "error", "unreachable")
-            checks.append(("Ollama", False, f"Offline — {msg}"))
+            checks.append(("Ollama", False, f"Offline - {msg}"))
     except Exception as exc:
-        checks.append(("Ollama", False, f"Error — {exc}"))
+        checks.append(("Ollama", False, f"Error - {exc}"))
 
     # 3. Config files
     prefs_path = PROJECT_ROOT / "core" / "config" / "preferences.json"
@@ -183,8 +189,14 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
 
 # ── Command handlers ──────────────────────────────────────────────────
 
-def _handle_help() -> None:
-    render_help()
+def _handle_help(*, command: str) -> None:
+    normalized = command.strip()
+    topic = None
+    if normalized.startswith("/help "):
+        topic = normalized[6:].strip()
+    elif normalized.startswith("help "):
+        topic = normalized[5:].strip()
+    render_help(topic)
 
 
 def _handle_status(*, assistant, runtime_profile, model_provider,
@@ -198,6 +210,7 @@ def _handle_status(*, assistant, runtime_profile, model_provider,
 
     render_status(
         is_awake=assistant.state.is_awake,
+        model_provider_name=runtime_profile.model.provider,
         model_name=runtime_profile.model.model_name,
         model_ok=model_ok,
         pending_plan=assistant.state.pending_plan,
@@ -361,8 +374,7 @@ def _handle_model_ask(*, command, model_provider, runtime_profile) -> None:
             return
     try:
         result = model_provider.generate(normalized)
-        console.print(f"  [accent]Model ›[/] {result.text}")
-        console.print()
+        render_model_ask_result(result.text)
     except Exception as error:
         render_error(f"Generation failed: {error}")
 
@@ -422,8 +434,7 @@ def _handle_icon_off(*, ctx) -> None:
 def _handle_cache(*, assistant) -> None:
     report = run_cache_validation(assistant.preferences)
     for line in format_cache_validation_report(report):
-        console.print(f"  {line}")
-    console.print()
+        render_info(line)
 
 
 def _handle_apis(*, command) -> None:
@@ -536,67 +547,20 @@ def _handle_audit() -> None:
         render_info("No audit entries yet.")
         return
 
-    # ── Summary stats ──────────────────────────────────────────────────
     tool_entries = [e for e in entries if e.get("type") == "tool_call"]
     tool_ok = sum(1 for e in tool_entries if e.get("success"))
     tool_fail = len(tool_entries) - tool_ok
     security_entries = [e for e in entries if e.get("type") == "security"]
     sessions = {e.get("session_id", "") for e in entries if e.get("session_id")}
-    last_session = (sorted(sessions) or ["—"])[-1]
+    last_session = (sorted(sessions) or ["-"])[-1]
 
-    console.print()
-    console.print("[heading]  Audit Log — Last 20 Events[/]")
-    console.print(
-        f"  Tools: [green]{tool_ok} OK[/]  [red]{tool_fail} FAIL[/]  "
-        f"│  Security events: [yellow]{len(security_entries)}[/]  "
-        f"│  Session: [dim]{last_session[:12]}[/]"
+    render_audit(
+        entries=entries,
+        last_session=last_session,
+        tool_ok=tool_ok,
+        tool_fail=tool_fail,
+        security_count=len(security_entries),
     )
-    console.print()
-
-    for entry in entries:
-        raw_ts = entry.get("ts", "")
-        if raw_ts and "T" in raw_ts:
-            ts = raw_ts[5:19].replace("T", " ")   # "MM-DD HH:MM:SS"
-        else:
-            ts = raw_ts[-8:] if raw_ts else "??:??:??"
-        etype = entry.get("type", "?")
-
-        if etype == "tool_call":
-            tool = entry.get("tool", "?")
-            ok = entry.get("success", False)
-            status_tag = "[green]OK  [/]" if ok else "[red]FAIL[/]"
-            preview = (entry.get("output_preview", "") or "")[:60]
-            console.print(
-                f"  [dim]{ts}[/] {status_tag} [accent]{tool:<22}[/]"
-                + (f" [dim]{preview}[/]" if preview else "")
-            )
-        elif etype == "turn_start":
-            msg = (entry.get("user_message", "") or "")[:50]
-            console.print(f"  [dim]{ts}[/] [cyan]▶ TURN[/]  [dim]{msg}[/]")
-        elif etype == "turn_end":
-            iters = entry.get("iterations", "?")
-            calls = entry.get("tool_calls_count", 0)
-            ok = entry.get("success", True)
-            status_tag = "[green]✓[/]" if ok else "[red]✗[/]"
-            console.print(
-                f"  [dim]{ts}[/] {status_tag} [cyan]END[/]    "
-                f"[dim]iter={iters} tools={calls}[/]"
-            )
-        elif etype == "command":
-            cmd = entry.get("command", "?")
-            console.print(f"  [dim]{ts}[/] [blue]CMD[/]    {cmd}")
-        elif etype in ("security", "tool_blocked_dry_run"):
-            evt = entry.get("event", entry.get("message", "?"))
-            console.print(f"  [dim]{ts}[/] [red]⚠ SEC[/]  {evt}")
-        else:
-            console.print(f"  [dim]{ts}[/] [dim]{etype}[/]")
-
-    console.print()
-    console.print(
-        "  [dim]Showing 20 of latest events. "
-        "Full log: ~/.aradhya/audit/audit.jsonl[/]"
-    )
-    console.print()
 
 
 def _handle_daemon_start(*, ctx) -> None:
@@ -611,10 +575,7 @@ def _handle_daemon_start(*, ctx) -> None:
             cwd=str(PROJECT_ROOT),
             creationflags=flags,
         )
-        render_success(
-            f"Daemon started in background (PID: {ctx['daemon_process'].pid}). "
-            "API on http://127.0.0.1:19842"
-        )
+        render_daemon_start_success(ctx["daemon_process"].pid)
     except Exception as error:
         render_error(f"Failed to start daemon: {error}")
 
@@ -637,103 +598,6 @@ def _handle_setup() -> None:
         render_error(f"Setup wizard failed: {error}")
 
 
-def _render_parasite_candidates(candidates, ledger_path: Path) -> None:
-    """Render the host integration queue."""
-
-    from rich import box
-    from rich.table import Table
-
-    if not candidates:
-        render_info("No host integration candidates found.")
-        return
-
-    console.print("\n[bold]  Parasite OS - Integration Candidates[/]\n")
-    table = Table(
-        box=box.ROUNDED,
-        border_style="dim",
-        show_header=True,
-        expand=False,
-    )
-    table.add_column("#", justify="right", no_wrap=True)
-    table.add_column("Repo", style="accent", no_wrap=True)
-    table.add_column("Priority", no_wrap=True)
-    table.add_column("Score", justify="right", no_wrap=True)
-    table.add_column("State", no_wrap=True)
-    table.add_column("Capabilities")
-    table.add_column("Recommended action")
-
-    for index, candidate in enumerate(candidates, start=1):
-        caps = ", ".join(candidate.capabilities[:4])
-        if len(candidate.capabilities) > 4:
-            caps += f", +{len(candidate.capabilities) - 4}"
-        if not caps:
-            caps = "[dim]none[/]"
-
-        repo = candidate.repo
-        if candidate.archived:
-            repo = f"{repo} [dim](archived)[/]"
-
-        table.add_row(
-            str(index),
-            repo,
-            candidate.priority,
-            str(candidate.score),
-            f"{candidate.completed_stage_count}/7 {candidate.status}",
-            caps,
-            candidate.recommended_action,
-        )
-
-    console.print(table)
-    console.print(f"  [dim]Ledger: {ledger_path}[/]")
-    console.print("  [dim]Use /parasite inspect <repo> for the exact benefits and next gate.[/]\n")
-
-
-def _render_parasite_inspect(candidate) -> None:
-    """Render one host integration candidate."""
-
-    from rich import box
-    from rich.table import Table
-
-    table = Table(
-        title=f"[heading]Parasite Candidate: {candidate.repo}[/]",
-        box=box.ROUNDED,
-        border_style="dim",
-        show_header=False,
-        expand=False,
-    )
-    table.add_column("", style="accent", no_wrap=True)
-    table.add_column("")
-    table.add_row("Path", candidate.host_path)
-    table.add_row("Archived", str(candidate.archived))
-    table.add_row("Status", f"{candidate.status} ({candidate.completed_stage_count}/7)")
-    table.add_row("Priority", f"{candidate.priority} / score {candidate.score}")
-    table.add_row("Trust", candidate.trust_score or "unknown")
-    table.add_row("Type", candidate.project_type)
-    table.add_row("Files", str(candidate.files_scanned))
-    table.add_row("Dependencies", str(candidate.dependency_count))
-    table.add_row("Capabilities", ", ".join(candidate.capabilities) or "none")
-    table.add_row("Integration plan", ", ".join(candidate.integration_plan) or "none")
-    table.add_row("Absorbed", str(candidate.absorbed_count))
-    table.add_row("Digest", "yes" if candidate.digest_exists else "no")
-    table.add_row("Validate", "passed" if candidate.validate_passed else "not passed")
-    table.add_row("Absorb", "completed" if candidate.absorb_completed else "not completed")
-    if candidate.error:
-        table.add_row("Error", f"[error]{candidate.error}[/]")
-    table.add_row("Action", candidate.recommended_action)
-    table.add_row("Next gate", candidate.next_gate)
-    if candidate.description:
-        table.add_row("Description", candidate.description)
-
-    console.print(table)
-    if candidate.benefits:
-        console.print("  [accent]Benefits[/]")
-        for benefit in candidate.benefits:
-            console.print(f"  - {benefit}")
-    if candidate.absorbed_artifacts:
-        console.print("  [accent]Absorbed artifacts[/]")
-        for artifact in candidate.absorbed_artifacts:
-            console.print(f"  - {artifact}")
-    console.print()
 
 
 def _handle_parasite(*, command) -> None:
@@ -755,10 +619,11 @@ def _handle_parasite(*, command) -> None:
         return ""
 
     # /parasite candidates
+    # /parasite candidates
     if normalized in {"/parasite candidates", "parasite candidates"}:
         candidates = build_integration_ledger(PROJECT_ROOT)
         ledger_path = write_integration_ledger(PROJECT_ROOT, candidates)
-        _render_parasite_candidates(candidates, ledger_path)
+        render_parasite_candidates(candidates, str(ledger_path))
         return
 
     # /parasite ledger
@@ -782,38 +647,13 @@ def _handle_parasite(*, command) -> None:
             render_error(f"No host integration candidate found for '{target}'.")
             render_info(f"Ledger refreshed at: {ledger_path}")
             return
-        _render_parasite_inspect(candidate)
+        render_parasite_inspect(candidate)
         return
 
     # /parasite status
     if normalized in {"/parasite", "/parasite status", "parasite status", "parasite"}:
         targets = pipeline.list_targets()
-        if not targets:
-            render_info("No targets in Hosts/ yet. Clone a repo there or use /parasite digest <name>.")
-            return
-        console.print("\n[bold]  Parasite OS — Digestion Pipeline Status[/]\n")
-        for t in targets:
-            stage = t["current_stage"]
-            completed = len(t["completed_stages"])
-            trust = t.get("trust_score") or "—"
-            error = t.get("error")
-            if error:
-                status_icon = "❌"
-            elif completed == 7:
-                status_icon = "✅"
-            elif completed > 0:
-                status_icon = "🔄"
-            else:
-                status_icon = "⬜"
-            console.print(
-                f"  {status_icon} [bold]{t['name']:25s}[/] "
-                f"stage: {stage:12s}  "
-                f"done: {completed}/7  "
-                f"trust: {trust}"
-            )
-            if error:
-                console.print(f"     [red]Error: {error}[/]")
-        console.print()
+        render_parasite_status(targets)
         return
 
     # /parasite digest <target>
@@ -827,10 +667,10 @@ def _handle_parasite(*, command) -> None:
             render_error(f"Target '{target}' not found in Hosts/. Available targets:")
             for child in sorted((PROJECT_ROOT / "Hosts").iterdir()):
                 if child.is_dir() and not child.name.startswith("."):
-                    console.print(f"  • {child.name}")
+                    render_info(f"- {child.name}")
             return
 
-        console.print(f"\n[bold]  Digesting: {target}[/]\n")
+        render_info(f"Digesting: {target}")
         cp = pipeline.digest(target)
         completed = len(cp.completed_stages)
         if cp.error:
