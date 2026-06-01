@@ -291,6 +291,8 @@ class HistoryProcessorPipeline:
         for processor in self.processors:
             before = len(result)
             result = processor(result)
+            before_chars = sum(len(m.get("content", "")) for m in messages)
+            after_chars = sum(len(m.get("content", "")) for m in result)
             if before != len(result):
                 logger.debug(
                     "History processor {}: {} -> {} messages ({} -> {} chars)",
