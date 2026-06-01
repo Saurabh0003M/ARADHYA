@@ -190,12 +190,12 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
 # ── Command handlers ──────────────────────────────────────────────────
 
 def _handle_help(*, command: str) -> None:
-    normalized = command.strip()
+    normalized = command.strip().lower()
     topic = None
     if normalized.startswith("/help "):
-        topic = normalized[6:].strip()
+        topic = command.strip()[6:].strip()
     elif normalized.startswith("help "):
-        topic = normalized[5:].strip()
+        topic = command.strip()[5:].strip()
     render_help(topic)
 
 

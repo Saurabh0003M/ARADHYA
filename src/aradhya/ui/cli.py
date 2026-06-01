@@ -31,6 +31,7 @@ from rich.text import Text
 from rich.theme import Theme
 from rich.live import Live
 from rich import box
+from rich.markup import escape
 
 # ── Global theme ──────────────────────────────────────────────────────
 ARADHYA_THEME = Theme(
@@ -874,24 +875,24 @@ def render_tool_confirmation_prompt(tool_name: str, arguments: dict[str, Any]) -
     """Render a detailed security confirmation panel for a dangerous tool."""
 
     # Extract common dangerous arguments
-    command = arguments.get("command", "")
-    path = arguments.get("path", "")
-    cwd = arguments.get("cwd", "")
-    url = arguments.get("url", "")
+    command = escape(str(arguments.get("command", "")))
+    path = escape(str(arguments.get("path", "")))
+    cwd = escape(str(arguments.get("cwd", "")))
+    url = escape(str(arguments.get("url", "")))
 
     details = Table(box=box.SIMPLE, show_header=False, pad_edge=False, expand=False)
     details.add_column("Key", style="accent")
     details.add_column("Value")
 
-    details.add_row("Tool", f"[bold]{tool_name}[/]")
+    details.add_row("Tool", f"[bold]{escape(tool_name)}[/]")
     if command:
         details.add_row("Command", f"[highlight]{command}[/]")
     if path:
-        details.add_row("Path", str(path))
+        details.add_row("Path", path)
     if cwd:
-        details.add_row("CWD", str(cwd))
+        details.add_row("CWD", cwd)
     if url:
-        details.add_row("URL", str(url))
+        details.add_row("URL", url)
 
     # Any other arguments not handled above
     for k, v in arguments.items():
@@ -899,15 +900,15 @@ def render_tool_confirmation_prompt(tool_name: str, arguments: dict[str, Any]) -
             val_str = str(v)
             if len(val_str) > 100:
                 val_str = val_str[:100] + "..."
-            details.add_row(k.capitalize(), val_str)
+            details.add_row(escape(k.capitalize()), escape(val_str))
 
     # Risk level heuristics
     risk_level = "High"
     border_style = "error"
-    if tool_name in ("browser_click", "browser_type", "open_url"):
+    if tool_name in ("browser_click", "browser_type"):
         risk_level = "Medium"
         border_style = "warning"
-    elif tool_name in ("write_file", "delete_file", "move_file", "run_command"):
+    elif tool_name in ("write_file", "delete_file", "move_file", "run_command", "open_url"):
         risk_level = "Critical"
         border_style = "error"
 
