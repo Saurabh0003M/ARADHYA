@@ -1141,7 +1141,7 @@ def _run_cli_loop(handler_kwargs: dict):
     assistant = handler_kwargs["assistant"]
     voice_manager = handler_kwargs["voice_manager"]
     runtime_profile = handler_kwargs["runtime_profile"]
-    session_name = handler_kwargs["session_name"]
+    session_name = handler_kwargs.get("session_name", "CLI")
 
     while True:
         try:
@@ -1231,6 +1231,7 @@ def main() -> None:
 
     # ── Main input loop ───────────────────────────────────────────────
     try:
+        handler_kwargs["session_name"] = session_name
         _run_cli_loop(handler_kwargs)
     finally:
         _stop_heartbeat()   # remove heartbeat file on clean shutdown

@@ -106,20 +106,6 @@ venv\Scripts\python.exe -m src.aradhya.daemon
 ## 🔒 Safety First
 
 Aradhya is designed around **User Sovereignty**:
-
-```mermaid
-flowchart TD
-    A[Tool Call Requested] --> B{HookEngine}
-    B -- Allowed --> C{PermissionEngine}
-    B -- Blocked --> F[Execution Denied]
-    C -- Allowed --> D{Requires User Approval?}
-    C -- Blocked --> F
-    D -- Yes --> E[Prompt User]
-    D -- No --> G[Execute Action]
-    E -- User Approves --> G
-    E -- User Denies --> F
-```
-
 - **Confirmation Gates**: Risky tools (shell execution, writes, browser clicks) require your explicit approval (`yes proceed`).
 - **Hook & Permission Engines**: System actions are evaluated through dynamic rules and project-level hooks before they ever prompt the user.
 - **Dry-Run Default**: `allow_live_execution` is disabled by default.
@@ -169,23 +155,6 @@ venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 ---
 
 ## 🏗️ Project Architecture
-
-```mermaid
-graph TD
-    A[ARADHYA] --> B[core/ - Legacy memory, config, skills]
-    A --> C[docs/ - Architecture maps]
-    A --> D[scripts/ - Setup scripts]
-    A --> E[src/aradhya/ - Core application source]
-    A --> F[tests/unit/ - Pytest unit tests]
-
-    E --> E1[main.py - CLI entry & dispatch]
-    E --> E2[daemon.py - Background API & tray icon]
-    E --> E3[assistant_core.py - State & Planner]
-    E --> E4[agent_loop.py - ReAct execution & safety]
-    E --> E5[tools/ - Browser, File, Shell, Vision]
-    E --> E6[channels/ - Telegram integration]
-    E --> E7[ui/ - Rich terminal & Floating Icon]
-```
 
 ```text
 📦 ARADHYA

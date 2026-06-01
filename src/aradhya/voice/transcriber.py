@@ -96,14 +96,18 @@ class WhisperCommandFileTranscriber:
                 ),
             )
 
-        rendered_command = template.format(
-            audio_path=shlex.quote(str(audio_path)),
-            transcript_path=shlex.quote(str(transcript_destination)),
-        )
+        args = shlex.split(template)
+        rendered_args = [
+            arg.format(
+                audio_path=str(audio_path),
+                transcript_path=str(transcript_destination),
+            )
+            for arg in args
+        ]
         logger.info("Running whisper_command provider for {}", audio_path.name)
         completed = subprocess.run(
-            rendered_command,
-            shell=True,
+            rendered_args,
+            shell=False,
             capture_output=True,
             text=True,
         )

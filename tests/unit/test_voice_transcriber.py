@@ -22,8 +22,9 @@ def test_whisper_command_prevents_injection():
         rendered_command = mock_run.call_args[0][0]
 
         # shlex.quote handles spaces and quotes characters so we shouldn't see bare malicious payload
-        assert "rm -rf" in rendered_command
-        assert "'" in rendered_command # verify it got quoted
+        assert any("rm -rf" in arg for arg in rendered_command)
+        # We no longer use shlex.quote in favor of shell=False with unquoted arguments
+        # so there's no need to assert the single quotes
 
         # Print for debugging
         print(f"Rendered command: {rendered_command}")
