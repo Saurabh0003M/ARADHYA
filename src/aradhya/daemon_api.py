@@ -30,7 +30,7 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
     """HTTP handler wired to an ``AradhyaAssistant`` instance at server level."""
 
     # Silence the default stderr logging — we use loguru instead.
-    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: ARG002
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: ARG002
         logger.debug("daemon-api: {} {}", self.command, self.path)
 
     # ------------------------------------------------------------------
@@ -64,7 +64,7 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def _handle_wake(self) -> None:
-        from src.aradhya.assistant_models import WakeSource
+        from src.aradhya.assistant_models import WakeSource  # pylint: disable=import-outside-toplevel
 
         assistant = self.server.assistant  # type: ignore[attr-defined]
         response = assistant.handle_wake(WakeSource.FLOATING_ICON)
@@ -98,19 +98,20 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_status(self) -> None:
         assistant = self.server.assistant  # type: ignore[attr-defined]
-        self._json_response(200, {
-            "is_awake": assistant.state.is_awake,
-            "has_pending_plan": assistant.state.pending_plan is not None,
-        })
+        self._json_response(
+            200,
+            {
+                "is_awake": assistant.state.is_awake,
+                "has_pending_plan": assistant.state.pending_plan is not None,
+            },
+        )
 
     def _handle_shutdown(self) -> None:
         self._json_response(200, {"message": "Daemon shutting down."})
         shutdown_callback = getattr(self.server, "shutdown_callback", None)
         if callable(shutdown_callback):
             # Fire the shutdown in a separate thread so the response is sent first.
-            threading.Thread(
-                target=shutdown_callback, daemon=True, name="daemon-shutdown"
-            ).start()
+            threading.Thread(target=shutdown_callback, daemon=True, name="daemon-shutdown").start()
 
     # ------------------------------------------------------------------
     # Helpers

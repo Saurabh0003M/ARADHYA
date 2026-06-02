@@ -223,6 +223,7 @@ class LearningsEngine:
 
 # ── Tool definitions for the agent loop ──────────────────────────
 
+
 @tool_definition(
     name="log_error",
     description=(

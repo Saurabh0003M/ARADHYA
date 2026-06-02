@@ -110,6 +110,7 @@ class WhisperCommandFileTranscriber:
             shell=False,
             capture_output=True,
             text=True,
+            check=False,
         )
 
         transcript_text = ""

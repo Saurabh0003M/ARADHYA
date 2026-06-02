@@ -18,6 +18,7 @@ By default, approvals are **session-scoped**.  The user can promote an
 approval to persistent scope by responding with "always" instead of "yes"
 when the confirmation gate asks.
 """
+
 from __future__ import annotations
 
 import hashlib

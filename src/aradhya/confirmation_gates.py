@@ -21,6 +21,7 @@ from typing import Any, Protocol
 
 class ConfirmationResult:
     """Result of a confirmation prompt."""
+
     __slots__ = ("approved", "persist")
 
     def __init__(self, approved: bool, persist: bool = False) -> None:
@@ -41,19 +42,17 @@ class ConfirmationGate(Protocol):
     Returns (approved: bool, persist: bool).
     """
 
-    def __call__(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> tuple[bool, bool]:
-        ...
+    def __call__(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, bool]: ...
 
 
 class CliConfirmationGate:
     """Interactive CLI confirmation using rich console."""
 
-    def __call__(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> tuple[bool, bool]:
-        from src.aradhya.ui.cli import render_tool_confirmation_prompt, prompt_input  # noqa: PLC0415
+    def __call__(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, bool]:
+        from src.aradhya.ui.cli import (  # pylint: disable=import-outside-toplevel
+            render_tool_confirmation_prompt,
+            prompt_input,
+        )  # noqa: PLC0415
 
         render_tool_confirmation_prompt(tool_name, arguments)
         try:
@@ -73,9 +72,7 @@ class HeadlessConfirmationGate:
     Use this when there is no interactive user to prompt.
     """
 
-    def __call__(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> tuple[bool, bool]:
+    def __call__(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, bool]:
         return (False, False)
 
 
@@ -91,16 +88,15 @@ class TelegramConfirmationGate:
         self.bot = bot
         self.chat_id = chat_id
 
-    def __call__(
-        self, tool_name: str, arguments: dict[str, Any]
-    ) -> tuple[bool, bool]:
+    def __call__(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, bool]:
         if self.bot is None or self.chat_id is None:
             return (False, False)
 
         try:
             # This would need async/sync bridge in real implementation
             # For now, deny in Telegram mode (safe default)
-            from loguru import logger
+            from loguru import logger  # pylint: disable=import-outside-toplevel
+
             logger.warning(
                 "Telegram gate: tool '{}' requires confirmation but "
                 "async Telegram approval is not yet wired. Denying.",

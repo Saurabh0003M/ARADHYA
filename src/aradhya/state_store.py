@@ -187,9 +187,7 @@ class StateStore:
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Load session metadata by ID."""
         conn = self._get_connection()
-        row = conn.execute(
-            "SELECT * FROM sessions WHERE id = ?", (session_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
         if row is None:
             return None
         return {
@@ -343,9 +341,7 @@ class StateStore:
         with self._transaction() as cur:
             cur.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
             for i, msg in enumerate(messages):
-                meta_json = json.dumps(
-                    msg.get("metadata", {}), default=str, ensure_ascii=False
-                )
+                meta_json = json.dumps(msg.get("metadata", {}), default=str, ensure_ascii=False)
                 cur.execute(
                     """
                     INSERT INTO messages (session_id, role, content, timestamp, metadata, sort_order)
@@ -471,9 +467,7 @@ class StateStore:
                 )
 
                 for i, msg in enumerate(data.get("messages", [])):
-                    meta_json = json.dumps(
-                        msg.get("metadata", {}), default=str, ensure_ascii=False
-                    )
+                    meta_json = json.dumps(msg.get("metadata", {}), default=str, ensure_ascii=False)
                     conn = self._get_connection()
                     conn.execute(
                         """

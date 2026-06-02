@@ -210,6 +210,7 @@ def _disk_summary(project_root: Path) -> dict[str, float | None]:
 
 def _total_ram_gb() -> float | None:
     if sys.platform == "win32":
+
         class MemoryStatus(ctypes.Structure):
             _fields_ = [
                 ("dwLength", ctypes.c_ulong),

@@ -9,14 +9,12 @@ from unittest.mock import MagicMock
 sys.modules["loguru"] = MagicMock()
 
 from src.aradhya.context_compressor import (
-    CompactionResult,
     TruncationPolicy,
     compact_history,
     estimate_messages_tokens,
     estimate_tokens,
     summarize_messages,
 )
-
 
 # ── Token estimation tests ────────────────────────────────────────────
 
@@ -134,10 +132,7 @@ def test_compact_history_token_based():
 
 
 def test_compact_history_message_based():
-    messages = [
-        {"role": "user", "content": f"Message {i}"}
-        for i in range(20)
-    ]
+    messages = [{"role": "user", "content": f"Message {i}"} for i in range(20)]
     policy = TruncationPolicy(mode="messages", limit=10, min_keep=4, max_keep=8)
 
     result_messages, result = compact_history(messages, policy=policy)
@@ -147,10 +142,7 @@ def test_compact_history_message_based():
 
 
 def test_compact_history_preserves_min_keep():
-    messages = [
-        {"role": "user", "content": "x" * 1000}
-        for _ in range(10)
-    ]
+    messages = [{"role": "user", "content": "x" * 1000} for _ in range(10)]
     policy = TruncationPolicy(mode="tokens", limit=100, min_keep=6)
 
     result_messages, result = compact_history(messages, policy=policy)
@@ -194,10 +186,7 @@ def test_compact_history_summary_content():
         {"role": "assistant", "content": "Done, updated the config."},
         {"role": "user", "content": "Now restart the server"},
         {"role": "assistant", "content": "Server restarted successfully."},
-    ] + [
-        {"role": "user", "content": f"Recent message {i}"}
-        for i in range(10)
-    ]
+    ] + [{"role": "user", "content": f"Recent message {i}"} for i in range(10)]
 
     policy = TruncationPolicy(mode="tokens", limit=500, min_keep=4, max_keep=6)
     result_messages, result = compact_history(messages, policy=policy)

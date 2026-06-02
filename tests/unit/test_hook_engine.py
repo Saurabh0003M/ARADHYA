@@ -1,18 +1,16 @@
 """Unit tests for the hook engine (src/aradhya/hooks/hook_engine.py)."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
-import pytest
 
 from src.aradhya.hooks.hook_engine import (
     HookDecision,
     HookDefinition,
     HookEngine,
     HookEvent,
-    HookResult,
     HookType,
 )
 from src.aradhya.hooks.hook_config import (
@@ -20,7 +18,6 @@ from src.aradhya.hooks.hook_config import (
     load_hooks_from_file,
     create_default_hooks_config,
 )
-
 
 # ── Hook Engine: Callable hooks ────────────────────────────────────────────
 
@@ -300,26 +297,22 @@ class TestHookConfig:
         user_dir = tmp_path / "user_hooks"
         user_dir.mkdir()
         (user_dir / "hooks.json").write_text(
-            json.dumps({
-                "hooks": {
-                    "SessionStart": [
-                        {"hooks": [{"type": "command", "command": "echo user"}]}
-                    ]
+            json.dumps(
+                {
+                    "hooks": {
+                        "SessionStart": [{"hooks": [{"type": "command", "command": "echo user"}]}]
+                    }
                 }
-            }),
+            ),
             encoding="utf-8",
         )
 
         project_dir = tmp_path / "project" / ".aradhya" / "hooks"
         project_dir.mkdir(parents=True)
         (project_dir / "hooks.json").write_text(
-            json.dumps({
-                "hooks": {
-                    "Stop": [
-                        {"hooks": [{"type": "command", "command": "echo project"}]}
-                    ]
-                }
-            }),
+            json.dumps(
+                {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "echo project"}]}]}}
+            ),
             encoding="utf-8",
         )
 
@@ -345,11 +338,7 @@ class TestHookConfig:
 
     def test_unknown_event_skipped(self, tmp_path: Path) -> None:
         config = {
-            "hooks": {
-                "UnknownEvent": [
-                    {"hooks": [{"type": "command", "command": "echo x"}]}
-                ]
-            }
+            "hooks": {"UnknownEvent": [{"hooks": [{"type": "command", "command": "echo x"}]}]}
         }
         hooks_file = tmp_path / "hooks.json"
         hooks_file.write_text(json.dumps(config), encoding="utf-8")

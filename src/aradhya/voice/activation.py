@@ -90,9 +90,7 @@ class VoiceActivatedAradhya:
         self.speech_synthesizer = speech_synthesizer
         if self.speech_synthesizer is None:
             try:
-                self.speech_synthesizer = speech_synthesizer_factory(
-                    runtime_profile.voice_output
-                )
+                self.speech_synthesizer = speech_synthesizer_factory(runtime_profile.voice_output)
             except Exception as error:
                 self._speech_output_warning = str(error)
                 logger.warning("Speech output is unavailable: {}", error)

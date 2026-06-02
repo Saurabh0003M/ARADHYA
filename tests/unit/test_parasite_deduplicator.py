@@ -38,9 +38,7 @@ def _write_skill(
         "---\n"
         f"name: {name}\n"
         f"description: {description}\n"
-        "intents:\n"
-        + "\n".join(f"  - {intent}" for intent in intents)
-        + "\n"
+        "intents:\n" + "\n".join(f"  - {intent}" for intent in intents) + "\n"
         "---\n\n"
         f"# {name}\n",
         encoding="utf-8",

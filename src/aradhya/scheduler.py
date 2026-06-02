@@ -27,6 +27,7 @@ DEFAULT_SCHEDULES_FILE: Path | None = None  # resolved lazily via aradhya_path()
 @dataclass
 class ScheduledTask:
     """A task that runs on a schedule."""
+
     id: str
     description: str
     action: str  # "shell", "message", "refresh"
@@ -202,6 +203,7 @@ class TaskScheduler:
                     capture_output=True,
                     text=True,
                     timeout=60,
+                    check=False,
                 )
                 logger.info(
                     "Task '{}' completed (exit={}): {}",

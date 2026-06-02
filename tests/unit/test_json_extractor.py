@@ -34,7 +34,14 @@ def test_extract_json_cleans_trailing_commas():
 def test_validate_json_structure_rejects_unexpected_keys():
     with pytest.raises(JSONExtractionError):
         validate_json_structure(
-            {"intent": "OPEN_PATH", "confidence": 0.9, "reasoning": "x", "target": "Notes", "enabled": None, "command": "rm -rf /"},
+            {
+                "intent": "OPEN_PATH",
+                "confidence": 0.9,
+                "reasoning": "x",
+                "target": "Notes",
+                "enabled": None,
+                "command": "rm -rf /",
+            },
             required_keys=("intent", "confidence", "reasoning", "target", "enabled"),
             allowed_keys=("intent", "confidence", "reasoning", "target", "enabled"),
         )

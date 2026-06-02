@@ -19,6 +19,7 @@ from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 @dataclass
 class ToolDefinition:
     """A registered tool with its callable and schema."""
+
     name: str
     description: str
     parameters: dict[str, Any]
@@ -33,6 +34,7 @@ def tool_definition(
     requires_confirmation: bool = False,
 ) -> Callable:
     """Decorator to register a function as a model-callable tool."""
+
     def decorator(func: Callable[..., str]) -> Callable[..., str]:
         func._tool_def = ToolDefinition(  # type: ignore[attr-defined]
             name=name,
@@ -42,6 +44,7 @@ def tool_definition(
             requires_confirmation=requires_confirmation,
         )
         return func
+
     return decorator
 
 
@@ -64,9 +67,7 @@ class ToolRegistry:
         """Register a decorated function as a tool."""
         tool_def = getattr(func, "_tool_def", None)
         if tool_def is None:
-            raise ValueError(
-                f"Function {func.__name__} is not decorated with @tool_definition"
-            )
+            raise ValueError(f"Function {func.__name__} is not decorated with @tool_definition")
         self.register(tool_def)
 
     def execute_tool(
@@ -131,7 +132,6 @@ class ToolRegistry:
             }
             for td in sorted(self._tools.values(), key=lambda t: t.name)
         ]
-
 
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)

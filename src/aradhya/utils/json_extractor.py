@@ -12,6 +12,7 @@ from loguru import logger
 class JSONExtractionError(ValueError):
     """Raised when a model response does not contain usable JSON."""
 
+
 _MARKDOWN_PATTERNS = (
     re.compile(r"```json\s*(\{.*?\})\s*```", flags=re.DOTALL),
     re.compile(r"```\s*(\{.*?\})\s*```", flags=re.DOTALL),
@@ -79,9 +80,7 @@ def validate_json_structure(
 
     missing_keys = [key for key in required_keys if key not in data]
     if missing_keys:
-        raise JSONExtractionError(
-            "Missing required key(s): " + ", ".join(sorted(missing_keys))
-        )
+        raise JSONExtractionError("Missing required key(s): " + ", ".join(sorted(missing_keys)))
 
     unexpected_keys = [key for key in data if key not in allowed_keys]
     if unexpected_keys:

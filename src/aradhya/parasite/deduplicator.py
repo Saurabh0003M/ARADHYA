@@ -115,7 +115,7 @@ class SkillDeduplicator:
             left_words = self._skill_words(left)
             if not left_words:
                 continue
-            for right in host_skills[index + 1:]:
+            for right in host_skills[index + 1 :]:
                 right_words = self._skill_words(right)
                 if not right_words:
                     continue
@@ -132,9 +132,7 @@ class SkillDeduplicator:
     def _skill_words(skill: SkillDefinition) -> set[str]:
         text = " ".join([skill.description, *skill.intents])
         return {
-            word
-            for word in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", text.lower())
-            if len(word) > 3
+            word for word in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", text.lower()) if len(word) > 3
         }
 
     def _llm_verify_duplicate(
@@ -159,7 +157,9 @@ class SkillDeduplicator:
             )
             return result.text.strip().upper().startswith("MERGE")
         except Exception as error:
-            logger.warning("LLM verification failed for {} and {}: {}", skill_a.name, skill_b.name, error)
+            logger.warning(
+                "LLM verification failed for {} and {}: {}", skill_a.name, skill_b.name, error
+            )
             return False
 
     def _confirm_merge(
@@ -225,7 +225,10 @@ class SkillDeduplicator:
 
         frontmatter = lines[1:end_index]
         body = lines[end_index:]
-        new_block = ["intents:", *[f"  - {SkillDeduplicator._clean_yaml_item(intent)}" for intent in intents]]
+        new_block = [
+            "intents:",
+            *[f"  - {SkillDeduplicator._clean_yaml_item(intent)}" for intent in intents],
+        ]
 
         start = None
         for index, line in enumerate(frontmatter):
@@ -285,6 +288,7 @@ class SkillDeduplicator:
     def _audit_merge(self, action: dict[str, Any]) -> None:
         audit = self.audit_logger
         if audit is None:
-            from src.aradhya.audit_logger import get_audit_logger
+            from src.aradhya.audit_logger import get_audit_logger  # pylint: disable=import-outside-toplevel
+
             audit = get_audit_logger()
         audit.log_event("parasite_dedup_merge", action)

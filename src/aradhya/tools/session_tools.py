@@ -70,10 +70,7 @@ def recall_note(title: str) -> str:
         return note_path.read_text(encoding="utf-8")
 
     # Fuzzy match
-    matches = [
-        p for p in nd.glob("*.md")
-        if title.lower() in p.stem.lower()
-    ]
+    matches = [p for p in nd.glob("*.md") if title.lower() in p.stem.lower()]
     if matches:
         return matches[0].read_text(encoding="utf-8")
 

@@ -90,9 +90,7 @@ class SkillRegistry:
         for skill in self.active_skills():
             if skill.instructions.strip():
                 parts.append(
-                    f"## Skill: {skill.name}\n"
-                    f"{skill.description}\n\n"
-                    f"{skill.instructions}"
+                    f"## Skill: {skill.name}\n" f"{skill.description}\n\n" f"{skill.instructions}"
                 )
         return "\n\n---\n\n".join(parts)
 

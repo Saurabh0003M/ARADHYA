@@ -25,13 +25,14 @@ from typing import Any, Callable
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
 
+
 class HookEvent(str, Enum):
     """All supported hook event types."""
+
     PRE_TOOL_USE = "PreToolUse"
     POST_TOOL_USE = "PostToolUse"
     POST_TOOL_USE_FAILURE = "PostToolUseFailure"
@@ -43,21 +44,24 @@ class HookEvent(str, Enum):
 
 class HookDecision(str, Enum):
     """Decision returned by a PreToolUse hook."""
+
     ALLOW = "allow"
     DENY = "deny"
-    ASK = "ask"         # fall through to confirmation gate
-    BLOCK = "block"     # hard block, no user override
+    ASK = "ask"  # fall through to confirmation gate
+    BLOCK = "block"  # hard block, no user override
 
 
 class HookType(str, Enum):
     """Type of hook implementation."""
-    COMMAND = "command"       # shell command
-    CALLABLE = "callable"     # Python callable (internal)
+
+    COMMAND = "command"  # shell command
+    CALLABLE = "callable"  # Python callable (internal)
 
 
 @dataclass
 class HookDefinition:
     """A single hook bound to an event."""
+
     event: HookEvent
     hook_type: HookType
     command: str = ""
@@ -70,6 +74,7 @@ class HookDefinition:
 @dataclass
 class HookResult:
     """Result returned by a hook execution."""
+
     decision: HookDecision = HookDecision.ALLOW
     system_message: str = ""
     updated_input: dict[str, Any] | None = None
@@ -82,6 +87,7 @@ class HookResult:
 # ---------------------------------------------------------------------------
 # Hook Engine
 # ---------------------------------------------------------------------------
+
 
 class HookEngine:
     """Central dispatcher for hook events.
@@ -106,9 +112,7 @@ class HookEngine:
     """
 
     def __init__(self) -> None:
-        self._hooks: dict[HookEvent, list[HookDefinition]] = {
-            event: [] for event in HookEvent
-        }
+        self._hooks: dict[HookEvent, list[HookDefinition]] = {event: [] for event in HookEvent}
         self._fired_once: set[int] = set()  # ids of once-hooks already fired
 
     # -- Registration ------------------------------------------------------
@@ -248,7 +252,8 @@ class HookEngine:
         """Execute a shell command hook with JSON stdin/stdout protocol."""
         input_json = json.dumps(payload, default=str)
 
-        import shlex
+        import shlex  # pylint: disable=import-outside-toplevel
+
         proc = subprocess.run(
             shlex.split(command),
             input=input_json,
@@ -256,6 +261,7 @@ class HookEngine:
             text=True,
             timeout=timeout,
             shell=False,
+            check=False,
         )
 
         if proc.returncode == 2:

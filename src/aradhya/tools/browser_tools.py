@@ -62,12 +62,10 @@ def _create_driver(
 ) -> Any:
     """Create a Selenium WebDriver instance."""
     try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options as ChromeOptions
+        from selenium import webdriver  # pylint: disable=import-outside-toplevel
+        from selenium.webdriver.chrome.options import Options as ChromeOptions  # pylint: disable=import-outside-toplevel
     except ImportError:
-        raise RuntimeError(
-            "Selenium is not installed. Install it with: pip install selenium"
-        )
+        raise RuntimeError("Selenium is not installed. Install it with: pip install selenium")
 
     options = ChromeOptions()
 
@@ -91,7 +89,7 @@ def _create_driver(
     except Exception:
         # Fallback: try Edge
         try:
-            from selenium.webdriver.edge.options import Options as EdgeOptions
+            from selenium.webdriver.edge.options import Options as EdgeOptions  # pylint: disable=import-outside-toplevel
 
             edge_options = EdgeOptions()
             if profile_dir:
@@ -102,9 +100,7 @@ def _create_driver(
                 edge_options.add_argument("--headless=new")
             driver = webdriver.Edge(options=edge_options)
         except Exception as edge_error:
-            raise RuntimeError(
-                f"Could not start Chrome or Edge WebDriver: {edge_error}"
-            )
+            raise RuntimeError(f"Could not start Chrome or Edge WebDriver: {edge_error}")
 
     driver.implicitly_wait(10)
     return driver
@@ -230,16 +226,14 @@ def browser_click(
     if _active_driver is None:
         return "No browser session. Call browser_open() first."
 
-    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.by import By  # pylint: disable=import-outside-toplevel
 
     element = None
 
     # Try by visible text
     if text and element is None:
         try:
-            element = _active_driver.find_element(
-                By.XPATH, f"//*[contains(text(), '{text}')]"
-            )
+            element = _active_driver.find_element(By.XPATH, f"//*[contains(text(), '{text}')]")
         except Exception:
             # Try link text
             try:
@@ -315,8 +309,8 @@ def browser_type(
     if _active_driver is None:
         return "No browser session. Call browser_open() first."
 
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.common.by import By  # pylint: disable=import-outside-toplevel
+    from selenium.webdriver.common.keys import Keys  # pylint: disable=import-outside-toplevel
 
     element = None
 
@@ -372,7 +366,7 @@ def browser_read(selector: str = "") -> str:
     if _active_driver is None:
         return "No browser session. Call browser_open() first."
 
-    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.by import By  # pylint: disable=import-outside-toplevel
 
     try:
         title = _active_driver.title
@@ -410,11 +404,10 @@ def browser_screenshot(filename: str = "") -> str:
         return "No browser session. Call browser_open() first."
 
     if not filename:
-        import tempfile
+        import tempfile  # pylint: disable=import-outside-toplevel
+
         stamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = str(
-            Path(tempfile.gettempdir()) / f"aradhya_browser_{stamp}.png"
-        )
+        filename = str(Path(tempfile.gettempdir()) / f"aradhya_browser_{stamp}.png")
 
     try:
         _active_driver.save_screenshot(filename)

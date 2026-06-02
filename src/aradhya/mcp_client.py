@@ -3,6 +3,7 @@
 This module provides a unified way to connect to external MCP servers,
 fetch their tools, and expose them to Aradhya's ToolRegistry.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,7 +23,9 @@ from src.aradhya.tools.tool_registry import ToolDefinition
 class MCPServer:
     """Represents a connection to a single MCP server."""
 
-    def __init__(self, name: str, command: str, args: list[str], env: dict[str, str] | None = None) -> None:
+    def __init__(
+        self, name: str, command: str, args: list[str], env: dict[str, str] | None = None
+    ) -> None:
         self.name = name
         self.command = command
         self.args = args
@@ -32,7 +35,8 @@ class MCPServer:
         self._tools: list[ToolDefinition] = []
 
     async def connect(self) -> None:
-        from contextlib import AsyncExitStack
+        from contextlib import AsyncExitStack  # pylint: disable=import-outside-toplevel
+
         self._exit_stack = AsyncExitStack()
         try:
             params = StdioServerParameters(command=self.command, args=self.args, env=self.env)
@@ -54,12 +58,14 @@ class MCPServer:
             response = await self.session.list_tools()
             tools = []
             for mcp_tool in response.tools:
-                tools.append(ToolDefinition(
-                    name=f"{self.name}__{mcp_tool.name}",
-                    description=mcp_tool.description or f"MCP tool from {self.name}",
-                    parameters=mcp_tool.inputSchema,
-                    handler=lambda **kwargs: "Not bound", # We map func later in the manager
-                ))
+                tools.append(
+                    ToolDefinition(
+                        name=f"{self.name}__{mcp_tool.name}",
+                        description=mcp_tool.description or f"MCP tool from {self.name}",
+                        parameters=mcp_tool.inputSchema,
+                        handler=lambda **kwargs: "Not bound",  # We map func later in the manager
+                    )
+                )
             self._tools = tools
             return tools
         except Exception as e:
@@ -117,6 +123,7 @@ class MCPManager:
 
     def stop(self) -> None:
         if self._running:
+
             async def close_all():
                 for server in self.servers.values():
                     await server.close()
@@ -145,12 +152,14 @@ class MCPManager:
                         name=name,
                         command=config["command"],
                         args=config["args"],
-                        env=config.get("env")
+                        env=config.get("env"),
                     )
         except Exception as e:
             logger.error(f"Failed to load MCP config: {e}")
 
-    def add_server(self, name: str, command: str, args: list[str], env: dict[str, str] | None = None) -> None:
+    def add_server(
+        self, name: str, command: str, args: list[str], env: dict[str, str] | None = None
+    ) -> None:
         if name in self.servers:
             logger.warning(f"MCP server '{name}' already exists.")
             return
@@ -185,7 +194,7 @@ class MCPManager:
 
         try:
             future = asyncio.run_coroutine_threadsafe(_connect_and_fetch(), self.loop)
-            tools_with_server = future.result(timeout=10) # 10s timeout for MCP boot
+            tools_with_server = future.result(timeout=10)  # 10s timeout for MCP boot
 
             for server, tool in tools_with_server:
                 self._register_server_tools(server, [tool], tool_registry)
@@ -194,13 +203,16 @@ class MCPManager:
         except Exception as e:
             logger.error(f"Failed to connect and register MCP tools: {e}")
 
-    def _register_server_tools(self, server: MCPServer, tools: list[ToolDefinition], tool_registry: Any) -> None:
+    def _register_server_tools(
+        self, server: MCPServer, tools: list[ToolDefinition], tool_registry: Any
+    ) -> None:
         for tool in tools:
+
             def make_callable(srv: MCPServer, t_name: str) -> Callable:
                 def tool_func(**kwargs) -> str:
                     fut = asyncio.run_coroutine_threadsafe(srv.call_tool(t_name, kwargs), self.loop)
                     try:
-                        return fut.result(timeout=60) # 60s timeout for tool execution
+                        return fut.result(timeout=60)  # 60s timeout for tool execution
                     except Exception as e:
                         return f"MCP tool execution failed: {e}"
 
@@ -216,7 +228,7 @@ class MCPManager:
                 description=tool.description,
                 parameters=tool.parameters,
                 handler=bound_func,
-                requires_confirmation=False, # Managed by ToolRuntimePolicy later
+                requires_confirmation=False,  # Managed by ToolRuntimePolicy later
             )
             tool_registry.register(tool_def)
             logger.info(f"Registered MCP tool: {tool.name}")

@@ -74,12 +74,12 @@ from src.aradhya.audit_logger import get_audit_logger
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
-IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"   # atomic append-only queue
-HEARTBEAT_FILE = PROJECT_ROOT / ".aradhya_heartbeat"   # touched by heartbeat thread
+IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"  # atomic append-only queue
+HEARTBEAT_FILE = PROJECT_ROOT / ".aradhya_heartbeat"  # touched by heartbeat thread
 MAX_DIRECT_MODEL_PROMPT_CHARS = 4000
 
 # ── Gap D: Session heartbeat (NanoClaw pattern) ──────────────────────
-_HEARTBEAT_INTERVAL = 30   # seconds between touches
+_HEARTBEAT_INTERVAL = 30  # seconds between touches
 _heartbeat_stop = threading.Event()
 
 
@@ -94,12 +94,12 @@ def _heartbeat_worker() -> None:
         try:
             HEARTBEAT_FILE.touch()
         except OSError:
-            pass   # non-fatal — file system issues must not crash the agent
+            pass  # non-fatal — file system issues must not crash the agent
 
 
 def _start_heartbeat() -> threading.Thread:
     """Start the heartbeat background thread and return it."""
-    HEARTBEAT_FILE.touch()   # immediate first touch at startup
+    HEARTBEAT_FILE.touch()  # immediate first touch at startup
     t = threading.Thread(
         target=_heartbeat_worker,
         name="aradhya-heartbeat",
@@ -130,6 +130,7 @@ def _response_was_streamed(resp) -> bool:
 
 # ── Startup health checks ────────────────────────────────────────────
 
+
 def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool, str]]:
     """Run startup diagnostics and return a list of (name, passed, msg)."""
     checks: list[tuple[str, bool, str]] = []
@@ -137,11 +138,13 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
     # 1. Python version
     v = sys.version_info
     ok = v >= (3, 10)
-    checks.append((
-        "Python",
-        ok,
-        f"{v.major}.{v.minor}.{v.micro}" + ("" if ok else " - need 3.10+"),
-    ))
+    checks.append(
+        (
+            "Python",
+            ok,
+            f"{v.major}.{v.minor}.{v.micro}" + ("" if ok else " - need 3.10+"),
+        )
+    )
 
     # 2. Ollama reachability + model
     try:
@@ -163,31 +166,38 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
     profile_path = PROJECT_ROOT / "core" / "config" / "profile.json"
     if not profile_path.is_file():
         profile_path = PROJECT_ROOT / "core" / "memory" / "profile.json"
-    checks.append((
-        "Preferences",
-        prefs_path.is_file(),
-        str(prefs_path.name) if prefs_path.is_file() else "MISSING",
-    ))
-    checks.append((
-        "Profile",
-        profile_path.is_file(),
-        str(profile_path.name) if profile_path.is_file() else "MISSING",
-    ))
+    checks.append(
+        (
+            "Preferences",
+            prefs_path.is_file(),
+            str(prefs_path.name) if prefs_path.is_file() else "MISSING",
+        )
+    )
+    checks.append(
+        (
+            "Profile",
+            profile_path.is_file(),
+            str(profile_path.name) if profile_path.is_file() else "MISSING",
+        )
+    )
 
     # 4. Voice inbox
     inbox = Path(runtime_profile.voice.audio_inbox_dir)
     if not inbox.is_absolute():
         inbox = PROJECT_ROOT / inbox
-    checks.append((
-        "Voice Inbox",
-        inbox.is_dir(),
-        str(inbox) if inbox.is_dir() else "Will be created on first use",
-    ))
+    checks.append(
+        (
+            "Voice Inbox",
+            inbox.is_dir(),
+            str(inbox) if inbox.is_dir() else "Will be created on first use",
+        )
+    )
 
     return checks
 
 
 # ── Command handlers ──────────────────────────────────────────────────
+
 
 def _handle_help(*, command: str) -> None:
     normalized = command.strip().lower()
@@ -199,8 +209,7 @@ def _handle_help(*, command: str) -> None:
     render_help(topic)
 
 
-def _handle_status(*, assistant, runtime_profile, model_provider,
-                   live_voice_runtime) -> None:
+def _handle_status(*, assistant, runtime_profile, model_provider, live_voice_runtime) -> None:
     model_ok = None
     try:
         health = model_provider.health_check()
@@ -224,7 +233,9 @@ def _handle_status(*, assistant, runtime_profile, model_provider,
 
 def _handle_topology(*, runtime_profile, command) -> None:
     normalized = command.strip().lower()
-    refreshed = normalized.startswith("/topology rescan") or normalized.startswith("topology rescan")
+    refreshed = normalized.startswith("/topology rescan") or normalized.startswith(
+        "topology rescan"
+    )
     topology = ensure_topology(PROJECT_ROOT, runtime_profile, force=refreshed)
     render_topology(
         topology,
@@ -259,8 +270,7 @@ def _handle_sleep(*, assistant) -> None:
     render_response(resp.spoken_response)
 
 
-def _handle_voice_status(*, voice_manager, runtime_profile,
-                         live_voice_runtime) -> None:
+def _handle_voice_status(*, voice_manager, runtime_profile, live_voice_runtime) -> None:
     status = voice_manager.status()
     activation_support = describe_voice_activation_support(runtime_profile)
     config = VoiceStatusConfig(
@@ -287,14 +297,14 @@ def _handle_voice_process(*, assistant, voice_manager) -> None:
             render_info(f"Transcript: {result.transcript_text}")
             if assistant.state.is_awake:
                 resp = assistant.handle_transcript(result.transcript_text)
-                render_response(resp.spoken_response, resp.transcript_echo,
-                                resp.awaiting_confirmation)
+                render_response(
+                    resp.spoken_response, resp.transcript_echo, resp.awaiting_confirmation
+                )
             else:
                 render_warning("Transcript saved. Wake Aradhya to route voice into planning.")
 
 
-def _handle_voice_activate(*, assistant, voice_manager, runtime_profile,
-                           ctx) -> None:
+def _handle_voice_activate(*, assistant, voice_manager, runtime_profile, ctx) -> None:
     try:
         if ctx.get("live_voice_runtime") is None:
             ctx["live_voice_runtime"] = VoiceActivatedAradhya(
@@ -319,7 +329,8 @@ def _handle_voice_stop(*, ctx) -> None:
 def _handle_wake_word_on(*, assistant, voice_manager, ctx) -> None:
     if ctx.get("wake_word_listener") is None:
         ctx["wake_word_listener"] = WakeWordListener(
-            assistant=assistant, voice_manager=voice_manager,
+            assistant=assistant,
+            voice_manager=voice_manager,
         )
     ctx["wake_word_listener"].start()
     render_success("Wake word detection enabled (listening for 'wakeup').")
@@ -343,7 +354,7 @@ def _handle_model_workers(*, runtime_profile, command) -> None:
         text = command
         for prefix in assess_prefixes:
             if normalized.startswith(prefix):
-                text = command[len(prefix):].strip()
+                text = command[len(prefix) :].strip()
                 break
         if not text:
             render_error("Usage: /model workers assess <text>")
@@ -357,15 +368,17 @@ def _handle_model_workers(*, runtime_profile, command) -> None:
 
 
 def _handle_model_ask(*, command, model_provider, runtime_profile) -> None:
-    prompt = command[len("/model ask "):].strip()
+    prompt = command[len("/model ask ") :].strip()
     if not prompt:
-        prompt = command[len("model ask "):].strip()
+        prompt = command[len("model ask ") :].strip()
     normalized = " ".join(prompt.split())
     if not normalized:
         render_error("Add a prompt after '/model ask'.")
         return
     if len(normalized) > MAX_DIRECT_MODEL_PROMPT_CHARS:
-        render_error(f"Direct model prompts must stay under {MAX_DIRECT_MODEL_PROMPT_CHARS} characters.")
+        render_error(
+            f"Direct model prompts must stay under {MAX_DIRECT_MODEL_PROMPT_CHARS} characters."
+        )
         return
     if runtime_profile.model.provider.lower() == "openrouter":
         assessment = CloudPrivacyGate().assess_text(normalized, source="/model ask")
@@ -444,7 +457,7 @@ def _handle_apis(*, command) -> None:
     def _tail(*prefixes: str) -> str:
         for prefix in prefixes:
             if normalized.startswith(prefix):
-                return command[len(prefix):].strip()
+                return command[len(prefix) :].strip()
         return ""
 
     if normalized in {"/apis", "apis"}:
@@ -510,7 +523,8 @@ def _handle_telegram_start(*, assistant, ctx) -> None:
         render_info("Telegram bot is already running.")
         return
     try:
-        from src.aradhya.channels.telegram import AradhyaTelegramBot, _load_telegram_config
+        from src.aradhya.channels.telegram import AradhyaTelegramBot, _load_telegram_config  # pylint: disable=import-outside-toplevel
+
         config = _load_telegram_config()
         if not config["bot_token"]:
             render_error(
@@ -592,18 +606,17 @@ def _handle_daemon_stop(*, ctx) -> None:
 
 def _handle_setup() -> None:
     try:
-        from src.aradhya.setup_wizard import run_wizard
+        from src.aradhya.setup_wizard import run_wizard  # pylint: disable=import-outside-toplevel
+
         run_wizard()
     except Exception as error:
         render_error(f"Setup wizard failed: {error}")
 
 
-
-
 def _handle_parasite(*, command) -> None:
     """Handle /parasite digestion and host-integration commands."""
-    from src.aradhya.parasite.pipeline import DigestionPipeline
-    from src.aradhya.parasite.ledger import (
+    from src.aradhya.parasite.pipeline import DigestionPipeline  # pylint: disable=import-outside-toplevel
+    from src.aradhya.parasite.ledger import (  # pylint: disable=import-outside-toplevel
         build_integration_ledger,
         find_candidate,
         write_integration_ledger,
@@ -615,7 +628,7 @@ def _handle_parasite(*, command) -> None:
     def _ptail(*prefixes: str) -> str:
         for prefix in prefixes:
             if normalized.startswith(prefix):
-                return command.strip()[len(prefix):].strip()
+                return command.strip()[len(prefix) :].strip()
         return ""
 
     # /parasite candidates
@@ -691,7 +704,9 @@ def _handle_parasite(*, command) -> None:
             return
         cp = pipeline.resume(target)
         if cp is None:
-            render_error(f"No checkpoint found for '{target}'. Run /parasite digest {target} first.")
+            render_error(
+                f"No checkpoint found for '{target}'. Run /parasite digest {target} first."
+            )
             return
         completed = len(cp.completed_stages)
         if cp.error:
@@ -709,7 +724,7 @@ def _handle_parasite(*, command) -> None:
         mode = "delete" if delete else "archive" if archive else "strip_git"
 
         if apply:
-            from src.aradhya.confirmation_gates import CliConfirmationGate
+            from src.aradhya.confirmation_gates import CliConfirmationGate  # pylint: disable=import-outside-toplevel
 
             approved, _persist = CliConfirmationGate()(
                 "parasite_gc",
@@ -731,9 +746,7 @@ def _handle_parasite(*, command) -> None:
         )
 
         render_info(
-            "Parasite GC dry-run plan"
-            if result.get("dry_run")
-            else "Parasite GC completed"
+            "Parasite GC dry-run plan" if result.get("dry_run") else "Parasite GC completed"
         )
         for item in result.get("results", []):
             status = item.get("status", "?")
@@ -745,7 +758,9 @@ def _handle_parasite(*, command) -> None:
         if not result.get("results"):
             render_info("Nothing to clean up.")
         for error in result.get("errors", []):
-            render_error(f"{error.get('action')} failed for {error.get('target')}: {error.get('error')}")
+            render_error(
+                f"{error.get('action')} failed for {error.get('target')}: {error.get('error')}"
+            )
         if result.get("dry_run"):
             render_info("Re-run with --apply after reviewing the plan.")
         else:
@@ -784,13 +799,13 @@ def _handle_parasite(*, command) -> None:
 
     # /parasite dedup [--apply]
     if normalized.startswith("/parasite dedup") or normalized.startswith("parasite dedup"):
-        from src.aradhya.parasite.deduplicator import SkillDeduplicator
+        from src.aradhya.parasite.deduplicator import SkillDeduplicator  # pylint: disable=import-outside-toplevel
 
         flags = _ptail("/parasite dedup", "parasite dedup").lower()
         apply = "--apply" in flags
         gate = None
         if apply:
-            from src.aradhya.confirmation_gates import CliConfirmationGate
+            from src.aradhya.confirmation_gates import CliConfirmationGate  # pylint: disable=import-outside-toplevel
 
             gate = CliConfirmationGate()
 
@@ -809,9 +824,7 @@ def _handle_parasite(*, command) -> None:
             status = action.get("status", "planned")
             if status == "merged":
                 merged += 1
-            render_info(
-                f"{status}: {action.get('duplicate')} -> {action.get('base')}"
-            )
+            render_info(f"{status}: {action.get('duplicate')} -> {action.get('base')}")
         if apply:
             render_success(f"Deduplication complete. Merged {merged} skill(s).")
         else:
@@ -839,37 +852,33 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     (["/topology", "topology"], _handle_topology),
     (["/federation doctor", "federation doctor"], _handle_federation_doctor),
     (["/federation init", "federation init"], _handle_federation_init),
-    (["/federation status", "federation status", "/federation", "federation"], _handle_federation_status),
+    (
+        ["/federation status", "federation status", "/federation", "federation"],
+        _handle_federation_status,
+    ),
     (["/sleep", "sleep"], _handle_sleep),
-
     # Voice (order matters — longer prefixes first)
     (["/voice process", "voice process"], _handle_voice_process),
     (["/voice activate", "voice activate"], _handle_voice_activate),
     (["/voice stop", "voice stop"], _handle_voice_stop),
     (["/voice", "voice status"], _handle_voice_status),
-
     # Wake word
     (["/wake-word on", "wake word enable"], _handle_wake_word_on),
     (["/wake-word off", "wake word disable"], _handle_wake_word_off),
-
     # Model (longer prefix first)
     (["/model workers assess", "model workers assess"], _handle_model_workers),
     (["/model workers", "model workers"], _handle_model_workers),
     (["/model ask", "model ask"], _handle_model_ask),
     (["/model", "model ping"], _handle_model_ping),
-
     # Skills (longer prefix first)
     (["/skills enable", "skills enable"], _handle_skills_enable),
     (["/skills disable", "skills disable"], _handle_skills_disable),
     (["/skills", "skills list"], _handle_skills_list),
-
     # Icon
     (["/icon on", "icon enable"], _handle_icon_on),
     (["/icon off", "icon disable"], _handle_icon_off),
-
     # Cache
     (["/cache", "cache validate"], _handle_cache),
-
     # Parasite OS (longer prefix first)
     (["/parasite candidates", "parasite candidates"], _handle_parasite),
     (["/parasite inspect", "parasite inspect"], _handle_parasite),
@@ -880,21 +889,16 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     (["/parasite gc", "parasite gc"], _handle_parasite),
     (["/parasite dedup", "parasite dedup"], _handle_parasite),
     (["/parasite status", "parasite status", "/parasite", "parasite"], _handle_parasite),
-
     # API catalog
     (["/apis", "apis"], _handle_apis),
-
     # Telegram
     (["/telegram start", "/telegram on"], _handle_telegram_start),
     (["/telegram stop", "/telegram off"], _handle_telegram_stop),
-
     # Audit
     (["/audit"], _handle_audit),
-
     # Daemon
     (["/daemon start", "/daemon on"], _handle_daemon_start),
     (["/daemon stop", "/daemon off"], _handle_daemon_stop),
-
     # Setup
     (["/setup"], _handle_setup),
 ]
@@ -926,6 +930,7 @@ def _dispatch_command(command: str, **kwargs) -> bool:
 # silently dropped because the file was unlinked before being read.
 
 IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"
+
 
 def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
     """Background thread that reads commands from the floating icon."""
@@ -977,8 +982,7 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
         elif cmd in {"lock_screen", "prevent_sleep"}:
             console.print()
             render_warning(
-                f"Floating-icon command '{cmd}' is not wired to a safe "
-                "confirmed action yet."
+                f"Floating-icon command '{cmd}' is not wired to a safe " "confirmed action yet."
             )
         elif cmd == "exit_icon":
             console.print()
@@ -1017,7 +1021,7 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
                     console.print()
                     render_warning(f"IPC queue read failed: {error}")
 
-            time.sleep(0.25)   # Faster polling with queue — 250 ms
+            time.sleep(0.25)  # Faster polling with queue — 250 ms
 
     t = threading.Thread(target=watcher, daemon=True)
     t.start()
@@ -1132,10 +1136,7 @@ def _run_cli_loop(handler_kwargs: dict):
 
         # Legacy wake commands — still supported but no longer needed
         if normalized in {"wake", "ctrl+win"}:
-            source = (
-                WakeSource.HOTKEY if normalized == "ctrl+win"
-                else WakeSource.FLOATING_ICON
-            )
+            source = WakeSource.HOTKEY if normalized == "ctrl+win" else WakeSource.FLOATING_ICON
             resp = assistant.handle_wake(source)
             render_response(resp.spoken_response)
             if runtime_profile.voice.poll_on_wake:
@@ -1149,7 +1150,9 @@ def _run_cli_loop(handler_kwargs: dict):
 
         # ── Natural language input ────────────────────────────────
         # Everything that isn't a command goes to the assistant planner.
-        resp = assistant.handle_transcript(command, stream_handler=render_stream, session_name=handler_kwargs["session_name"])
+        resp = assistant.handle_transcript(
+            command, stream_handler=render_stream, session_name=handler_kwargs["session_name"]
+        )
 
         spoken = "" if _response_was_streamed(resp) else resp.spoken_response
         if resp.transcript_echo or resp.awaiting_confirmation or spoken:
@@ -1162,8 +1165,10 @@ def _run_cli_loop(handler_kwargs: dict):
 
 # ── Main entry point ──────────────────────────────────────────────────
 
+
 def main() -> None:
-    import argparse  # noqa: PLC0415
+    import argparse  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
     parser = argparse.ArgumentParser(description="Aradhya CLI", add_help=False)
     parser.add_argument(
         "--session",
@@ -1174,7 +1179,9 @@ def main() -> None:
     args, _ = parser.parse_known_args()
     session_name: str = args.session
 
-    assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx = _setup_environment()
+    assistant, model_provider, runtime_profile, voice_manager, skill_registry, ctx = (
+        _setup_environment()
+    )
 
     # ── Gap D: Session heartbeat (NanoClaw pattern) ───────────────────
     _start_heartbeat()
@@ -1188,7 +1195,7 @@ def main() -> None:
         skill_registry=skill_registry,
         live_voice_runtime=ctx.get("live_voice_runtime"),
         ctx=ctx,
-        session_name=session_name,   # Gap G: named per-channel session
+        session_name=session_name,  # Gap G: named per-channel session
     )
 
     # ── Main input loop ───────────────────────────────────────────────
@@ -1196,7 +1203,7 @@ def main() -> None:
         handler_kwargs["session_name"] = session_name
         _run_cli_loop(handler_kwargs)
     finally:
-        _stop_heartbeat()   # remove heartbeat file on clean shutdown
+        _stop_heartbeat()  # remove heartbeat file on clean shutdown
         ctx["ipc_running"] = False
         wl = ctx.get("wake_word_listener")
         if wl:

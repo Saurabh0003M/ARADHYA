@@ -5,12 +5,12 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable
+from typing import Any, Callable
 
 from loguru import logger
 
 try:
-    from pynput import keyboard
+    from pynput import keyboard  # type: ignore
 
     PYNPUT_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on optional package
@@ -63,7 +63,7 @@ class HotkeyListener:
 
         self.config = hotkey_config
         self.on_hotkey_pressed = on_hotkey_pressed
-        self._listener: keyboard.Listener | None = None
+        self._listener: Any = None
         self._current_keys: set[object] = set()
         self._lock = threading.Lock()
         self._running = False

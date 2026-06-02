@@ -76,11 +76,13 @@ class AuditLogger:
     ) -> None:
         """Emit a session_meta event (once at session start)."""
         self._session_id = session_id
-        self._write({
-            "type": "session_meta",
-            "session_id": session_id,
-            "config": config_snapshot or {},
-        })
+        self._write(
+            {
+                "type": "session_meta",
+                "session_id": session_id,
+                "config": config_snapshot or {},
+            }
+        )
 
     def log_turn_start(
         self,
@@ -90,12 +92,14 @@ class AuditLogger:
     ) -> str:
         """Emit a turn_start event and return the assigned turn_id."""
         self._turn_id = turn_id or _generate_turn_id()
-        self._write({
-            "type": "turn_start",
-            "turn_id": self._turn_id,
-            "user_message": user_message[:500],
-            "context": context or {},
-        })
+        self._write(
+            {
+                "type": "turn_start",
+                "turn_id": self._turn_id,
+                "user_message": user_message[:500],
+                "context": context or {},
+            }
+        )
         return self._turn_id
 
     def log_turn_end(
@@ -107,14 +111,16 @@ class AuditLogger:
         final_response_preview: str = "",
     ) -> None:
         """Emit a turn_end event with summary statistics."""
-        self._write({
-            "type": "turn_end",
-            "turn_id": turn_id or self._turn_id,
-            "iterations": iterations,
-            "tool_calls_count": tool_calls_count,
-            "success": success,
-            "response_preview": final_response_preview[:300],
-        })
+        self._write(
+            {
+                "type": "turn_end",
+                "turn_id": turn_id or self._turn_id,
+                "iterations": iterations,
+                "tool_calls_count": tool_calls_count,
+                "success": success,
+                "response_preview": final_response_preview[:300],
+            }
+        )
         self._turn_id = ""
 
     # ── Tool calls ────────────────────────────────────────────────────
@@ -153,12 +159,14 @@ class AuditLogger:
         result: str = "",
     ) -> None:
         """Log a user command or slash command."""
-        self._write({
-            "type": "command",
-            "command": command[:200],
-            "source": source,
-            "result": result[:200],
-        })
+        self._write(
+            {
+                "type": "command",
+                "command": command[:200],
+                "source": source,
+                "result": result[:200],
+            }
+        )
 
     def log_state_change(
         self,
@@ -167,12 +175,14 @@ class AuditLogger:
         new_value: Any,
     ) -> None:
         """Log an assistant state transition."""
-        self._write({
-            "type": "state_change",
-            "field": field,
-            "old": str(old_value)[:100],
-            "new": str(new_value)[:100],
-        })
+        self._write(
+            {
+                "type": "state_change",
+                "field": field,
+                "old": str(old_value)[:100],
+                "new": str(new_value)[:100],
+            }
+        )
 
     def log_security_event(
         self,
@@ -181,12 +191,14 @@ class AuditLogger:
         severity: str = "info",
     ) -> None:
         """Log a security-relevant event (blocked action, policy denial, etc)."""
-        self._write({
-            "type": "security",
-            "event": event,
-            "details": details[:500],
-            "severity": severity,
-        })
+        self._write(
+            {
+                "type": "security",
+                "event": event,
+                "details": details[:500],
+                "severity": severity,
+            }
+        )
 
     def log_event(self, event_type: str, payload: dict[str, Any] | None = None) -> None:
         """Generic event logger for one-off event types (e.g. 'compacted').
@@ -294,7 +306,7 @@ _global_audit: AuditLogger | None = None
 
 def get_audit_logger(audit_dir: Path | None = None) -> AuditLogger:
     """Return the global audit logger, creating it on first call."""
-    global _global_audit
+    global _global_audit  # pylint: disable=global-statement
     if _global_audit is None:
         _global_audit = AuditLogger(audit_dir)
     return _global_audit

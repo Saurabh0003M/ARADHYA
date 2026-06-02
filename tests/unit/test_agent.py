@@ -211,4 +211,3 @@ def test_complex_unknown_request_auto_executes_agent_task(tmp_path):
     assert response.spoken_response == "I inspected what I could and here is the answer."
     assert assistant.session_manager.active_session is not None
     assert assistant.session_manager.active_session.message_count >= 2
-

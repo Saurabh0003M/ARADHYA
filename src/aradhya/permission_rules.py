@@ -33,14 +33,15 @@ from typing import Any
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PermissionDecision:
     """The outcome of a permission check."""
+
     allowed: bool = True
     reason: str = ""
     matched_rule: str = ""
@@ -50,9 +51,10 @@ class PermissionDecision:
 @dataclass
 class PermissionRule:
     """A single permission rule."""
-    tool_name: str          # e.g. "run_command"
-    arg_pattern: str = ""   # e.g. "npm *", empty = match any args
-    raw: str = ""           # original rule string for display
+
+    tool_name: str  # e.g. "run_command"
+    arg_pattern: str = ""  # e.g. "npm *", empty = match any args
+    raw: str = ""  # original rule string for display
 
     def matches(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """Check if this rule matches a given tool call."""
@@ -81,6 +83,7 @@ class ConditionalBlockRule:
             raw="run_command:radare2 requires -c flag",
         )
     """
+
     tool_name: str
     safe_pattern: str  # regex that MUST match for the call to proceed
     raw: str = ""
@@ -100,9 +103,7 @@ class ConditionalBlockRule:
 # Parsing
 # ---------------------------------------------------------------------------
 
-_RULE_RE = re.compile(
-    r"^(?P<tool>\w+)(?:\((?P<pattern>[^)]*)\))?$"
-)
+_RULE_RE = re.compile(r"^(?P<tool>\w+)(?:\((?P<pattern>[^)]*)\))?$")
 
 
 def parse_rule(raw: str) -> PermissionRule | None:
@@ -144,6 +145,7 @@ def _arguments_to_match_string(tool_name: str, arguments: dict[str, Any]) -> str
 # ---------------------------------------------------------------------------
 # Permission Engine
 # ---------------------------------------------------------------------------
+
 
 class PermissionEngine:
     """Checks tool calls against allow/deny rules.
@@ -233,6 +235,7 @@ class PermissionEngine:
 # Config loading
 # ---------------------------------------------------------------------------
 
+
 def load_permissions(
     project_root: Path | None = None,
     *,
@@ -318,8 +321,10 @@ def _load_from_file(
     # Load conditional blocks: {"tool": "name", "safe_pattern": "regex"}
     for entry in data.get("block_unless_regex", []):
         if isinstance(entry, dict) and "tool" in entry and "safe_pattern" in entry:
-            conditional_blocks.append(ConditionalBlockRule(
-                tool_name=entry["tool"],
-                safe_pattern=entry["safe_pattern"],
-                raw=f"{entry['tool']}:block_unless({entry['safe_pattern']})",
-            ))
+            conditional_blocks.append(
+                ConditionalBlockRule(
+                    tool_name=entry["tool"],
+                    safe_pattern=entry["safe_pattern"],
+                    raw=f"{entry['tool']}:block_unless({entry['safe_pattern']})",
+                )
+            )

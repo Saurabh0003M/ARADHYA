@@ -49,7 +49,7 @@ class Pyttsx3SpeechSynthesizer:
             engine = self._engine_factory()
         else:
             try:
-                import pyttsx3
+                import pyttsx3  # pylint: disable=import-outside-toplevel
             except ImportError as error:  # pragma: no cover - optional dependency
                 raise RuntimeError(
                     "Optional dependency 'pyttsx3' is not installed. "

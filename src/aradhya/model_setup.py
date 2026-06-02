@@ -95,7 +95,9 @@ def bootstrap_runtime_profile(
         output_handler("Model > Suggested smaller local models:")
         for index, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
             output_handler(f"Model >   {index}. {model.name} - {model.description}")
-        output_handler("Model > Pull a smaller model, then update the profile with /setup or profile.local.json.")
+        output_handler(
+            "Model > Pull a smaller model, then update the profile with /setup or profile.local.json."
+        )
         output_handler("")
         return runtime_profile
 

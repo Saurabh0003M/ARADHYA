@@ -15,7 +15,6 @@ from loguru import logger
 
 from src.aradhya.cloud_safety import CloudPrivacyGate
 
-
 # Files to read for understanding a repo
 PRIORITY_FILES = (
     "README.md",
@@ -166,6 +165,7 @@ def generate_digest(analysis: dict[str, Any], output_path: Path) -> Path:
 
 # ── Data-specific analyzers ────────────────────────────────────────────
 
+
 def analyze_public_apis_readme(target_path: Path) -> list[dict[str, Any]]:
     """Parse the public-apis README.md into verified API entries.
 
@@ -241,6 +241,7 @@ def analyze_public_apis_readme(target_path: Path) -> list[dict[str, Any]]:
 
 
 # ── Internal helpers ───────────────────────────────────────────────────
+
 
 def _detect_project_type(path: Path) -> str:
     if (path / "pyproject.toml").exists() or (path / "setup.py").exists():
@@ -378,7 +379,7 @@ def _extract_dependencies(path: Path, project_type: str) -> list[str]:
             try:
                 pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
                 for section in ("dependencies", "devDependencies"):
-                    for name in (pkg.get(section) or {}):
+                    for name in pkg.get(section) or {}:
                         deps.append(name)
             except (OSError, json.JSONDecodeError):
                 pass
@@ -400,46 +401,61 @@ def _detect_capabilities(
     for indicator in MCP_INDICATORS:
         if indicator in combined_text:
             mcp_found = True
-            capabilities.append({
-                "kind": "mcp_server",
-                "detail": f"MCP indicator found: '{indicator}'",
-            })
+            capabilities.append(
+                {
+                    "kind": "mcp_server",
+                    "detail": f"MCP indicator found: '{indicator}'",
+                }
+            )
             break
 
     # Check for CLI tools
     if any(p in combined_text for p in ("argparse", "click", "typer", "cli")):
-        capabilities.append({
-            "kind": "cli_tool",
-            "detail": "CLI framework detected",
-        })
+        capabilities.append(
+            {
+                "kind": "cli_tool",
+                "detail": "CLI framework detected",
+            }
+        )
 
     # Check for API client
     if any(p in combined_text for p in ("requests", "httpx", "aiohttp", "fetch", "axios")):
-        capabilities.append({
-            "kind": "api_client",
-            "detail": "HTTP client library detected",
-        })
+        capabilities.append(
+            {
+                "kind": "api_client",
+                "detail": "HTTP client library detected",
+            }
+        )
 
     # Check for web scraping
-    if any(p in combined_text for p in ("beautifulsoup", "scrapy", "selenium", "playwright", "puppeteer")):
-        capabilities.append({
-            "kind": "web_scraper",
-            "detail": "Web scraping library detected",
-        })
+    if any(
+        p in combined_text
+        for p in ("beautifulsoup", "scrapy", "selenium", "playwright", "puppeteer")
+    ):
+        capabilities.append(
+            {
+                "kind": "web_scraper",
+                "detail": "Web scraping library detected",
+            }
+        )
 
     # Check for data catalog
     if any(p in combined_text for p in ("public api", "api directory", "api list")):
-        capabilities.append({
-            "kind": "data_catalog",
-            "detail": "API directory / catalog detected",
-        })
+        capabilities.append(
+            {
+                "kind": "data_catalog",
+                "detail": "API directory / catalog detected",
+            }
+        )
 
     # Check for agent framework
     if any(p in combined_text for p in ("agent", "langchain", "autogen", "crew", "swarm")):
-        capabilities.append({
-            "kind": "agent_framework",
-            "detail": "Agent/AI framework detected",
-        })
+        capabilities.append(
+            {
+                "kind": "agent_framework",
+                "detail": "Agent/AI framework detected",
+            }
+        )
 
     return capabilities, mcp_found
 

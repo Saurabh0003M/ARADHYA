@@ -1,4 +1,5 @@
 """Unit tests for centralized path resolver (src/aradhya/paths.py)."""
+
 from __future__ import annotations
 
 import os
@@ -32,7 +33,9 @@ def _clear_cache():
 
 
 class TestAradhyaHome:
-    def test_env_var_overrides_default(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_overrides_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         custom = tmp_path / "custom_aradhya"
         monkeypatch.setenv("ARADHYA_HOME", str(custom))
         assert aradhya_home() == custom.resolve()
@@ -51,7 +54,9 @@ class TestAradhyaHome:
         second = aradhya_home()
         assert first is second  # Same object from lru_cache
 
-    def test_env_var_with_trailing_slash(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_env_var_with_trailing_slash(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         custom = tmp_path / "trailing"
         monkeypatch.setenv("ARADHYA_HOME", str(custom) + os.sep)
         result = aradhya_home()
@@ -95,9 +100,19 @@ class TestWellKnownDirs:
         assert repos_dir() == tmp_path / "repos"
         assert state_dir() == tmp_path
 
-    def test_helpers_create_directories(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_helpers_create_directories(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.setenv("ARADHYA_HOME", str(tmp_path))
-        for helper in [audit_dir, hooks_dir, sessions_dir, skills_dir, notes_dir, worktrees_dir, repos_dir]:
+        for helper in [
+            audit_dir,
+            hooks_dir,
+            sessions_dir,
+            skills_dir,
+            notes_dir,
+            worktrees_dir,
+            repos_dir,
+        ]:
             result = helper()
             assert result.is_dir(), f"{helper.__name__} should create its directory"
 

@@ -13,7 +13,6 @@ from typing import Any
 
 from src.aradhya.parasite.checkpoint import STAGES, Checkpoint
 
-
 LEDGER_PATH = Path("data") / "processed" / "context" / "host_integration_ledger.json"
 
 CAPABILITY_WEIGHTS = {
@@ -192,14 +191,8 @@ def _candidate_from_checkpoint(
     absorb_result = stage_results.get("ABSORB", {})
 
     capabilities = _capability_kinds(analysis)
-    integration_plan = [
-        str(item)
-        for item in integrate.get("integration_plan", [])
-    ]
-    absorbed_artifacts = [
-        str(item)
-        for item in absorb.get("absorbed", [])
-    ]
+    integration_plan = [str(item) for item in integrate.get("integration_plan", [])]
+    absorbed_artifacts = [str(item) for item in absorb.get("absorbed", [])]
     absorbed_count = int(absorb.get("count", len(absorbed_artifacts)) or 0)
     validate_passed = validate.get("passed") is True
     absorb_completed = absorb_result.get("status") == "completed"
@@ -371,7 +364,9 @@ def _benefits(capabilities: list[str], absorbed_count: int) -> list[str]:
     if "data_catalog" in capabilities:
         benefits.append("Structured catalog/reference data candidate.")
     if not benefits:
-        benefits.append("Reference material only until a second-pass review finds a reusable artifact.")
+        benefits.append(
+            "Reference material only until a second-pass review finds a reusable artifact."
+        )
     return benefits
 
 
@@ -385,7 +380,9 @@ def _recommended_action(
     if repo == "agency-agents":
         return "Promote selected agent definitions into local Aradhya skills."
     if repo == "Scrapegraph-ai":
-        return "Extract a safe web research/scraping workflow, keeping execution behind confirmation."
+        return (
+            "Extract a safe web research/scraping workflow, keeping execution behind confirmation."
+        )
     if "mcp_server" in capabilities:
         return "Inspect MCP entry points and design a local wrapper before copying code."
     if "data_catalog" in capabilities:

@@ -86,9 +86,7 @@ class Session:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Session":
-        messages = [
-            Message(**m) for m in data.get("messages", [])
-        ]
+        messages = [Message(**m) for m in data.get("messages", [])]
         return cls(
             id=data["id"],
             messages=messages,
@@ -310,6 +308,4 @@ class SessionManager:
         user_messages = [m.content for m in messages if m.role == "user"]
         if not user_messages:
             return "No user messages in compacted range."
-        return "Earlier topics discussed: " + "; ".join(
-            msg[:120] for msg in user_messages[-10:]
-        )
+        return "Earlier topics discussed: " + "; ".join(msg[:120] for msg in user_messages[-10:])

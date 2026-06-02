@@ -4,11 +4,12 @@ Gap 1: Dangerous tools blocked even when confirmation_gate is None (dry-run)
 Gap 2: Tool failures auto-logged to learnings engine
 Gap 3: Per-turn token budget guard truncates oversized tool outputs
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -17,7 +18,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.aradhya.agent_loop import AgentLoop, ToolCall, ToolResult
+from src.aradhya.agent_loop import AgentLoop, ToolResult
 from src.aradhya.model_provider import ModelChatResult, ModelToolCall
 import src.aradhya.tools.approved_rules as _ar_module
 
@@ -36,6 +37,7 @@ def _reset_approved_rules():
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _make_chat_result(tool_name: str | None = None, text: str = "done") -> ModelChatResult:
     """Build a ModelChatResult with all required fields."""
     if tool_name:
@@ -44,9 +46,7 @@ def _make_chat_result(tool_name: str | None = None, text: str = "done") -> Model
             model="test-model",
             provider="test",
             raw={},
-            tool_calls=(
-                ModelToolCall(name=tool_name, arguments={"x": 1}, id="tc_001"),
-            ),
+            tool_calls=(ModelToolCall(name=tool_name, arguments={"x": 1}, id="tc_001"),),
         )
     return ModelChatResult(text=text, model="test-model", provider="test", raw={})
 
@@ -99,19 +99,30 @@ class _BigOutputModel:
 
 # ── Gap 1: Dangerous tool blocked without confirmation_gate ───────────────────
 
+
 class TestDangerousToolBlockedNullGate:
     """Dangerous tools must be blocked when confirmation_gate is None."""
 
-    @pytest.mark.parametrize("tool", [
-        "run_command", "write_file", "delete_file", "move_file",
-        "browser_click", "browser_type", "browser_submit",
-        "open_path", "open_url", "clipboard_write",
-    ])
+    @pytest.mark.parametrize(
+        "tool",
+        [
+            "run_command",
+            "write_file",
+            "delete_file",
+            "move_file",
+            "browser_click",
+            "browser_type",
+            "browser_submit",
+            "open_path",
+            "open_url",
+            "clipboard_write",
+        ],
+    )
     def test_dangerous_tool_blocked(self, tool):
         loop = AgentLoop(
             model_provider=_ToolCallModel(tool),
             tool_executor=_EchoExecutor(),
-            confirmation_gate=None,   # ← silent bypass scenario
+            confirmation_gate=None,  # ← silent bypass scenario
         )
         with patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit:
             mock_audit.return_value = MagicMock()
@@ -143,7 +154,7 @@ class TestDangerousToolBlockedNullGate:
         loop = AgentLoop(
             model_provider=_ToolCallModel("run_command"),
             tool_executor=_EchoExecutor(output="exit 0"),
-            confirmation_gate=lambda name, args: True,   # always approve
+            confirmation_gate=lambda name, args: True,  # always approve
         )
         with patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit:
             mock_audit.return_value = MagicMock()
@@ -157,7 +168,7 @@ class TestDangerousToolBlockedNullGate:
         loop = AgentLoop(
             model_provider=_ToolCallModel("run_command"),
             tool_executor=_EchoExecutor(output="exit 0"),
-            confirmation_gate=lambda name, args: False,   # always reject
+            confirmation_gate=lambda name, args: False,  # always reject
         )
         with patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit:
             mock_audit.return_value = MagicMock()
@@ -170,6 +181,7 @@ class TestDangerousToolBlockedNullGate:
 
 
 # ── Gap 2: Auto-log tool failures to learnings engine ────────────────────────
+
 
 class TestAutoLearningsOnFailure:
     """Tool failures must be auto-logged without requiring the model to call log_error."""
@@ -211,7 +223,7 @@ class TestAutoLearningsOnFailure:
             #  the method call site, so the exception propagates; this is fine
             #  because the real method is safe — we test the real one below)
             try:
-                turn = loop.run(user_message="read", system_prompt="")
+                loop.run(user_message="read", system_prompt="")
             except RuntimeError:
                 pass  # expected — mock bypasses the internal try/except
 
@@ -235,6 +247,7 @@ class TestAutoLearningsOnFailure:
         class _CrashExecutor:
             def execute_tool(self, name, arguments, tool_call_id=""):
                 raise RuntimeError("disk full")
+
             def list_tools(self):
                 return []
 
@@ -257,34 +270,41 @@ class TestAutoLearningsOnFailure:
 
 # ── Gap 3: Per-turn token budget ──────────────────────────────────────────────
 
+
 class TestPerTurnTokenBudget:
     """Accumulated tool output tokens must not exceed the per-turn budget."""
 
     def test_budget_exceeded_returns_trim_notice(self):
-        big_output = "X" * 200   # 200 chars ÷ 4 = 50 tokens
+        big_output = "X" * 200  # 200 chars ÷ 4 = 50 tokens
         # The trim-notice path calls _call_model one final time for a summary.
         # We give the model one tool-call response and then a summary text response.
         loop = AgentLoop(
             model_provider=_BigOutputModel(),
             tool_executor=_EchoExecutor(output=big_output),
             confirmation_gate=None,
-            turn_token_budget=10,   # tiny budget → triggers immediately
+            turn_token_budget=10,  # tiny budget → triggers immediately
         )
         with (
             patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit,
             # Patch _call_model so the summary call returns a fixed text
             patch.object(
-                loop, "_call_model",
+                loop,
+                "_call_model",
                 side_effect=[
                     # First call: model requests a tool
-                    {"text": "", "tool_calls": [{
-                        "id": "tc_001",
-                        "type": "function",
-                        "function": {"name": "read_file", "arguments": '{"x": 1}'},
-                    }]},
+                    {
+                        "text": "",
+                        "tool_calls": [
+                            {
+                                "id": "tc_001",
+                                "type": "function",
+                                "function": {"name": "read_file", "arguments": '{"x": 1}'},
+                            }
+                        ],
+                    },
                     # Second call (trim summary): model returns final text
                     {"text": "Here is a summary after trimming.", "tool_calls": []},
-                ]
+                ],
             ),
         ):
             mock_audit.return_value = MagicMock()
@@ -317,12 +337,12 @@ class TestPerTurnTokenBudget:
 
     def test_accumulated_tokens_reset_per_turn(self):
         """Each call to run() should start with a fresh token accumulator."""
-        small_output = "A" * 40   # 10 tokens, right at a 10-token budget
+        small_output = "A" * 40  # 10 tokens, right at a 10-token budget
         loop = AgentLoop(
             model_provider=_BigOutputModel(),
             tool_executor=_EchoExecutor(output=small_output),
             confirmation_gate=None,
-            turn_token_budget=5,   # triggers after first 20-token result
+            turn_token_budget=5,  # triggers after first 20-token result
         )
         with patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit:
             mock_audit.return_value = MagicMock()

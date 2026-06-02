@@ -1,10 +1,10 @@
 """Tests for consecutive timeout kill switch in AgentLoop."""
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
-from src.aradhya.agent_loop import AgentLoop, ToolCall, ToolResult
+from src.aradhya.agent_loop import AgentLoop, ToolResult
 
 
 class TestConsecutiveTimeoutKillSwitch:
@@ -26,10 +26,16 @@ class TestConsecutiveTimeoutKillSwitch:
         # Simulate 3 consecutive timeouts
         for _ in range(3):
             result = ToolResult(
-                tool_call_id="t1", name="run_command",
-                output="Error: Command timed out after 30 seconds.", success=False,
+                tool_call_id="t1",
+                name="run_command",
+                output="Error: Command timed out after 30 seconds.",
+                success=False,
             )
-            loop._consecutive_timeouts += 1 if ("timeout" in result.output.lower() or "timed out" in result.output.lower()) else 0
+            loop._consecutive_timeouts += (
+                1
+                if ("timeout" in result.output.lower() or "timed out" in result.output.lower())
+                else 0
+            )
 
         assert loop._consecutive_timeouts >= 3
 
@@ -41,8 +47,10 @@ class TestConsecutiveTimeoutKillSwitch:
 
         # Simulate a successful result (non-timeout)
         result = ToolResult(
-            tool_call_id="t2", name="run_command",
-            output="Exit code: 0\nSTDOUT: hello", success=True,
+            tool_call_id="t2",
+            name="run_command",
+            output="Exit code: 0\nSTDOUT: hello",
+            success=True,
         )
         if "timeout" not in result.output.lower() and "timed out" not in result.output.lower():
             loop._consecutive_timeouts = 0
@@ -69,7 +77,9 @@ class TestConsecutiveTimeoutKillSwitch:
             "The operation has timeout",
         ]
         for msg in timeout_messages:
-            assert "timeout" in msg.lower() or "timed out" in msg.lower(), f"Should detect timeout in: {msg}"
+            assert (
+                "timeout" in msg.lower() or "timed out" in msg.lower()
+            ), f"Should detect timeout in: {msg}"
 
         non_timeout = [
             "Exit code: 0\nSTDOUT: hello",
@@ -77,4 +87,6 @@ class TestConsecutiveTimeoutKillSwitch:
             "Permission denied",
         ]
         for msg in non_timeout:
-            assert "timeout" not in msg.lower() and "timed out" not in msg.lower(), f"Should NOT detect timeout in: {msg}"
+            assert (
+                "timeout" not in msg.lower() and "timed out" not in msg.lower()
+            ), f"Should NOT detect timeout in: {msg}"

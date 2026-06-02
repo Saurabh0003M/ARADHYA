@@ -163,16 +163,12 @@ class VoiceInboxManager:
         )
 
     def _write_transcript(self, stem: str, transcript_text: str) -> Path:
-        destination = self._unique_destination(
-            self.profile.transcripts_dir / f"{stem}.txt"
-        )
+        destination = self._unique_destination(self.profile.transcripts_dir / f"{stem}.txt")
         destination.write_text(transcript_text + "\n", encoding="utf-8")
         return destination
 
     def _archive_audio(self, audio_path: Path) -> Path:
-        destination = self._unique_destination(
-            self.profile.processed_audio_dir / audio_path.name
-        )
+        destination = self._unique_destination(self.profile.processed_audio_dir / audio_path.name)
         # Moving the source file keeps the inbox clean so you can immediately
         # see which recordings are still unprocessed.
         shutil.move(str(audio_path), str(destination))
@@ -194,9 +190,7 @@ class VoiceInboxManager:
 
         counter = 1
         while True:
-            alternative = candidate.with_name(
-                f"{candidate.stem}_{counter}{candidate.suffix}"
-            )
+            alternative = candidate.with_name(f"{candidate.stem}_{counter}{candidate.suffix}")
             if not alternative.exists():
                 return alternative
             counter += 1

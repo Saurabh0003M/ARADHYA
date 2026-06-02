@@ -139,9 +139,13 @@ class CloudPrivacyGate:
         has_block = any(f.severity == "block" for f in findings)
         risk_level = "blocked" if has_block else ("review" if findings else "public")
         if has_block:
-            summary = f"Blocked cloud routing for {source}; private or secret-like content was detected."
+            summary = (
+                f"Blocked cloud routing for {source}; private or secret-like content was detected."
+            )
         elif findings:
-            summary = f"Cloud routing is allowed for {source}, but the payload deserves human review."
+            summary = (
+                f"Cloud routing is allowed for {source}, but the payload deserves human review."
+            )
         else:
             summary = f"Cloud routing is allowed for {source}; no private markers were detected."
 

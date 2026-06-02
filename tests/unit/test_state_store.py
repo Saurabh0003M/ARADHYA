@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 # Mock dependencies before any other imports
@@ -12,8 +11,7 @@ sys.modules["loguru"] = MagicMock()
 sys.modules["requests"] = MagicMock()
 
 from src.aradhya.state_store import StateStore
-from src.aradhya.session_manager import Message, Session, SessionManager
-
+from src.aradhya.session_manager import SessionManager
 
 # ── StateStore tests ──────────────────────────────────────────────────
 
@@ -101,10 +99,13 @@ def test_state_store_replace_messages(tmp_path):
     store.add_message("s1", "assistant", "Old message 2")
 
     # Replace with compacted version
-    store.replace_messages("s1", [
-        {"role": "summary", "content": "Compacted summary", "timestamp": ""},
-        {"role": "user", "content": "Latest message", "timestamp": ""},
-    ])
+    store.replace_messages(
+        "s1",
+        [
+            {"role": "summary", "content": "Compacted summary", "timestamp": ""},
+            {"role": "user", "content": "Latest message", "timestamp": ""},
+        ],
+    )
 
     messages = store.get_messages("s1")
     assert len(messages) == 2
@@ -200,13 +201,21 @@ def test_state_store_migrate_json_sessions(tmp_path):
         "updated_at": "2026-01-01T00:01:00",
         "compacted": False,
         "messages": [
-            {"role": "user", "content": "Hello", "timestamp": "2026-01-01T00:00:00", "metadata": {}},
-            {"role": "assistant", "content": "Hi!", "timestamp": "2026-01-01T00:00:01", "metadata": {}},
+            {
+                "role": "user",
+                "content": "Hello",
+                "timestamp": "2026-01-01T00:00:00",
+                "metadata": {},
+            },
+            {
+                "role": "assistant",
+                "content": "Hi!",
+                "timestamp": "2026-01-01T00:00:01",
+                "metadata": {},
+            },
         ],
     }
-    (sessions_dir / "legacy_session.json").write_text(
-        json.dumps(session_data), encoding="utf-8"
-    )
+    (sessions_dir / "legacy_session.json").write_text(json.dumps(session_data), encoding="utf-8")
 
     store = StateStore(state_dir=tmp_path)
     count = store.migrate_json_sessions(sessions_dir)
@@ -330,9 +339,7 @@ def test_session_manager_auto_migrates_json(tmp_path):
             {"role": "user", "content": "Old message", "timestamp": "", "metadata": {}},
         ],
     }
-    (sessions_dir / "old_session.json").write_text(
-        json.dumps(legacy), encoding="utf-8"
-    )
+    (sessions_dir / "old_session.json").write_text(json.dumps(legacy), encoding="utf-8")
 
     store = StateStore(state_dir=tmp_path)
     mgr = SessionManager(sessions_dir=sessions_dir, state_store=store)

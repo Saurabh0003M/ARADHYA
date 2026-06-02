@@ -106,7 +106,10 @@ def test_format_cache_validation_report_full():
     assert "Cache > Cold refresh: 1.500s (10 summary nodes, refreshed=yes)" in formatted
     assert "Cache > Warm reuse: 0.500s (refreshed=no)" in formatted
     assert "Cache > Exact lookup: exact_test (0.100s, found=yes)" in formatted
-    assert "Cache > Miss lookup: miss_test (first=0.200s, repeat=0.050s, negative_cache=yes)" in formatted
+    assert (
+        "Cache > Miss lookup: miss_test (first=0.200s, repeat=0.050s, negative_cache=yes)"
+        in formatted
+    )
     assert "Cache > Targeted query: targeted_test (0.300s)" in formatted
     assert "Cache > Targeted rescan refreshed: yes" in formatted
     assert "Cache > Targeted lookup found probe: yes" in formatted

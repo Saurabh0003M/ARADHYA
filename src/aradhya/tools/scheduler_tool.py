@@ -11,6 +11,7 @@ Supported actions
                     (heartbeat continuation pattern)
 - ``message``     — display a reminder message at a set interval
 """
+
 from __future__ import annotations
 
 import uuid
@@ -18,7 +19,6 @@ import uuid
 from loguru import logger
 
 from src.aradhya.tools.tool_registry import tool_definition
-
 
 # ── Tool definitions ──────────────────────────────────────────────────────────
 
@@ -73,7 +73,7 @@ def schedule_task(
     interval_minutes: int = 60,
 ) -> str:
     """Create or update a scheduled task via the global TaskScheduler."""
-    from src.aradhya.scheduler import TaskScheduler  # lazy to avoid circular import
+    from src.aradhya.scheduler import TaskScheduler  # lazy to avoid circular import  # pylint: disable=import-outside-toplevel
 
     tid = task_id.strip() or f"task_{uuid.uuid4().hex[:8]}"
 
@@ -91,7 +91,12 @@ def schedule_task(
             payload=payload,
             interval_minutes=interval_minutes,
         )
-        logger.info("schedule_task tool: created task '{}' (action={}, interval={}m)", tid, action, interval_minutes)
+        logger.info(
+            "schedule_task tool: created task '{}' (action={}, interval={}m)",
+            tid,
+            action,
+            interval_minutes,
+        )
         return (
             f"Scheduled task '{tid}' created.\n"
             f"  Description : {description}\n"
@@ -111,7 +116,7 @@ def schedule_task(
 )
 def list_scheduled_tasks() -> str:
     """Return a formatted list of all scheduled tasks."""
-    from src.aradhya.scheduler import TaskScheduler  # lazy import
+    from src.aradhya.scheduler import TaskScheduler  # lazy import  # pylint: disable=import-outside-toplevel
 
     try:
         scheduler = TaskScheduler()
@@ -147,7 +152,7 @@ def list_scheduled_tasks() -> str:
 )
 def delete_scheduled_task(task_id: str) -> str:
     """Remove a scheduled task by ID."""
-    from src.aradhya.scheduler import TaskScheduler  # lazy import
+    from src.aradhya.scheduler import TaskScheduler  # lazy import  # pylint: disable=import-outside-toplevel
 
     try:
         scheduler = TaskScheduler()

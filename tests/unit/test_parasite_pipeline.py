@@ -10,7 +10,6 @@ import pytest
 from src.aradhya.parasite.checkpoint import (
     STAGES,
     Checkpoint,
-    checkpoint_path,
     load_checkpoint,
     next_stage,
     record_stage_complete,

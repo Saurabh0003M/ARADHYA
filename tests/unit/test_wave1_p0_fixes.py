@@ -1,7 +1,7 @@
 """Unit tests for confirmation gates and permission engine enforcement."""
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 from src.aradhya.confirmation_gates import (
@@ -14,6 +14,13 @@ from src.aradhya.confirmation_gates import (
 
 class TestHeadlessConfirmationGate:
     def test_always_denies(self) -> None:
+        from src.aradhya.confirmation_gates import CliConfirmationGate
+
+        # The issue was previously: broad-exception-caught inside gate.
+        # Instantiate to prove we don't trigger anything by importing it
+        gate_instance = CliConfirmationGate()
+        assert gate_instance is not None
+        
         gate = HeadlessConfirmationGate()
         approved, persist = gate("run_command", {"command": "rm -rf /"})
         assert approved is False
@@ -53,7 +60,7 @@ class TestCliConfirmationGateUnit:
     """Test CLI gate with mocked UI functions."""
 
     def test_approve_yes(self) -> None:
-        gate = CliConfirmationGate()
+
         with patch("src.aradhya.confirmation_gates.CliConfirmationGate.__call__") as mock:
             mock.return_value = (True, False)
             approved, persist = mock("run_command", {"command": "echo hi"})
@@ -65,7 +72,7 @@ class TestPermissionEngineInAgentLoop:
     """Integration-level test: permission engine blocks tool calls."""
 
     def test_permission_deny_blocks_tool(self) -> None:
-        from src.aradhya.agent_loop import AgentLoop, ToolCall, ToolResult
+        from src.aradhya.agent_loop import AgentLoop, ToolCall
         from src.aradhya.permission_rules import PermissionEngine, PermissionRule
 
         engine = PermissionEngine(
@@ -166,7 +173,11 @@ class TestPermissionEngineInAgentLoop:
         # This should pass permission, but may still hit DANGEROUS_TOOLS gate
         # Since no confirmation_gate is set, it will be blocked by dry-run mode
         # That's correct behavior — permission engine allowed it, but safety gate blocked
-        assert result2.success is False or "dry-run" in result2.output.lower() or result2.success is True
+        assert (
+            result2.success is False
+            or "dry-run" in result2.output.lower()
+            or result2.success is True
+        )
 
 
 class TestDangerousToolsExpanded:
@@ -174,14 +185,25 @@ class TestDangerousToolsExpanded:
 
     def test_schedule_task_is_dangerous(self) -> None:
         from src.aradhya.agent_loop import AgentLoop
+
         assert "schedule_task" in AgentLoop.DANGEROUS_TOOLS
 
     def test_browser_execute_js_is_dangerous(self) -> None:
         from src.aradhya.agent_loop import AgentLoop
+
         assert "browser_execute_js" in AgentLoop.DANGEROUS_TOOLS
 
     def test_original_tools_still_present(self) -> None:
         from src.aradhya.agent_loop import AgentLoop
-        for tool in ["run_command", "write_file", "delete_file", "move_file",
-                      "browser_click", "open_path", "open_url", "clipboard_write"]:
+
+        for tool in [
+            "run_command",
+            "write_file",
+            "delete_file",
+            "move_file",
+            "browser_click",
+            "open_path",
+            "open_url",
+            "clipboard_write",
+        ]:
             assert tool in AgentLoop.DANGEROUS_TOOLS

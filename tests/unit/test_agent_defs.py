@@ -1,9 +1,9 @@
 """Unit tests for agent definitions (src/aradhya/agents/agent_defs.py)."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from src.aradhya.agents.agent_defs import (
     AgentDefinition,
@@ -39,7 +39,7 @@ You are a test agent.
         assert body == text
 
     def test_quoted_values_stripped(self) -> None:
-        text = '---\nname: "my-agent"\ndescription: \'A desc\'\n---\nBody'
+        text = "---\nname: \"my-agent\"\ndescription: 'A desc'\n---\nBody"
         meta, body = _parse_frontmatter(text)
         assert meta["name"] == "my-agent"
         assert meta["description"] == "A desc"

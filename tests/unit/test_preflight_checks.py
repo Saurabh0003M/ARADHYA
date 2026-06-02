@@ -1,7 +1,7 @@
 """Unit tests for pre-flight checks (src/aradhya/preflight_checks.py)."""
+
 from __future__ import annotations
 
-import pytest
 
 from src.aradhya.preflight_checks import (
     PreflightResult,
@@ -29,7 +29,7 @@ class TestCheckPython:
         assert result.ok is True
 
     def test_complex_valid_python(self) -> None:
-        code = '''
+        code = """
 from __future__ import annotations
 import os
 
@@ -40,7 +40,7 @@ class Foo:
     @staticmethod
     def baz():
         return [i**2 for i in range(10)]
-'''
+"""
         result = check_python(code)
         assert result.ok is True
 

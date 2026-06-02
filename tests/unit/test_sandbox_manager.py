@@ -1,11 +1,11 @@
 """Unit tests for SandboxManager (sandbox_manager.py)."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.aradhya.sandbox_manager import SandboxManager, SANDBOX_MARKER
 
@@ -52,19 +52,16 @@ class TestSandboxManagerRunCommand:
     def test_run_failing_command(self, mock_run: MagicMock, tmp_path: Path) -> None:
         mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="")
         mgr = SandboxManager(project_root=tmp_path)
-        result = mgr.run_in_sandbox(
-            "exit 1", workdir=tmp_path
-        )
+        result = mgr.run_in_sandbox("exit 1", workdir=tmp_path)
         assert result["exit_code"] != 0
 
     @patch("src.aradhya.sandbox_manager.subprocess.run")
     def test_timeout_returns_error(self, mock_run: MagicMock, tmp_path: Path) -> None:
         import subprocess
+
         mock_run.side_effect = subprocess.TimeoutExpired(cmd="Start-Sleep", timeout=0.2)
         mgr = SandboxManager(project_root=tmp_path)
-        result = mgr.run_in_sandbox(
-            "Start-Sleep -Seconds 10", workdir=tmp_path, timeout_ms=200
-        )
+        result = mgr.run_in_sandbox("Start-Sleep -Seconds 10", workdir=tmp_path, timeout_ms=200)
         assert result["exit_code"] == -1
         assert "timed out" in result["stderr"].lower()
 
@@ -96,7 +93,7 @@ class TestSandboxACLConstruction:
         """Paths in both read and write sets should get write grant only."""
         mgr = SandboxManager(project_root=tmp_path)
         called_paths: list[str] = []
-        original_grant = mgr._icacls_grant
+        # original_grant = mgr._icacls_grant
 
         def recording_grant(path: Path, permissions: str) -> None:
             called_paths.append(f"{path}:{permissions}")

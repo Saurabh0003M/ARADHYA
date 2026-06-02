@@ -81,6 +81,7 @@ def clipboard_read() -> str:
             capture_output=True,
             text=True,
             timeout=3,
+            check=False,
         )
         if result.returncode == 0:
             content = result.stdout.strip()

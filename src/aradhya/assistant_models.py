@@ -97,9 +97,7 @@ class AssistantPreferences:
     game_library_roots: tuple[Path, ...]
     allow_live_execution: bool = False
     use_docker_sandbox: bool = False
-    directory_index_policy: DirectoryIndexPolicy = field(
-        default_factory=DirectoryIndexPolicy
-    )
+    directory_index_policy: DirectoryIndexPolicy = field(default_factory=DirectoryIndexPolicy)
 
 
 @dataclass(frozen=True)
@@ -280,9 +278,7 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
             defaults.directory_index_policy.refresh_interval_seconds,
         ),
         ignored_names=ignored_names,
-        max_nodes=raw_policy.get(
-            "max_nodes", defaults.directory_index_policy.max_nodes
-        ),
+        max_nodes=raw_policy.get("max_nodes", defaults.directory_index_policy.max_nodes),
         max_name_candidates_per_key=raw_policy.get(
             "max_name_candidates_per_key",
             defaults.directory_index_policy.max_name_candidates_per_key,
@@ -298,16 +294,12 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
     )
 
     directory_index_paths = _resolve_paths(
-        [data.get("directory_index_path")]
-        if data.get("directory_index_path")
-        else None,
+        [data.get("directory_index_path")] if data.get("directory_index_path") else None,
         root,
         (defaults.directory_index_path,),
     )
     context_cache_paths = _resolve_paths(
-        [data.get("context_cache_dir")]
-        if data.get("context_cache_dir")
-        else None,
+        [data.get("context_cache_dir")] if data.get("context_cache_dir") else None,
         root,
         (defaults.context_cache_dir,),
     )
@@ -316,25 +308,15 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         user_roots=_resolve_paths(data.get("user_roots"), root, defaults.user_roots),
         directory_index_path=directory_index_paths[0],
         context_cache_dir=context_cache_paths[0],
-        confirmation_phrases=tuple(
-            data.get("confirmation_phrases", defaults.confirmation_phrases)
-        ),
-        security_blog_urls=tuple(
-            data.get("security_blog_urls", defaults.security_blog_urls)
-        ),
-        project_markers=tuple(
-            data.get("project_markers", defaults.project_markers)
-        ),
+        confirmation_phrases=tuple(data.get("confirmation_phrases", defaults.confirmation_phrases)),
+        security_blog_urls=tuple(data.get("security_blog_urls", defaults.security_blog_urls)),
+        project_markers=tuple(data.get("project_markers", defaults.project_markers)),
         game_library_roots=_resolve_paths(
             data.get("game_library_roots"),
             root,
             defaults.game_library_roots,
         ),
-        allow_live_execution=data.get(
-            "allow_live_execution", defaults.allow_live_execution
-        ),
-        use_docker_sandbox=data.get(
-            "use_docker_sandbox", defaults.use_docker_sandbox
-        ),
+        allow_live_execution=data.get("allow_live_execution", defaults.allow_live_execution),
+        use_docker_sandbox=data.get("use_docker_sandbox", defaults.use_docker_sandbox),
         directory_index_policy=policy,
     )

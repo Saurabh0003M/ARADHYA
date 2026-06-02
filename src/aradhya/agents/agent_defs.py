@@ -53,9 +53,9 @@ class AgentDefinition:
     model: str = ""
     color: str = ""
     max_turns: int = 10
-    isolation: str = ""           # "worktree" for git worktree isolation
-    background: bool = False      # always run as background task
-    initial_prompt: str = ""      # auto-submit first turn
+    isolation: str = ""  # "worktree" for git worktree isolation
+    background: bool = False  # always run as background task
+    initial_prompt: str = ""  # auto-submit first turn
     source_path: Path | None = None
 
     @property
@@ -98,7 +98,7 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
         return {}, text
 
     frontmatter_block = match.group(1)
-    body = text[match.end():]
+    body = text[match.end() :]
 
     metadata: dict[str, str] = {}
     for kv_match in _KV_RE.finditer(frontmatter_block):
@@ -142,7 +142,9 @@ def load_agent_from_file(filepath: Path) -> AgentDefinition | None:
         description=metadata.get("description", ""),
         system_prompt=body.strip(),
         tools=_parse_tools_list(metadata.get("tools", "")),
-        disallowed_tools=_parse_tools_list(metadata.get("disallowedTools", "") or metadata.get("disallowed-tools", "")),
+        disallowed_tools=_parse_tools_list(
+            metadata.get("disallowedTools", "") or metadata.get("disallowed-tools", "")
+        ),
         model=metadata.get("model", ""),
         color=metadata.get("color", ""),
         max_turns=int(metadata.get("max_turns", metadata.get("maxTurns", "10"))),

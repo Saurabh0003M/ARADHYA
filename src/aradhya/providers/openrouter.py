@@ -36,7 +36,6 @@ from src.aradhya.model_provider import (
 from src.aradhya.cloud_safety import CloudPrivacyGate, CloudSafetyAssessment
 from src.aradhya.runtime_profile import ModelProfile
 
-
 # ── Free model catalogue ──────────────────────────────────────────────
 # Sorted by recommended use.  All $0/M input+output as of May 2026.
 
@@ -143,12 +142,14 @@ class OpenRouterTextModelProvider:
         base_url = profile.base_url or "https://openrouter.ai/api/v1"
         self.base_url = base_url.rstrip("/")
 
-        self.session.headers.update({
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/aradhya-ai/aradhya",
-            "X-Title": "Aradhya OI",
-        })
+        self.session.headers.update(
+            {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/aradhya-ai/aradhya",
+                "X-Title": "Aradhya OI",
+            }
+        )
 
     # ── Health ─────────────────────────────────────────────────────────
 
@@ -181,9 +182,7 @@ class OpenRouterTextModelProvider:
             )
             response.raise_for_status()
             data = response.json()
-            model_ids = tuple(
-                m.get("id", "") for m in data.get("data", [])
-            )
+            model_ids = tuple(m.get("id", "") for m in data.get("data", []))
             ready = self.profile.model_name in model_ids
             message = (
                 f"Ready — {self.profile.model_name}"
@@ -223,7 +222,9 @@ class OpenRouterTextModelProvider:
     ) -> ModelResult:
         messages = []
         if system_prompt or self.profile.system_prompt:
-            messages.append({"role": "system", "content": system_prompt or self.profile.system_prompt})
+            messages.append(
+                {"role": "system", "content": system_prompt or self.profile.system_prompt}
+            )
         messages.append({"role": "user", "content": prompt})
 
         result = self.chat(messages)
@@ -242,7 +243,9 @@ class OpenRouterTextModelProvider:
     ) -> Iterator[str]:
         messages = []
         if system_prompt or self.profile.system_prompt:
-            messages.append({"role": "system", "content": system_prompt or self.profile.system_prompt})
+            messages.append(
+                {"role": "system", "content": system_prompt or self.profile.system_prompt}
+            )
         messages.append({"role": "user", "content": prompt})
         yield from self.chat_stream(messages)
 
@@ -285,21 +288,23 @@ class OpenRouterTextModelProvider:
                 if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
                     openai_tools.append(tool)
                 else:
-                    openai_tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": tool.get("name", ""),
-                            "description": tool.get("description", ""),
-                            "parameters": tool.get("parameters", {}),
-                        },
-                    })
+                    openai_tools.append(
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": tool.get("name", ""),
+                                "description": tool.get("description", ""),
+                                "parameters": tool.get("parameters", {}),
+                            },
+                        }
+                    )
             payload["tools"] = openai_tools
 
         # Try primary model, then fallbacks on 429
         models_to_try = [payload["model"]] + self._get_fallback_models(payload["model"])
 
         last_error = ""
-        for model_name in models_to_try[:1 + _MAX_FALLBACK_ATTEMPTS]:
+        for model_name in models_to_try[: 1 + _MAX_FALLBACK_ATTEMPTS]:
             payload["model"] = model_name
             try:
                 response = self.session.post(
@@ -357,9 +362,7 @@ class OpenRouterTextModelProvider:
 
         # Parse tool calls if present
         raw_tool_calls = message.get("tool_calls") or []
-        tool_calls = tuple(
-            self._parse_tool_call(tc) for tc in raw_tool_calls
-        )
+        tool_calls = tuple(self._parse_tool_call(tc) for tc in raw_tool_calls)
 
         return ModelChatResult(
             text=str(message.get("content") or "").strip(),
@@ -400,7 +403,7 @@ class OpenRouterTextModelProvider:
         response = None
         used_model = payload["model"]
 
-        for model_name in models_to_try[:1 + _MAX_FALLBACK_ATTEMPTS]:
+        for model_name in models_to_try[: 1 + _MAX_FALLBACK_ATTEMPTS]:
             payload["model"] = model_name
             try:
                 response = self.session.post(
@@ -454,7 +457,8 @@ class OpenRouterTextModelProvider:
                         yield "\n\n[Response truncated — model exceeded safe length]"
                         logger.warning(
                             "Stream from {} truncated at {} chars (safety valve)",
-                            used_model, total_chars,
+                            used_model,
+                            total_chars,
                         )
                         break
                     yield content
@@ -465,10 +469,7 @@ class OpenRouterTextModelProvider:
 
     def _get_fallback_models(self, primary: str) -> list[str]:
         """Return a list of free fallback models, excluding the primary."""
-        return [
-            model_id for model_id in FREE_MODELS
-            if model_id != primary
-        ]
+        return [model_id for model_id in FREE_MODELS if model_id != primary]
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -520,7 +521,4 @@ class OpenRouterTextModelProvider:
 
     def list_free_models(self) -> list[dict[str, str]]:
         """Return the curated list of free models for display."""
-        return [
-            {"id": model_id, **info}
-            for model_id, info in FREE_MODELS.items()
-        ]
+        return [{"id": model_id, **info} for model_id, info in FREE_MODELS.items()]

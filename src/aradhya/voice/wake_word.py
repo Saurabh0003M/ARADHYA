@@ -27,7 +27,7 @@ class WakeWordListener:
                 silence_duration=0.5,
                 silence_threshold=0.015,
             ),
-            backend=get_available_backend()
+            backend=get_available_backend(),
         )
 
     def start(self):

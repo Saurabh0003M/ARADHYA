@@ -59,11 +59,9 @@ class FakeModelProvider:
 def test_llm_fallback_routes_to_open_path_and_keeps_confirmation_gate(tmp_path):
     target_dir = tmp_path / "Launchpad"
     target_dir.mkdir()
-    model_provider = FakeModelProvider(
-        """
+    model_provider = FakeModelProvider("""
         {"intent": "OPEN_PATH", "confidence": 0.91, "reasoning": "User wants a local folder opened", "target": "Launchpad", "enabled": null}
-        """
-    )
+        """)
     assistant = AradhyaAssistant(
         build_test_preferences(tmp_path),
         model_provider=model_provider,
@@ -88,11 +86,9 @@ def test_llm_fallback_routes_to_open_path_and_keeps_confirmation_gate(tmp_path):
 
 
 def test_llm_fallback_rejects_low_confidence_results(tmp_path):
-    model_provider = FakeModelProvider(
-        """
+    model_provider = FakeModelProvider("""
         {"intent": "OPEN_PATH", "confidence": 0.33, "reasoning": "Weak guess", "target": "Notes", "enabled": null}
-        """
-    )
+        """)
     assistant = AradhyaAssistant(
         build_test_preferences(tmp_path),
         model_provider=model_provider,
@@ -142,13 +138,11 @@ def test_llm_fallback_handles_provider_errors(tmp_path):
 def test_llm_fallback_accepts_markdown_wrapped_json(tmp_path):
     target_dir = tmp_path / "Notes"
     target_dir.mkdir()
-    model_provider = FakeModelProvider(
-        """
+    model_provider = FakeModelProvider("""
         ```json
         {"intent": "OPEN_PATH", "confidence": 0.88, "reasoning": "The user wants a folder", "target": "Notes", "enabled": null}
         ```
-        """
-    )
+        """)
     assistant = AradhyaAssistant(
         build_test_preferences(tmp_path),
         model_provider=model_provider,

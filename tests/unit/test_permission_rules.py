@@ -1,14 +1,13 @@
 """Unit tests for permission rules (src/aradhya/permission_rules.py)."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-import pytest
 
 from src.aradhya.permission_rules import (
     ConditionalBlockRule,
-    PermissionDecision,
     PermissionEngine,
     PermissionRule,
     load_permissions,
@@ -229,10 +228,12 @@ class TestLoadPermissions:
         config_dir = tmp_path / ".aradhya"
         config_dir.mkdir()
         (config_dir / "permissions.json").write_text(
-            json.dumps({
-                "allow": ["run_command(npm *)", "read_file"],
-                "deny": ["run_command(rm -rf *)"],
-            }),
+            json.dumps(
+                {
+                    "allow": ["run_command(npm *)", "read_file"],
+                    "deny": ["run_command(rm -rf *)"],
+                }
+            ),
             encoding="utf-8",
         )
         engine = load_permissions(user_config_dir=config_dir)
@@ -265,7 +266,7 @@ class TestLoadPermissions:
             user_config_dir=user_dir,
         )
         assert len(engine.allow_rules) == 2  # read_file + run_command(npm *)
-        assert len(engine.deny_rules) == 1   # delete_file
+        assert len(engine.deny_rules) == 1  # delete_file
 
     def test_invalid_json_returns_empty(self, tmp_path: Path) -> None:
         config_dir = tmp_path / ".aradhya"
@@ -278,16 +279,17 @@ class TestLoadPermissions:
         config_dir = tmp_path / ".aradhya"
         config_dir.mkdir()
         (config_dir / "permissions.json").write_text(
-            json.dumps({
-                "allow": [],
-                "deny": [],
-                "block_unless_regex": [
-                    {"tool": "run_command", "safe_pattern": r"python\s+-c\s+"},
-                ],
-            }),
+            json.dumps(
+                {
+                    "allow": [],
+                    "deny": [],
+                    "block_unless_regex": [
+                        {"tool": "run_command", "safe_pattern": r"python\s+-c\s+"},
+                    ],
+                }
+            ),
             encoding="utf-8",
         )
         engine = load_permissions(user_config_dir=config_dir)
         assert len(engine.conditional_blocks) == 1
         assert engine.conditional_blocks[0].tool_name == "run_command"
-

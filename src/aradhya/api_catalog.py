@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 CATALOG_CACHE_PATH = Path("data/processed/context/public_apis_catalog.json")
 PUBLIC_APIS_REPO_URL = "https://github.com/public-apis/public-apis"
 
@@ -77,7 +76,9 @@ class PublicApiCatalog:
                     entry.cors,
                 ]
             ).lower()
-            score = sum(3 if term in entry.name.lower() else 1 for term in terms if term in haystack)
+            score = sum(
+                3 if term in entry.name.lower() else 1 for term in terms if term in haystack
+            )
             if score:
                 scored.append((score, entry))
         scored.sort(key=lambda item: (-item[0], item[1].name.lower()))
@@ -87,10 +88,7 @@ class PublicApiCatalog:
         normalized = category.strip().lower()
         if not normalized:
             return []
-        matches = [
-            entry for entry in self._entries
-            if normalized in entry.category.lower()
-        ]
+        matches = [entry for entry in self._entries if normalized in entry.category.lower()]
         return sorted(matches, key=lambda entry: entry.name.lower())[:limit]
 
     def inspect(self, name: str) -> PublicApiEntry | None:
@@ -282,16 +280,13 @@ class PublicApiCatalog:
             },
         ]
         return [
-            entry for item in raw_seed
+            entry
+            for item in raw_seed
             if (entry := self._entry_from_payload(item, source="seed")) is not None
         ]
 
     def _terms(self, text: str) -> list[str]:
-        return [
-            term.lower()
-            for term in re.findall(r"[A-Za-z0-9_+-]+", text)
-            if len(term) > 1
-        ]
+        return [term.lower() for term in re.findall(r"[A-Za-z0-9_+-]+", text) if len(term) > 1]
 
     def _expand_need(self, need: str) -> str:
         lowered = need.lower()

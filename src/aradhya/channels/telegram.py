@@ -30,6 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 # ── Configuration ─────────────────────────────────────────────────────
 
+
 def _load_telegram_config() -> dict[str, Any]:
     """Load Telegram config from profile.json or environment."""
     config: dict[str, Any] = {
@@ -67,6 +68,7 @@ def _load_telegram_config() -> dict[str, Any]:
 
 # ── Telegram API (requests-based, no extra deps) ─────────────────────
 
+
 class TelegramAPI:
     """Minimal Telegram Bot API wrapper using only ``requests``."""
 
@@ -75,7 +77,8 @@ class TelegramAPI:
         self._offset = 0
 
     def _call(self, method: str, **params) -> dict[str, Any]:
-        import requests
+        import requests  # pylint: disable=import-outside-toplevel
+
         resp = requests.post(
             f"{self.base_url}/{method}",
             json={k: v for k, v in params.items() if v is not None},
@@ -161,6 +164,7 @@ class TelegramAPI:
 
 # ── Bot logic ─────────────────────────────────────────────────────────
 
+
 class AradhyaTelegramBot:
     """Telegram bot that connects to the Aradhya assistant.
 
@@ -199,7 +203,9 @@ class AradhyaTelegramBot:
 
         self._running = True
         self._thread = threading.Thread(
-            target=self._poll_loop, daemon=True, name="aradhya-telegram",
+            target=self._poll_loop,
+            daemon=True,
+            name="aradhya-telegram",
         )
         self._thread.start()
 
@@ -295,7 +301,8 @@ class AradhyaTelegramBot:
                 "Auto-registered first Telegram user: {} (ID: {}). "
                 "Add this ID to profile.json telegram.allowed_user_ids "
                 "for persistent access.",
-                user_name, user_id,
+                user_name,
+                user_id,
             )
             self.api.send_message(
                 chat_id,
@@ -318,15 +325,15 @@ class AradhyaTelegramBot:
         """Route a message through the Aradhya assistant with live streaming."""
         if self.assistant is None:
             self.api.send_message(
-                chat_id,
-                "Aradhya assistant is not connected. Start the bot via the main CLI."
+                chat_id, "Aradhya assistant is not connected. Start the bot via the main CLI."
             )
             return
 
         try:
             # Ensure assistant is awake
             if not self.assistant.state.is_awake:
-                from src.aradhya.assistant_models import WakeSource
+                from src.aradhya.assistant_models import WakeSource  # pylint: disable=import-outside-toplevel
+
                 self.assistant.handle_wake(WakeSource.FLOATING_ICON)
 
             # Send a placeholder message
@@ -366,9 +373,7 @@ class AradhyaTelegramBot:
                 parts.append(accumulated_text)
 
             if response.awaiting_confirmation:
-                parts.append(
-                    "\n-- Reply 'yes proceed' to execute, or 'cancel' to discard."
-                )
+                parts.append("\n-- Reply 'yes proceed' to execute, or 'cancel' to discard.")
 
             final_text = "\n".join(parts)
 
@@ -398,8 +403,7 @@ class AradhyaTelegramBot:
         state = "Awake" if self.assistant.state.is_awake else "Idle"
         pending = "Yes" if self.assistant.state.pending_plan else "None"
         skills_count = (
-            self.assistant.skill_registry.active_count
-            if self.assistant.skill_registry else 0
+            self.assistant.skill_registry.active_count if self.assistant.skill_registry else 0
         )
 
         self.api.send_message(
@@ -432,6 +436,7 @@ class AradhyaTelegramBot:
 
 # ── Standalone entry point ────────────────────────────────────────────
 
+
 def main() -> None:
     """Run the Telegram bot standalone with a full assistant."""
     config = _load_telegram_config()
@@ -441,17 +446,17 @@ def main() -> None:
         print()
         print("Set it via:")
         print("  1. Environment: ARADHYA_TELEGRAM_TOKEN=<token>")
-        print("  2. profile.json: {\"telegram\": {\"bot_token\": \"<token>\"}}")
+        print('  2. profile.json: {"telegram": {"bot_token": "<token>"}}')
         print()
         print("Get a token from @BotFather on Telegram.")
         return
 
     # Build full assistant for standalone mode
-    from src.aradhya.assistant_core import AradhyaAssistant
-    from src.aradhya.model_provider import build_text_model_provider
-    from src.aradhya.model_setup import bootstrap_runtime_profile
-    from src.aradhya.runtime_profile import load_runtime_profile
-    from src.aradhya.skills import load_skills
+    from src.aradhya.assistant_core import AradhyaAssistant  # pylint: disable=import-outside-toplevel
+    from src.aradhya.model_provider import build_text_model_provider  # pylint: disable=import-outside-toplevel
+    from src.aradhya.model_setup import bootstrap_runtime_profile  # pylint: disable=import-outside-toplevel
+    from src.aradhya.runtime_profile import load_runtime_profile  # pylint: disable=import-outside-toplevel
+    from src.aradhya.skills import load_skills  # pylint: disable=import-outside-toplevel
 
     runtime_profile = load_runtime_profile(PROJECT_ROOT)
     runtime_profile = bootstrap_runtime_profile(runtime_profile, PROJECT_ROOT)

@@ -58,9 +58,7 @@ def load_skills(
             try:
                 skill = _parse_skill_file(skill_file, candidate)
             except Exception as error:
-                logger.warning(
-                    "Failed to parse skill at {}: {}", candidate, error
-                )
+                logger.warning("Failed to parse skill at {}: {}", candidate, error)
                 continue
 
             if not _check_requirements(skill):
@@ -257,10 +255,10 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
     """
 
     result: dict[str, Any] = {}
-    l0_key: str | None = None         # current top-level key
+    l0_key: str | None = None  # current top-level key
     l0_list: list[str] | None = None  # list collecting for l0_key
     l0_dict: dict[str, Any] | None = None  # dict collecting for l0_key
-    l1_key: str | None = None         # current sub-key inside l0_dict
+    l1_key: str | None = None  # current sub-key inside l0_dict
     l1_list: list[str] | None = None  # list collecting for l1_key
 
     def _flush_l1() -> None:

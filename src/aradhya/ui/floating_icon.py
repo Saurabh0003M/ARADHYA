@@ -17,7 +17,7 @@ from pathlib import Path
 # Using an append-only queue avoids the race condition where two rapid button
 # presses overwrote each other in the old single-shot file protocol.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"            # legacy, kept for compat
+IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"  # legacy, kept for compat
 IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"  # new queue protocol
 
 # ── Color palette ─────────────────────────────────────────────────────
@@ -70,11 +70,15 @@ class FloatingIcon:
 
         # Context menu for additional options
         self.menu = tk.Menu(
-            self.root, tearoff=0,
-            bg=BG_PANEL, fg=FG_TEXT,
-            activebackground=BG_HOVER, activeforeground=FG_TEAL,
+            self.root,
+            tearoff=0,
+            bg=BG_PANEL,
+            fg=FG_TEXT,
+            activebackground=BG_HOVER,
+            activeforeground=FG_TEAL,
             font=("Segoe UI", 10),
-            relief="flat", bd=0,
+            relief="flat",
+            bd=0,
         )
         self._build_context_menu()
 
@@ -93,9 +97,12 @@ class FloatingIcon:
         )
         btn.pack(pady=3, padx=4)
         btn.bind("<Enter>", lambda e: btn.configure(bg=BG_HOVER))
-        btn.bind("<Leave>", lambda e: btn.configure(
-            bg=self._active_bg(btn) if hasattr(btn, "_active") and btn._active else BG_BUTTON
-        ))
+        btn.bind(
+            "<Leave>",
+            lambda e: btn.configure(
+                bg=self._active_bg(btn) if hasattr(btn, "_active") and btn._active else BG_BUTTON
+            ),
+        )
         btn.bind("<ButtonRelease-1>", lambda e: command())
         btn._active = False
         return btn
@@ -127,19 +134,28 @@ class FloatingIcon:
 
         # 🎤 Microphone toggle
         self.btn_mic = self._make_button(
-            self.root, "🎤", FG_DIM, self._toggle_mic,
+            self.root,
+            "🎤",
+            FG_DIM,
+            self._toggle_mic,
             tooltip="Toggle microphone",
         )
 
         # 📷 Camera / Screen Watch toggle
         self.btn_camera = self._make_button(
-            self.root, "📷", FG_DIM, self._toggle_camera,
+            self.root,
+            "📷",
+            FG_DIM,
+            self._toggle_camera,
             tooltip="Toggle screen watch",
         )
 
         # 🖥️ Screen Share toggle
         self.btn_screen = self._make_button(
-            self.root, "🖥", FG_DIM, self._toggle_screenshare,
+            self.root,
+            "🖥",
+            FG_DIM,
+            self._toggle_screenshare,
             tooltip="Toggle screen share",
         )
 
@@ -149,7 +165,10 @@ class FloatingIcon:
 
         # 🅰️ Debate AI toggle
         self.btn_debate = self._make_button(
-            self.root, "A", FG_DIM, self._toggle_debate,
+            self.root,
+            "A",
+            FG_DIM,
+            self._toggle_debate,
             tooltip="Toggle Debate AI",
         )
         self.btn_debate.configure(font=("Segoe UI", 14, "bold"))
@@ -160,7 +179,10 @@ class FloatingIcon:
 
         # ⋮ More options (right-click menu)
         self.btn_more = self._make_button(
-            self.root, "⋮", FG_DIM, self._show_menu,
+            self.root,
+            "⋮",
+            FG_DIM,
+            self._show_menu,
             tooltip="More options",
         )
 

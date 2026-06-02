@@ -38,10 +38,10 @@ from pathlib import Path
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Core resolution
 # ---------------------------------------------------------------------------
+
 
 @lru_cache(maxsize=1)
 def aradhya_home() -> Path:
@@ -98,6 +98,7 @@ def ensure_aradhya_dir(*parts: str) -> Path:
 # Project root discovery
 # ---------------------------------------------------------------------------
 
+
 @lru_cache(maxsize=1)
 def find_project_root() -> Path | None:
     """Walk up from CWD looking for markers of the project root.
@@ -117,6 +118,7 @@ def find_project_root() -> Path | None:
 # parasite.toml reader
 # ---------------------------------------------------------------------------
 
+
 def _read_parasite_toml_home() -> Path | None:
     """Try to read [paths].home from parasite.toml at project root."""
     root = find_project_root()
@@ -129,10 +131,10 @@ def _read_parasite_toml_home() -> Path | None:
 
     try:
         try:
-            import tomllib  # Python 3.11+
+            import tomllib  # Python 3.11+  # pylint: disable=import-outside-toplevel
         except ImportError:
             try:
-                import tomli as tomllib  # type: ignore[no-redef]
+                import tomli as tomllib  # type: ignore[no-redef]  # pylint: disable=import-outside-toplevel
             except ImportError:
                 return None
 
@@ -149,6 +151,7 @@ def _read_parasite_toml_home() -> Path | None:
 # ---------------------------------------------------------------------------
 # Well-known subdirectories
 # ---------------------------------------------------------------------------
+
 
 def audit_dir() -> Path:
     """~/.aradhya/audit"""
@@ -198,6 +201,7 @@ def repos_dir() -> Path:
 # ---------------------------------------------------------------------------
 # Cache invalidation (for tests)
 # ---------------------------------------------------------------------------
+
 
 def reset_cache() -> None:
     """Clear cached path resolution. Used in tests."""

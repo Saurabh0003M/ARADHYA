@@ -232,8 +232,7 @@ def compact_history(
     summary_message = {
         "role": "system",
         "content": (
-            f"[Compacted summary of {len(older_messages)} earlier messages]\n\n"
-            f"{summary_text}"
+            f"[Compacted summary of {len(older_messages)} earlier messages]\n\n" f"{summary_text}"
         ),
     }
 

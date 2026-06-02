@@ -16,7 +16,6 @@ from typing import Any
 from src.aradhya.providers.openrouter import FREE_MODELS
 from src.aradhya.runtime_profile import RuntimeProfile, build_default_runtime_profile
 
-
 MODEL_WORKERS_FILENAME = "model_workers.json"
 MODEL_WORKERS_LOCAL_FILENAME = "model_workers.local.json"
 
@@ -103,7 +102,9 @@ class ModelWorkerRegistry:
         workers: list[ModelWorker] = []
 
         current = self.runtime_profile.model
-        current_privacy = "local-only" if current.provider.lower() == "ollama" else "public-cloud-only"
+        current_privacy = (
+            "local-only" if current.provider.lower() == "ollama" else "public-cloud-only"
+        )
         current_tier = "local" if current.provider.lower() == "ollama" else "cloud"
         workers.append(
             ModelWorker(

@@ -20,6 +20,7 @@ from typing import Any, Callable, Protocol, TYPE_CHECKING
 from loguru import logger
 
 from src.aradhya.audit_logger import get_audit_logger
+
 # NOTE: approved_rules is imported lazily inside _execute_with_gate to avoid
 # the circular import chain: agent_loop -> tools/__init__ -> tool_registry -> agent_loop
 
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
 
 class ThinkingLevel(Enum):
     """Controls how much reasoning the model should expose."""
+
     LOW = auto()
     MEDIUM = auto()
     HIGH = auto()
@@ -45,6 +47,7 @@ class ThinkingLevel(Enum):
 @dataclass
 class ToolCall:
     """A single tool call requested by the model."""
+
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
     id: str = ""
@@ -53,6 +56,7 @@ class ToolCall:
 @dataclass
 class ToolResult:
     """The result of executing a tool call."""
+
     tool_call_id: str
     name: str
     output: str
@@ -63,6 +67,7 @@ class ToolResult:
 @dataclass
 class AgentTurn:
     """A complete turn in the agent loop (may span multiple tool calls)."""
+
     user_message: str
     system_prompt: str
     messages: list[dict[str, Any]] = field(default_factory=list)
@@ -75,6 +80,7 @@ class AgentTurn:
 
 class ToolExecutor(Protocol):
     """Protocol for executing tool calls."""
+
     def execute_tool(
         self, name: str, arguments: dict[str, Any], tool_call_id: str = ""
     ) -> ToolResult: ...
@@ -163,7 +169,7 @@ class AgentLoop:
 
             try:
                 response = self._call_model(messages, stream_handler=stream_handler)
-            except Exception as error:
+            except Exception as error:  # pylint: disable=broad-exception-caught
                 logger.error("Agent loop model call failed: {}", error)
                 turn.final_response = f"[Error calling model: {error}]"
                 break
@@ -205,7 +211,9 @@ class AgentLoop:
                 turn.tool_results.append(result)
 
                 # ── Consecutive timeout kill switch (SWE-agent P1) ────
-                if result.output and ("timeout" in result.output.lower() or "timed out" in result.output.lower()):
+                if result.output and (
+                    "timeout" in result.output.lower() or "timed out" in result.output.lower()
+                ):
                     self._consecutive_timeouts += 1
                     if self._consecutive_timeouts >= self.max_consecutive_timeouts:
                         turn.final_response = (
@@ -233,7 +241,44 @@ class AgentLoop:
                         self.turn_token_budget,
                     )
                     # Add a trim notice so the model knows it hit the limit
-                    messages.append({
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": None,
+                            "tool_calls": [
+                                {
+                                    "id": tool_call.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tool_call.name,
+                                        "arguments": json.dumps(tool_call.arguments),
+                                    },
+                                }
+                            ],
+                        }
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": (
+                                result.output[:500]
+                                + f"\n\n[Output trimmed — turn token budget ({self.turn_token_budget} tokens) reached. "
+                                "Summarize findings and respond now.]"
+                            ),
+                        }
+                    )
+                    # Force one final model call to summarise
+                    try:
+                        final_resp = self._call_model(messages)
+                        turn.final_response = self._extract_text(final_resp)
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        turn.final_response = "[Tool results were trimmed due to token budget. Please ask a more focused question.]"
+                    return turn
+
+                # Add tool call and result to message history
+                messages.append(
+                    {
                         "role": "assistant",
                         "content": None,
                         "tool_calls": [
@@ -246,48 +291,17 @@ class AgentLoop:
                                 },
                             }
                         ],
-                    })
-                    messages.append({
+                    }
+                )
+                messages.append(
+                    {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
-                        "content": (
-                            result.output[:500]
-                            + f"\n\n[Output trimmed — turn token budget ({self.turn_token_budget} tokens) reached. "
-                            "Summarize findings and respond now.]"
-                        ),
-                    })
-                    # Force one final model call to summarise
-                    try:
-                        final_resp = self._call_model(messages)
-                        turn.final_response = self._extract_text(final_resp)
-                    except Exception:
-                        turn.final_response = "[Tool results were trimmed due to token budget. Please ask a more focused question.]"
-                    return turn
-
-                # Add tool call and result to message history
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_call.name,
-                                "arguments": json.dumps(tool_call.arguments),
-                            },
-                        }
-                    ],
-                })
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result.output,
-                })
+                        "content": result.output,
+                    }
+                )
         else:
-            turn.final_response = (
-                "[Agent loop reached maximum iterations without completing]"
-            )
+            turn.final_response = "[Agent loop reached maximum iterations without completing]"
 
         return turn
 
@@ -325,8 +339,7 @@ class AgentLoop:
                 return {
                     "text": result.text,
                     "tool_calls": [
-                        self._model_tool_call_to_raw(tool_call)
-                        for tool_call in result.tool_calls
+                        self._model_tool_call_to_raw(tool_call) for tool_call in result.tool_calls
                     ],
                 }
             return self._coerce_chat_result(result)
@@ -376,10 +389,7 @@ class AgentLoop:
         raw_tool_calls = getattr(result, "tool_calls", ())
         return {
             "text": str(text or ""),
-            "tool_calls": [
-                self._model_tool_call_to_raw(tool_call)
-                for tool_call in raw_tool_calls
-            ],
+            "tool_calls": [self._model_tool_call_to_raw(tool_call) for tool_call in raw_tool_calls],
         }
 
     def _model_tool_call_to_raw(self, tool_call: Any) -> dict[str, Any]:
@@ -409,9 +419,7 @@ class AgentLoop:
             return [
                 ToolCall(
                     name=str(tc.get("function", {}).get("name", "") or ""),
-                    arguments=self._parse_arguments(
-                        tc.get("function", {}).get("arguments", {})
-                    ),
+                    arguments=self._parse_arguments(tc.get("function", {}).get("arguments", {})),
                     id=str(tc.get("id", "") or f"tc_{time.time_ns()}"),
                 )
                 for tc in raw_calls
@@ -480,20 +488,22 @@ class AgentLoop:
     # When neither is available the call is blocked with a policy-denial
     # result — this closes the silent bypass that existed when
     # confirmation_gate was None (e.g. streaming mode).
-    DANGEROUS_TOOLS: frozenset[str] = frozenset({
-        "run_command",
-        "write_file",
-        "delete_file",
-        "move_file",
-        "browser_click",
-        "browser_type",
-        "browser_submit",
-        "browser_execute_js",
-        "open_path",
-        "open_url",
-        "clipboard_write",
-        "schedule_task",
-    })
+    DANGEROUS_TOOLS: frozenset[str] = frozenset(
+        {
+            "run_command",
+            "write_file",
+            "delete_file",
+            "move_file",
+            "browser_click",
+            "browser_type",
+            "browser_submit",
+            "browser_execute_js",
+            "open_path",
+            "open_url",
+            "clipboard_write",
+            "schedule_task",
+        }
+    )
 
     def _execute_with_gate(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call, applying hooks and the confirmation gate.
@@ -516,12 +526,14 @@ class AgentLoop:
         assert self.tool_executor is not None
         audit = get_audit_logger()
         # Lazy import avoids the circular dependency chain
-        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
+        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
         rules = get_approved_rules()
 
         # ── Layer 0: Hook gate (PreToolUse) ───────────────────────────
         if self.hook_engine is not None:
-            from src.aradhya.hooks.hook_engine import HookEvent, HookDecision  # noqa: PLC0415
+            from src.aradhya.hooks.hook_engine import HookEvent, HookDecision  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
             hook_result = self.hook_engine.fire(
                 HookEvent.PRE_TOOL_USE,
                 {
@@ -555,9 +567,7 @@ class AgentLoop:
 
         # ── Layer 0.5: PermissionEngine (deny/allow/conditional rules) ──
         if self.permission_engine is not None:
-            decision = self.permission_engine.check(
-                tool_call.name, tool_call.arguments
-            )
+            decision = self.permission_engine.check(tool_call.name, tool_call.arguments)
             if not decision.allowed:
                 audit.log_security_event(
                     "tool_blocked_by_permission",
@@ -579,16 +589,12 @@ class AgentLoop:
         if tool_call.name in self.DANGEROUS_TOOLS:
             # Check allow-list first — skip prompt for pre-approved calls
             if rules.is_approved(tool_call.name, tool_call.arguments):
-                logger.debug(
-                    "Tool '{}' auto-approved from allow-list", tool_call.name
-                )
+                logger.debug("Tool '{}' auto-approved from allow-list", tool_call.name)
             elif self.confirmation_gate:
                 # Interactive path — ask the user
                 # Gate returns (approved: bool, persist: bool)
                 # persist=True when user answered 'always' instead of 'yes'
-                gate_result = self.confirmation_gate(
-                    tool_call.name, tool_call.arguments
-                )
+                gate_result = self.confirmation_gate(tool_call.name, tool_call.arguments)
                 # Support both old bool return and new (bool, bool) tuple
                 if isinstance(gate_result, tuple):
                     approved, persist = gate_result
@@ -609,9 +615,7 @@ class AgentLoop:
                         requires_confirmation=True,
                     )
                 # Record the approval in the allow-list
-                rules.record_approval(
-                    tool_call.name, tool_call.arguments, persist=persist
-                )
+                rules.record_approval(tool_call.name, tool_call.arguments, persist=persist)
                 if persist:
                     logger.info(
                         "Tool '{}' permanently approved — won't ask again",
@@ -648,7 +652,8 @@ class AgentLoop:
             )
             # ── PostToolUse hook ──────────────────────────────────────────
             if self.hook_engine is not None:
-                from src.aradhya.hooks.hook_engine import HookEvent as _HE  # noqa: PLC0415
+                from src.aradhya.hooks.hook_engine import HookEvent as _HE  # noqa: PLC0415  # pylint: disable=import-outside-toplevel
+
                 post_event = _HE.POST_TOOL_USE if result.success else _HE.POST_TOOL_USE_FAILURE
                 post_result = self.hook_engine.fire(
                     post_event,
@@ -671,10 +676,8 @@ class AgentLoop:
             if not result.success:
                 self._auto_log_tool_failure(tool_call.name, result.output or "")
             return result
-        except Exception as error:
-            logger.error(
-                "Tool execution failed for '{}': {}", tool_call.name, error
-            )
+        except Exception as error:  # pylint: disable=broad-exception-caught
+            logger.error("Tool execution failed for '{}': {}", tool_call.name, error)
             audit.log_tool_call(
                 tool_call.name,
                 arguments=tool_call.arguments,
@@ -698,15 +701,16 @@ class AgentLoop:
         call log_error itself.
         """
         try:
-            from pathlib import Path as _Path
-            from src.aradhya.learnings.learnings_engine import LearningsEngine
+            from pathlib import Path as _Path  # pylint: disable=import-outside-toplevel
+            from src.aradhya.learnings.learnings_engine import LearningsEngine  # pylint: disable=import-outside-toplevel
+
             _root = _Path(__file__).resolve().parents[2]
             LearningsEngine(_root).log_error(
                 tool_name=tool_name,
                 error_message=error_msg[:400],
                 context="auto-logged by agent_loop on tool failure",
             )
-        except Exception as _exc:
+        except Exception as _exc:  # pylint: disable=broad-exception-caught
             # Never let learnings logging crash the agent loop
             logger.debug("Auto-learnings log failed (non-fatal): {}", _exc)
 
@@ -715,7 +719,7 @@ class AgentLoop:
             return []
         try:
             return self.tool_executor.list_tools()
-        except Exception as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             logger.warning("Could not list agent tools: {}", error)
             return []
 

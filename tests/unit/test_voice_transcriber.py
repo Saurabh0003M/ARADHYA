@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 
 from src.aradhya.voice.transcriber import WhisperCommandFileTranscriber
 
+
 def test_whisper_command_prevents_injection():
     # Setup profile mock with whisper_command
     profile = MagicMock()

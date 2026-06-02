@@ -22,6 +22,7 @@ from loguru import logger
 @dataclass
 class PreflightResult:
     """Outcome of a pre-flight check."""
+
     ok: bool = True
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -31,8 +32,7 @@ class PreflightResult:
         parts = []
         if self.errors:
             parts.append(
-                f"❌ {len(self.errors)} error(s):\n"
-                + "\n".join(f"  • {e}" for e in self.errors)
+                f"❌ {len(self.errors)} error(s):\n" + "\n".join(f"  • {e}" for e in self.errors)
             )
         if self.warnings:
             parts.append(
@@ -63,9 +63,7 @@ def check_json(content: str) -> PreflightResult:
         json.loads(content)
     except json.JSONDecodeError as exc:
         result.ok = False
-        result.errors.append(
-            f"JSON syntax error at line {exc.lineno}, col {exc.colno}: {exc.msg}"
-        )
+        result.errors.append(f"JSON syntax error at line {exc.lineno}, col {exc.colno}: {exc.msg}")
     return result
 
 
@@ -73,7 +71,8 @@ def check_yaml(content: str) -> PreflightResult:
     """Validate YAML syntax (if PyYAML is available)."""
     result = PreflightResult()
     try:
-        import yaml
+        import yaml  # pylint: disable=import-outside-toplevel
+
         yaml.safe_load(content)
     except ImportError:
         # yaml not installed, skip silently
@@ -89,9 +88,9 @@ def check_toml(content: str) -> PreflightResult:
     result = PreflightResult()
     try:
         try:
-            import tomllib  # Python 3.11+
+            import tomllib  # Python 3.11+  # pylint: disable=import-outside-toplevel
         except ImportError:
-            import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[no-redef]  # pylint: disable=import-outside-toplevel
         tomllib.loads(content)
     except ImportError:
         pass

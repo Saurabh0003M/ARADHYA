@@ -138,7 +138,7 @@ def set_volume(level: int | None = None, mute: bool | None = None) -> str:
                  f"$dev = $audio.GetDefaultAudioEndpoint(0, 1); "
                  f"$vol = $dev.AudioEndpointVolume; "
                  f"$vol.Mute = {'$true' if mute else '$false'}"],
-                capture_output=True, timeout=10,
+                capture_output=True, timeout=10, check=False,
             )
             # Fallback: use nircmd or simple key simulation
             if mute:
@@ -161,7 +161,7 @@ def set_volume(level: int | None = None, mute: bool | None = None) -> str:
             # Use nircmd if available for precise volume
             nircmd_result = subprocess.run(
                 ["nircmd", "setsysvolume", str(int(clamped * 655.35))],
-                capture_output=True, timeout=5,
+                capture_output=True, timeout=5, check=False,
             )
             if nircmd_result.returncode == 0:
                 results.append(f"Volume set to {clamped}%.")
@@ -174,7 +174,7 @@ def set_volume(level: int | None = None, mute: bool | None = None) -> str:
                 )
                 subprocess.run(
                     ["powershell", "-Command", ps_cmd],
-                    capture_output=True, timeout=10,
+                    capture_output=True, timeout=10, check=False,
                 )
                 results.append(f"Volume set to approximately {clamped}%.")
 
@@ -222,7 +222,7 @@ def check_process_running(process_name: str) -> str:
              f"Get-Process -Name '{name_filter}' -ErrorAction SilentlyContinue "
              f"| Select-Object -First 5 Name, Id, CPU, WorkingSet64 "
              f"| Format-Table -AutoSize | Out-String"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, check=False,
         )
         output = result.stdout.strip()
         if not output:

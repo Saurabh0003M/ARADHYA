@@ -209,7 +209,9 @@ def _lookup_exact_cached_paths(
     manager: DirectoryIndexManager,
     query: str,
 ) -> tuple[Path, ...]:
-    normalized_query = manager._normalize_key(query)  # noqa: SLF001 - diagnostics inspect exact cache keys
+    normalized_query = manager._normalize_key(
+        query
+    )  # noqa: SLF001 - diagnostics inspect exact cache keys
     if not normalized_query:
         return tuple()
 

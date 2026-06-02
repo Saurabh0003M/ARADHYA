@@ -69,8 +69,7 @@ class WorkspaceManager:
         """
         if not self._is_git_repo(project_root):
             logger.warning(
-                "WorkspaceManager: {} is not a Git repository; "
-                "skipping worktree creation.",
+                "WorkspaceManager: {} is not a Git repository; " "skipping worktree creation.",
                 project_root,
             )
             return None
@@ -161,11 +160,11 @@ class WorkspaceManager:
             if line.startswith("worktree "):
                 if current:
                     worktrees.append(current)
-                current = {"path": line[len("worktree "):].strip()}
+                current = {"path": line[len("worktree ") :].strip()}
             elif line.startswith("HEAD "):
-                current["head"] = line[len("HEAD "):].strip()
+                current["head"] = line[len("HEAD ") :].strip()
             elif line.startswith("branch "):
-                current["branch"] = line[len("branch "):].strip()
+                current["branch"] = line[len("branch ") :].strip()
             elif line == "bare":
                 current["bare"] = True
         if current:
@@ -202,6 +201,7 @@ class WorkspaceManager:
                 text=True,
                 cwd=str(cwd),
                 timeout=30,
+                check=False,
             )
             return {
                 "returncode": proc.returncode,

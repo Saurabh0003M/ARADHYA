@@ -228,8 +228,8 @@ class LLMIntentPlanner:
     def _coerce_confidence(self, raw_value: Any) -> float:
         try:
             return float(raw_value)
-        except (TypeError, ValueError):
-            raise ValueError("The model did not return a numeric confidence.")
+        except (TypeError, ValueError) as exc:
+            raise ValueError("The model did not return a numeric confidence.") from exc
 
     def _coerce_enabled(self, raw_value: Any) -> bool | None:
         if raw_value is None:

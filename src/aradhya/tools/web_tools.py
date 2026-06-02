@@ -31,6 +31,7 @@ def _check_network(tool_name: str) -> str | None:
             return decision.message
     return None
 
+
 DEFAULT_TIMEOUT_SECONDS = 15
 DEFAULT_USER_AGENT = "Aradhya/0.1 local assistant"
 
@@ -158,10 +159,7 @@ def _extract_duckduckgo_results(
     max_results: int,
 ) -> list[dict[str, str]]:
     link_matches = _DDG_RESULT_LINK_RE.finditer(html)
-    snippets = [
-        _html_to_text(match.group(1))
-        for match in _DDG_SNIPPET_RE.finditer(html)
-    ]
+    snippets = [_html_to_text(match.group(1)) for match in _DDG_SNIPPET_RE.finditer(html)]
 
     results: list[dict[str, str]] = []
     for index, match in enumerate(link_matches):

@@ -90,13 +90,7 @@ def _create_skill_md(
     if source:
         frontmatter_lines.append(f"  source: {source}")
 
-    content = (
-        "---\n"
-        + "\n".join(frontmatter_lines)
-        + "\n---\n\n"
-        + instructions
-        + "\n"
-    )
+    content = "---\n" + "\n".join(frontmatter_lines) + "\n---\n\n" + instructions + "\n"
 
     skill_file = skill_dir / "SKILL.md"
     skill_file.write_text(content, encoding="utf-8")
@@ -144,8 +138,10 @@ def install_skill_from_git(git_url: str, skill_name: str = "") -> str:
 
     try:
         result = subprocess.run(
-            ["git", "clone", "--depth", "1", git_url, str(target_dir)],
-            capture_output=True, text=True, timeout=120,
+            ["git", "clone", "--depth", "1", git_url, str(target_dir, check=False)],
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode != 0:
             return f"Git clone failed: {result.stderr.strip()}"
@@ -211,7 +207,7 @@ def install_skill_from_git(git_url: str, skill_name: str = "") -> str:
 )
 def install_skill_from_url(url: str, skill_name: str) -> str:
     """Fetch content from a URL and create a skill from it."""
-    import requests
+    import requests  # pylint: disable=import-outside-toplevel
 
     name = _sanitize_name(skill_name)
     target_dir = _skills_dir() / name
@@ -316,7 +312,9 @@ def install_skill_from_code(
     logger.info("Created skill '{}' from provided code/instructions", name)
     parts = [f"Skill '{name}' created at {target_dir}."]
     if tool_module:
-        parts.append(f"Tool module '{tool_module}' saved — its tools will be loaded on next restart.")
+        parts.append(
+            f"Tool module '{tool_module}' saved — its tools will be loaded on next restart."
+        )
     return " ".join(parts)
 
 

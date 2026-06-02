@@ -24,21 +24,21 @@ from typing import Any, Protocol
 
 from loguru import logger
 
-
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
 
+
 class HistoryProcessor(Protocol):
     """A single transformation over a message list."""
 
-    def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        ...
+    def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]: ...
 
 
 # ---------------------------------------------------------------------------
 # Processors
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class LastNToolOutputs:
@@ -57,7 +57,8 @@ class LastNToolOutputs:
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         # Find indices of tool-result messages
         tool_indices = [
-            i for i, m in enumerate(messages)
+            i
+            for i, m in enumerate(messages)
             if m.get("role") == "tool" or m.get("message_type") == "tool_result"
         ]
 
@@ -66,7 +67,7 @@ class LastNToolOutputs:
 
         # Keep the last N tool results; elide older ones
         # Never elide the first tool result (often the setup context)
-        keep_set = set(tool_indices[-self.n:])
+        keep_set = set(tool_indices[-self.n :])
         if tool_indices:
             keep_set.add(tool_indices[0])
 
@@ -76,14 +77,15 @@ class LastNToolOutputs:
                 content = msg.get("content", "")
                 n_lines = content.count("\n") + 1 if content else 0
                 n_chars = len(content)
-                result.append({
-                    **msg,
-                    "content": (
-                        f"[Previous tool output: {n_lines} lines, "
-                        f"{n_chars} chars omitted]"
-                    ),
-                    "_elided": True,
-                })
+                result.append(
+                    {
+                        **msg,
+                        "content": (
+                            f"[Previous tool output: {n_lines} lines, " f"{n_chars} chars omitted]"
+                        ),
+                        "_elided": True,
+                    }
+                )
             else:
                 result.append(msg)
         return result
@@ -111,7 +113,7 @@ class OutputTruncator:
             content = msg.get("content", "")
             if len(content) > self.max_chars:
                 truncated = self.template.format(
-                    truncated_content=content[:self.max_chars],
+                    truncated_content=content[: self.max_chars],
                     elided_chars=len(content) - self.max_chars,
                     total_chars=len(content),
                 )
@@ -136,17 +138,13 @@ class ClosedWindowProcessor:
 
     # Matches patterns like [File: some/path.py (N lines total)]
     _file_pattern: re.Pattern = field(
-        default_factory=lambda: re.compile(
-            r"\[File:\s+(.+?)\s+\(\d+\s+lines?\s+total\)\]"
-        ),
+        default_factory=lambda: re.compile(r"\[File:\s+(.+?)\s+\(\d+\s+lines?\s+total\)\]"),
         repr=False,
     )
 
     # Matches path= or file_path= in tool arguments
     _arg_pattern: re.Pattern = field(
-        default_factory=lambda: re.compile(
-            r'(?:path|file_path)\s*[=:]\s*["\']?([^"\'}\s,]+)'
-        ),
+        default_factory=lambda: re.compile(r'(?:path|file_path)\s*[=:]\s*["\']?([^"\'}\s,]+)'),
         repr=False,
     )
 
@@ -178,14 +176,16 @@ class ClosedWindowProcessor:
             if path and path in latest_views and latest_views[path] != i:
                 content = msg.get("content", "")
                 n_lines = content.count("\n") + 1
-                result.append({
-                    **msg,
-                    "content": (
-                        f"[Outdated file view of {path}: {n_lines} lines omitted. "
-                        f"See latest view below.]"
-                    ),
-                    "_deduped": True,
-                })
+                result.append(
+                    {
+                        **msg,
+                        "content": (
+                            f"[Outdated file view of {path}: {n_lines} lines omitted. "
+                            f"See latest view below.]"
+                        ),
+                        "_deduped": True,
+                    }
+                )
             else:
                 result.append(msg)
         return result
@@ -201,12 +201,14 @@ class RegexScrubber:
     - Clearing long diff blocks from history
     """
 
-    patterns: list[str] = field(default_factory=lambda: [
-        # Common API key patterns
-        r"(?:api[_-]?key|token|secret|password)\s*[=:]\s*['\"][^'\"]{8,}['\"]",
-        # Very long hex strings (likely hashes/tokens)
-        r"\b[0-9a-fA-F]{40,}\b",
-    ])
+    patterns: list[str] = field(
+        default_factory=lambda: [
+            # Common API key patterns
+            r"(?:api[_-]?key|token|secret|password)\s*[=:]\s*['\"][^'\"]{8,}['\"]",
+            # Very long hex strings (likely hashes/tokens)
+            r"\b[0-9a-fA-F]{40,}\b",
+        ]
+    )
     replacement: str = "[REDACTED]"
 
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -240,8 +242,7 @@ class ConsecutiveTimeoutTracker:
         for msg in messages:
             content = msg.get("content", "")
             if ("timeout" in content.lower() or "timed out" in content.lower()) and (
-                msg.get("role") == "tool"
-                or msg.get("message_type") == "tool_result"
+                msg.get("role") == "tool" or msg.get("message_type") == "tool_result"
             ):
                 self._consecutive_count += 1
             else:
@@ -250,22 +251,25 @@ class ConsecutiveTimeoutTracker:
 
         result = list(messages)
         if self._consecutive_count >= self.max_consecutive:
-            result.append({
-                "role": "system",
-                "content": (
-                    f"[WARNING: {self._consecutive_count} consecutive command timeouts. "
-                    f"The current approach is likely stuck. Try a completely different "
-                    f"strategy — shorter commands, different tools, or break the "
-                    f"problem into smaller steps.]"
-                ),
-                "message_type": "system_warning",
-            })
+            result.append(
+                {
+                    "role": "system",
+                    "content": (
+                        f"[WARNING: {self._consecutive_count} consecutive command timeouts. "
+                        f"The current approach is likely stuck. Try a completely different "
+                        f"strategy — shorter commands, different tools, or break the "
+                        f"problem into smaller steps.]"
+                    ),
+                    "message_type": "system_warning",
+                }
+            )
         return result
 
 
 # ---------------------------------------------------------------------------
 # Pipeline
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class HistoryProcessorPipeline:
@@ -300,7 +304,7 @@ class HistoryProcessorPipeline:
                     before,
                     len(result),
                     before_chars,
-                    after_chars
+                    after_chars,
                 )
         return result
 
@@ -312,10 +316,12 @@ class HistoryProcessorPipeline:
 
 def default_pipeline() -> HistoryProcessorPipeline:
     """Create the default ARADHYA history processing pipeline."""
-    return HistoryProcessorPipeline(processors=[
-        LastNToolOutputs(n=5),
-        ClosedWindowProcessor(),
-        OutputTruncator(max_chars=8000),
-        RegexScrubber(),
-        ConsecutiveTimeoutTracker(),
-    ])
+    return HistoryProcessorPipeline(
+        processors=[
+            LastNToolOutputs(n=5),
+            ClosedWindowProcessor(),
+            OutputTruncator(max_chars=8000),
+            RegexScrubber(),
+            ConsecutiveTimeoutTracker(),
+        ]
+    )

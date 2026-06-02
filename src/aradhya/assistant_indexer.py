@@ -147,10 +147,7 @@ class ContextCacheManifest:
             else {}
         )
         root_signatures = (
-            {
-                str(key): str(value)
-                for key, value in raw_root_signatures.items()
-            }
+            {str(key): str(value) for key, value in raw_root_signatures.items()}
             if isinstance(raw_root_signatures, dict)
             else {}
         )
@@ -166,6 +163,7 @@ class ContextCacheManifest:
             summary_node_count=int(payload.get("summary_node_count", 0)),
             summary_truncated=bool(payload.get("summary_truncated", False)),
         )
+
 
 @dataclass(frozen=True)
 class DriveCacheShard:
@@ -194,9 +192,7 @@ class DriveCacheShard:
             "txt_folders": [folder.to_dict() for folder in self.txt_folders],
             "projects": [candidate.to_dict() for candidate in self.projects],
             "games": [candidate.to_dict() for candidate in self.games],
-            "shallow_outline": {
-                key: list(lines) for key, lines in self.shallow_outline.items()
-            },
+            "shallow_outline": {key: list(lines) for key, lines in self.shallow_outline.items()},
             "directory_count": self.directory_count,
             "file_count": self.file_count,
         }
@@ -209,17 +205,19 @@ class DriveCacheShard:
             drive_key=str(payload.get("drive_key", MISC_DRIVE_KEY)),
             user_roots=tuple(str(item) for item in payload.get("user_roots", [])),
             game_roots=tuple(str(item) for item in payload.get("game_roots", [])),
-            name_candidates={
-                str(key): tuple(
-                    CachedPathCandidate.from_dict(candidate)
-                    for candidate in candidates
-                    if isinstance(candidate, dict)
-                )
-                for key, candidates in raw_name_candidates.items()
-                if isinstance(candidates, list)
-            }
-            if isinstance(raw_name_candidates, dict)
-            else {},
+            name_candidates=(
+                {
+                    str(key): tuple(
+                        CachedPathCandidate.from_dict(candidate)
+                        for candidate in candidates
+                        if isinstance(candidate, dict)
+                    )
+                    for key, candidates in raw_name_candidates.items()
+                    if isinstance(candidates, list)
+                }
+                if isinstance(raw_name_candidates, dict)
+                else {}
+            ),
             txt_folders=tuple(
                 CachedTxtFolder.from_dict(item)
                 for item in payload.get("txt_folders", [])
@@ -235,13 +233,15 @@ class DriveCacheShard:
                 for item in payload.get("games", [])
                 if isinstance(item, dict)
             ),
-            shallow_outline={
-                str(key): tuple(str(line) for line in lines)
-                for key, lines in raw_outline.items()
-                if isinstance(lines, list)
-            }
-            if isinstance(raw_outline, dict)
-            else {},
+            shallow_outline=(
+                {
+                    str(key): tuple(str(line) for line in lines)
+                    for key, lines in raw_outline.items()
+                    if isinstance(lines, list)
+                }
+                if isinstance(raw_outline, dict)
+                else {}
+            ),
             directory_count=int(payload.get("directory_count", 0)),
             file_count=int(payload.get("file_count", 0)),
         )
@@ -338,7 +338,9 @@ class DirectoryIndexManager:
         self._last_snapshot = snapshot
         return snapshot
 
-    def find_named_paths(self, query: str, limit: int = 10, reason: str = "local_query") -> list[Path]:
+    def find_named_paths(
+        self, query: str, limit: int = 10, reason: str = "local_query"
+    ) -> list[Path]:
         """Return cached path candidates for an open-path style query."""
 
         snapshot = self.refresh_if_stale(reason)
@@ -456,9 +458,7 @@ class DirectoryIndexManager:
             return self.refresh(reason)
 
         affected_drive_keys = {
-            self._drive_key_for_path(path)
-            for path in (*user_roots, *game_roots)
-            if path.exists()
+            self._drive_key_for_path(path) for path in (*user_roots, *game_roots) if path.exists()
         }
         if not affected_drive_keys:
             self._last_snapshot = DirectoryIndexSnapshot(
@@ -502,14 +502,13 @@ class DirectoryIndexManager:
         generated_at = self.now_provider()
         accumulators = self._scan_roots(user_roots, game_roots)
         updated_shards = {
-            key: self._finalize_drive_shard(accumulator) for key, accumulator in accumulators.items()
+            key: self._finalize_drive_shard(accumulator)
+            for key, accumulator in accumulators.items()
         }
 
         if base_shards is not None:
             final_shards = {
-                key: shard
-                for key, shard in base_shards.items()
-                if key not in updated_shards
+                key: shard for key, shard in base_shards.items() if key not in updated_shards
             }
             final_shards.update(updated_shards)
         else:
@@ -528,11 +527,12 @@ class DirectoryIndexManager:
             generated_at=generated_at,
             refresh_interval_seconds=self.preferences.directory_index_policy.refresh_interval_seconds,
             indexed_roots=tuple(str(root) for root in self.preferences.user_roots if root.exists()),
-            game_roots=tuple(str(root) for root in self.preferences.game_library_roots if root.exists()),
+            game_roots=tuple(
+                str(root) for root in self.preferences.game_library_roots if root.exists()
+            ),
             root_signatures=self._build_root_signatures(),
             shards={
-                drive_key: self._shard_filename(drive_key)
-                for drive_key in sorted(final_shards)
+                drive_key: self._shard_filename(drive_key) for drive_key in sorted(final_shards)
             },
             total_indexed_nodes=sum(
                 shard.directory_count + shard.file_count for shard in final_shards.values()
@@ -628,11 +628,7 @@ class DirectoryIndexManager:
             if visible_files:
                 accumulator.file_count += len(visible_files)
 
-            txt_count = sum(
-                1
-                for filename in visible_files
-                if filename.lower().endswith(".txt")
-            )
+            txt_count = sum(1 for filename in visible_files if filename.lower().endswith(".txt"))
             if txt_count > 0 and visible_files:
                 accumulator.txt_folders.append(
                     CachedTxtFolder(
@@ -734,8 +730,7 @@ class DirectoryIndexManager:
                 sorted(deduped_games, key=lambda candidate: candidate.latest_activity, reverse=True)
             ),
             shallow_outline={
-                root: tuple(lines)
-                for root, lines in sorted(accumulator.shallow_outline.items())
+                root: tuple(lines) for root, lines in sorted(accumulator.shallow_outline.items())
             },
             directory_count=accumulator.directory_count,
             file_count=accumulator.file_count,
@@ -749,8 +744,7 @@ class DirectoryIndexManager:
 
         manifest = self._read_manifest()
         shards = {
-            drive_key: self._read_shard(filename)
-            for drive_key, filename in manifest.shards.items()
+            drive_key: self._read_shard(filename) for drive_key, filename in manifest.shards.items()
         }
         self._loaded_cache_state = self._build_loaded_cache_state(manifest, shards)
         return manifest, shards
@@ -924,7 +918,10 @@ class DirectoryIndexManager:
                 activity_time = datetime.fromtimestamp(candidate.latest_activity)
                 if activity_time.date() != target_day:
                     continue
-                if best_candidate is None or candidate.latest_activity > best_candidate.latest_activity:
+                if (
+                    best_candidate is None
+                    or candidate.latest_activity > best_candidate.latest_activity
+                ):
                     best_candidate = candidate
 
         if best_candidate is None:
@@ -944,7 +941,10 @@ class DirectoryIndexManager:
             for candidate in shard.games:
                 if not Path(candidate.path).exists():
                     continue
-                if best_candidate is None or candidate.latest_activity > best_candidate.latest_activity:
+                if (
+                    best_candidate is None
+                    or candidate.latest_activity > best_candidate.latest_activity
+                ):
                     best_candidate = candidate
 
         if best_candidate is None:
@@ -1066,9 +1066,7 @@ class DirectoryIndexManager:
                 dirnames[:] = []
             else:
                 dirnames[:] = [
-                    dirname
-                    for dirname in dirnames
-                    if not self._should_ignore_name(dirname)
+                    dirname for dirname in dirnames if not self._should_ignore_name(dirname)
                 ]
 
             for filename in filenames:
@@ -1193,7 +1191,9 @@ class DirectoryIndexManager:
         user_roots: tuple[Path, ...] = (),
         game_roots: tuple[Path, ...] = (),
     ) -> str | None:
-        affected_drive_keys = self._affected_drive_keys(user_roots=user_roots, game_roots=game_roots)
+        affected_drive_keys = self._affected_drive_keys(
+            user_roots=user_roots, game_roots=game_roots
+        )
         if not affected_drive_keys:
             return None
 

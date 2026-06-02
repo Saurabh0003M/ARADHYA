@@ -88,6 +88,7 @@ def _capture_with_powershell(output_path: str) -> bool:
         result = subprocess.run(
             ["powershell", "-Command", ps_script],
             capture_output=True, text=True, timeout=15,
+            check=False,
         )
         return result.returncode == 0 and Path(output_path).is_file()
     except Exception as error:
@@ -132,6 +133,7 @@ def _ocr_with_windows_api(image_path: str) -> str | None:
         result = subprocess.run(
             ["powershell", "-Command", ps_script],
             capture_output=True, text=True, timeout=30,
+            check=False,
         )
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()

@@ -16,7 +16,6 @@ from pathlib import Path
 
 from src.aradhya.tools.tool_registry import tool_definition
 
-
 # ── Gap H: rotating in-memory terminal history buffer ──────────────────
 # Stores up to _MAX_TERMINAL_LINES lines from all run_command invocations
 # this session. Lets the model call read_terminal_history() to review
@@ -24,6 +23,7 @@ from src.aradhya.tools.tool_registry import tool_definition
 # Inspired by Codex's read_thread_terminal dynamic tool.
 _MAX_TERMINAL_LINES = 500
 _terminal_buffer: collections.deque[str] = collections.deque(maxlen=_MAX_TERMINAL_LINES)
+
 
 @tool_definition(
     name="run_command",
@@ -59,11 +59,13 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         return f"Error: Working directory does not exist: {work_dir}"
 
     try:
-        from src.aradhya.assistant_models import load_preferences
+        from src.aradhya.assistant_models import load_preferences  # pylint: disable=import-outside-toplevel
+
         prefs = load_preferences()
 
         # Sandboxing support (ZeroClaw feature)
-        import shlex
+        import shlex  # pylint: disable=import-outside-toplevel
+
         final_command_args = shlex.split(command)
         is_sandboxed = False
 
@@ -71,19 +73,22 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
             try:
                 # Check if docker is available
                 subprocess.run(
-                    ["docker", "--version"],
-                    shell=False,
-                    capture_output=True,
-                    check=True
+                    ["docker", "--version"], shell=False, capture_output=True, check=True
                 )
                 quoted_command = shlex.quote(command)
                 # Mount the working directory to /workspace and run the command securely
                 final_command_args = [
-                    "docker", "run", "--rm",
-                    "-v", f"{work_dir}:/workspace",
-                    "-w", "/workspace",
+                    "docker",
+                    "run",
+                    "--rm",
+                    "-v",
+                    f"{work_dir}:/workspace",
+                    "-w",
+                    "/workspace",
                     "python:3.10-slim",
-                    "bash", "-c", quoted_command
+                    "bash",
+                    "-c",
+                    quoted_command,
                 ]
                 is_sandboxed = True
             except subprocess.CalledProcessError:
@@ -98,6 +103,7 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
             text=True,
             cwd=None if is_sandboxed else str(work_dir),
             timeout=timeout,
+            check=False,
         )
         wall_time = time.perf_counter() - start_time
 
@@ -152,11 +158,8 @@ def read_terminal_history(last_n_lines: int = 100) -> str:
     if not _terminal_buffer:
         return "Terminal history is empty. No commands have been run yet this session."
     lines = list(_terminal_buffer)
-    selected = lines[-max(1, last_n_lines):]
-    return (
-        f"Terminal history (last {len(selected)} of {len(lines)} lines):\n"
-        + "\n".join(selected)
-    )
+    selected = lines[-max(1, last_n_lines) :]
+    return f"Terminal history (last {len(selected)} of {len(lines)} lines):\n" + "\n".join(selected)
 
 
 ALL_SHELL_TOOLS = [run_command, read_terminal_history]

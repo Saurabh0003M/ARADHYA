@@ -102,6 +102,7 @@ class SandboxManager:
                 text=True,
                 cwd=str(cwd),
                 timeout=timeout_s,
+                check=False,
             )
             wall_ms = int((time.perf_counter() - start) * 1000)
             return {
@@ -195,7 +196,8 @@ class SandboxManager:
 
     def _icacls_grant(self, path: Path, permissions: str) -> None:
         """Run icacls to grant the current user the specified permissions."""
-        import os
+        import os  # pylint: disable=import-outside-toplevel
+
         username = os.environ.get("USERNAME", "")
         if not username:
             return
@@ -213,11 +215,10 @@ class SandboxManager:
                 capture_output=True,
                 text=True,
                 timeout=15,
+                check=False,
             )
             if result.returncode != 0:
-                logger.warning(
-                    "icacls grant failed for {}: {}", path, result.stderr.strip()
-                )
+                logger.warning("icacls grant failed for {}: {}", path, result.stderr.strip())
             else:
                 logger.debug("ACL applied: {} → {}", path, permissions)
         except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
@@ -225,5 +226,6 @@ class SandboxManager:
 
 
 def _now() -> str:
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone  # pylint: disable=import-outside-toplevel
+
     return datetime.now(timezone.utc).isoformat()

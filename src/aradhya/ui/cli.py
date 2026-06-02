@@ -21,7 +21,9 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             sys.stdout = io.TextIOWrapper(
-                sys.stdout.buffer, encoding="utf-8", errors="replace",
+                sys.stdout.buffer,
+                encoding="utf-8",
+                errors="replace",
             )
 
 from rich.console import Console
@@ -52,8 +54,9 @@ console = Console(theme=ARADHYA_THEME, highlight=False)
 
 
 # ── Startup banner ────────────────────────────────────────────────────
-def render_banner(model_name: str, voice_inbox: str, skills_active: int,
-                  skills_total: int, log_path: str) -> None:
+def render_banner(
+    model_name: str, voice_inbox: str, skills_active: int, skills_total: int, log_path: str
+) -> None:
     """Print the beautiful startup banner with key system info."""
 
     banner_text = (
@@ -66,8 +69,7 @@ def render_banner(model_name: str, voice_inbox: str, skills_active: int,
 
     console.print(
         Panel(
-            f"[bold #00d4aa]{banner_text}[/]\n"
-            "[dim]       Operating Intelligence  v1.1[/]",
+            f"[bold #00d4aa]{banner_text}[/]\n" "[dim]       Operating Intelligence  v1.1[/]",
             border_style="#00d4aa",
             padding=(0, 4),
         )
@@ -75,8 +77,9 @@ def render_banner(model_name: str, voice_inbox: str, skills_active: int,
     console.print()
 
     # System info table
-    info = Table(box=box.SIMPLE, border_style="dim", show_header=False,
-                 pad_edge=False, expand=False)
+    info = Table(
+        box=box.SIMPLE, border_style="dim", show_header=False, pad_edge=False, expand=False
+    )
     info.add_column("Key", style="accent", no_wrap=True)
     info.add_column("Value")
     info.add_row("  Model", f"[highlight]{model_name}[/]")
@@ -93,8 +96,9 @@ def render_banner(model_name: str, voice_inbox: str, skills_active: int,
 
 
 # ── Response rendering ────────────────────────────────────────────────
-def render_response(spoken: str, transcript_echo: str | None = None,
-                    awaiting: bool = False) -> None:
+def render_response(
+    spoken: str, transcript_echo: str | None = None, awaiting: bool = False
+) -> None:
     """Render an Aradhya response with optional transcript echo."""
     if transcript_echo:
         console.print(f"  [dim]Heard >[/] {transcript_echo}")
@@ -187,7 +191,7 @@ def render_help(topic: str | None = None) -> None:
         ],
         "Setup": [
             ("/setup", "Run the interactive setup wizard"),
-        ]
+        ],
     }
 
     if topic:
@@ -281,8 +285,10 @@ def render_status(
 
     # 4. Model Health
     model_icon = "[+]" if model_ok else ("[!]" if model_ok is False else "[?]")
-    model_status = "[success]Ready[/]" if model_ok else (
-        "[error]Not ready[/]" if model_ok is False else "[dim]Unknown[/]"
+    model_status = (
+        "[success]Ready[/]"
+        if model_ok
+        else ("[error]Not ready[/]" if model_ok is False else "[dim]Unknown[/]")
     )
     table.add_row(f"{model_icon} Model", f"{model_name} - {model_status}")
 
@@ -297,9 +303,7 @@ def render_status(
 
     # 6. Voice
     voice_icon = "[+]" if voice_running else "[ ]"
-    voice_text = f"{voice_provider}" + (
-        " - [success]listening[/]" if voice_running else ""
-    )
+    voice_text = f"{voice_provider}" + (" - [success]listening[/]" if voice_running else "")
     table.add_row(f"{voice_icon} Voice", voice_text)
 
     # 7. Skills
@@ -394,6 +398,7 @@ def render_federation_doctor(checks: list[dict[str, Any]]) -> None:
 
 
 # ── Voice status ──────────────────────────────────────────────────────
+
 
 def render_model_workers(statuses: list[Any]) -> None:
     """Render local and optional cloud model workers."""
@@ -539,7 +544,13 @@ def render_api_entries(title: str, entries: list[Any], risk_labels: dict[str, st
     console.print()
 
 
-def render_audit(entries: list[dict[str, Any]], last_session: str, tool_ok: int, tool_fail: int, security_count: int) -> None:
+def render_audit(
+    entries: list[dict[str, Any]],
+    last_session: str,
+    tool_ok: int,
+    tool_fail: int,
+    security_count: int,
+) -> None:
     """Render recent audit log events."""
     console.print()
     console.print("[heading]  Audit Log - Last 20 Events[/]")
@@ -553,7 +564,7 @@ def render_audit(entries: list[dict[str, Any]], last_session: str, tool_ok: int,
     for entry in entries:
         raw_ts = entry.get("ts", "")
         if raw_ts and "T" in raw_ts:
-            ts = raw_ts[5:19].replace("T", " ")   # "MM-DD HH:MM:SS"
+            ts = raw_ts[5:19].replace("T", " ")  # "MM-DD HH:MM:SS"
         else:
             ts = raw_ts[-8:] if raw_ts else "??:??:??"
         etype = entry.get("type", "?")
@@ -590,10 +601,10 @@ def render_audit(entries: list[dict[str, Any]], last_session: str, tool_ok: int,
 
     console.print()
     console.print(
-        "  [dim]Showing 20 of latest events. "
-        "Full log: ~/.aradhya/audit/audit.jsonl[/]"
+        "  [dim]Showing 20 of latest events. " "Full log: ~/.aradhya/audit/audit.jsonl[/]"
     )
     console.print()
+
 
 def render_parasite_candidates(candidates: list[Any], ledger_path: str) -> None:
     """Render the host integration queue."""
@@ -721,9 +732,11 @@ def render_model_ask_result(text: str) -> None:
     console.print(f"  [accent]Model >[/] {text}")
     console.print()
 
+
 def render_daemon_start_success(pid: int, url: str = "http://127.0.0.1:19842") -> None:
     """Render daemon start success message."""
     render_success(f"Daemon started in background (PID: {pid}). API on {url}")
+
 
 def render_api_entry(entry: Any, risk_label: str) -> None:
     """Render one API catalog entry."""
@@ -755,6 +768,7 @@ class VoiceStatusConfig:
     activation_support: Any
     runtime_profile: Any
     voice_running: bool
+
 
 def render_voice_status(config: VoiceStatusConfig) -> None:
     """Render detailed voice pipeline status."""
@@ -790,7 +804,11 @@ def render_voice_status(config: VoiceStatusConfig) -> None:
     table.add_row("Note", config.activation_support.message)
     table.add_row(
         "Spoken Replies",
-        "[success]Enabled[/]" if config.runtime_profile.voice_output.enabled else "[dim]Disabled[/]",
+        (
+            "[success]Enabled[/]"
+            if config.runtime_profile.voice_output.enabled
+            else "[dim]Disabled[/]"
+        ),
     )
 
     pending = config.status.pending_audio
@@ -862,14 +880,18 @@ def render_health_check(checks: list[tuple[str, bool, str]]) -> None:
 def render_info(message: str) -> None:
     console.print(f"  [dim]>[/] {message}")
 
+
 def render_success(message: str) -> None:
     console.print(f"  [success][+][/] {message}")
+
 
 def render_warning(message: str) -> None:
     console.print(f"  [warning][~][/] {message}")
 
+
 def render_error(message: str) -> None:
     console.print(f"  [error][!][/] {message}")
+
 
 def render_tool_confirmation_prompt(tool_name: str, arguments: dict[str, Any]) -> None:
     """Render a detailed security confirmation panel for a dangerous tool."""
@@ -923,15 +945,20 @@ def render_tool_confirmation_prompt(tool_name: str, arguments: dict[str, Any]) -
     console.print(panel)
     console.print(r"  Approve? [success]\[y]es[/] / [success]\[a]lways[/] / [error]\[n]o[/]")
 
+
 def get_prompt() -> str:
     """Return styled user prompt text for input()."""
     return "[user]You >[/user] "
+
 
 def prompt_input() -> str:
     """Read user input with a styled prompt."""
     return console.input(get_prompt())
 
-def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = "") -> str:
+
+def render_stream(
+    stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = ""
+) -> str:
     """Render a live stream of text chunks with post-processing.
 
     During streaming: raw text shown live for instant feedback.
@@ -961,8 +988,8 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
     Splits routing notices, thinking blocks, and the main body into
     separate Rich-styled sections.
     """
-    import re
-    from rich.markdown import Markdown
+    import re  # pylint: disable=import-outside-toplevel
+    from rich.markdown import Markdown  # pylint: disable=import-outside-toplevel
 
     remaining = text
 
@@ -971,9 +998,7 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
     for match in routing_pattern.finditer(remaining):
         model_name = match.group(1)
         reason = match.group(2)
-        console.print(
-            f"  [dim][~] Routed -> [accent]{model_name}[/accent] ({reason})[/]"
-        )
+        console.print(f"  [dim][~] Routed -> [accent]{model_name}[/accent] ({reason})[/]")
     remaining = routing_pattern.sub("", remaining)
 
     # 2. Extract and render <thought>/<think> blocks
@@ -994,8 +1019,7 @@ def _render_formatted_response(text: str, prefix: str = "  [aradhya]Aradhya >[/]
         return
 
     has_markdown = any(
-        marker in body
-        for marker in ("## ", "```", "| ", "- **", "1. ", "* ", "---")
+        marker in body for marker in ("## ", "```", "| ", "- **", "1. ", "* ", "---")
     )
 
     if has_markdown:

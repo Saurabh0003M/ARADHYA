@@ -1,7 +1,7 @@
 """Unit tests for history processors (src/aradhya/history_processors.py)."""
+
 from __future__ import annotations
 
-import pytest
 
 from src.aradhya.history_processors import (
     ClosedWindowProcessor,
@@ -45,15 +45,15 @@ class TestLastNToolOutputs:
         proc = LastNToolOutputs(n=2)
         msgs = [
             _user_msg("q1"),
-            _tool_msg("output1\nline2\nline3"),   # index 1 (first tool — kept)
+            _tool_msg("output1\nline2\nline3"),  # index 1 (first tool — kept)
             _assistant_msg("ok"),
             _user_msg("q2"),
-            _tool_msg("output2\nline2"),            # index 4 (old — elided)
+            _tool_msg("output2\nline2"),  # index 4 (old — elided)
             _assistant_msg("ok"),
             _user_msg("q3"),
-            _tool_msg("output3"),                   # index 7 (last 2 — kept)
+            _tool_msg("output3"),  # index 7 (last 2 — kept)
             _user_msg("q4"),
-            _tool_msg("output4"),                   # index 9 (last 2 — kept)
+            _tool_msg("output4"),  # index 9 (last 2 — kept)
         ]
         result = proc(msgs)
         assert len(result) == 10  # same count, content replaced
@@ -239,10 +239,12 @@ class TestHistoryProcessorPipeline:
         assert pipeline(msgs) == msgs
 
     def test_chained_processing(self) -> None:
-        pipeline = HistoryProcessorPipeline(processors=[
-            LastNToolOutputs(n=1),
-            OutputTruncator(max_chars=50),
-        ])
+        pipeline = HistoryProcessorPipeline(
+            processors=[
+                LastNToolOutputs(n=1),
+                OutputTruncator(max_chars=50),
+            ]
+        )
         msgs = [
             _tool_msg("old output " * 20),  # will be elided by LastN
             _tool_msg("recent but very long " * 20),  # will be truncated
@@ -252,7 +254,11 @@ class TestHistoryProcessorPipeline:
         # but with only 2 tool msgs and n=1, the first is kept as "first" and
         # the last is kept by n=1 — so neither is elided.
         # Let's verify the truncation at least works:
-        assert result[0].get("_truncated") or result[0].get("_elided") or len(result[0]["content"]) <= 300
+        assert (
+            result[0].get("_truncated")
+            or result[0].get("_elided")
+            or len(result[0]["content"]) <= 300
+        )
         assert result[1].get("_truncated") or len(result[1]["content"]) <= 300
 
     def test_fluent_api(self) -> None:

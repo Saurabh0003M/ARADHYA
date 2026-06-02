@@ -1,9 +1,9 @@
 """Unit tests for the intent-based dynamic skill loader."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 
 from src.aradhya.skills.skill_loader import load_skills_for_intent
 from src.aradhya.skills.skill_models import SkillDefinition, SkillRegistry, SkillRequirements
@@ -43,9 +43,7 @@ class TestLoadSkillsForIntent:
             "src.aradhya.skills.skill_loader.load_skills",
             return_value=full_reg,
         ):
-            result = load_skills_for_intent(
-                tmp_path, "do something random", max_skills=5
-            )
+            result = load_skills_for_intent(tmp_path, "do something random", max_skills=5)
 
         assert len(result.all_skills()) == 2
 

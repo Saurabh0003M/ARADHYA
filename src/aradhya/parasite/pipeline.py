@@ -54,13 +54,15 @@ class DigestionPipeline:
             if not child.is_dir() or child.name.startswith("."):
                 continue
             cp = load_checkpoint(self.hosts_root, child.name)
-            targets.append({
-                "name": child.name,
-                "current_stage": cp.current_stage if cp else "NOT_STARTED",
-                "completed_stages": cp.completed_stages if cp else [],
-                "trust_score": cp.trust_score if cp else "",
-                "error": cp.error if cp else "",
-            })
+            targets.append(
+                {
+                    "name": child.name,
+                    "current_stage": cp.current_stage if cp else "NOT_STARTED",
+                    "completed_stages": cp.completed_stages if cp else [],
+                    "trust_score": cp.trust_score if cp else "",
+                    "error": cp.error if cp else "",
+                }
+            )
         return targets
 
     def digest(self, target: str, *, source_url: str = "") -> Checkpoint:
@@ -74,7 +76,8 @@ class DigestionPipeline:
                 target=target,
                 source_url=source_url,
             )
-            from src.aradhya.parasite.checkpoint import _now
+            from src.aradhya.parasite.checkpoint import _now  # pylint: disable=import-outside-toplevel
+
             cp.started_at = _now()
 
         logger.info("Digestion pipeline: target={}, resuming from={}", target, cp.current_stage)
@@ -122,10 +125,7 @@ class DigestionPipeline:
         if cp is None:
             return None
 
-        validation_done = (
-            "EXTRACT" in cp.completed_stages
-            or "VALIDATE" in cp.completed_stages
-        )
+        validation_done = "EXTRACT" in cp.completed_stages or "VALIDATE" in cp.completed_stages
         if not validation_done:
             cp.error = "Cannot re-absorb: validation stage not completed"
             return cp
@@ -198,8 +198,7 @@ class DigestionPipeline:
     ) -> dict[str, Any]:
         """Stage 2: Quick trust check — license, README presence, risk scan."""
         has_readme = any(
-            (target_path / name).is_file()
-            for name in ("README.md", "readme.md", "README.rst")
+            (target_path / name).is_file() for name in ("README.md", "readme.md", "README.rst")
         )
         has_license = any(
             (target_path / name).is_file()
@@ -264,8 +263,7 @@ class DigestionPipeline:
 
         # Special handling for repos with data_catalog capability
         has_data_catalog = any(
-            cap.get("kind") == "data_catalog"
-            for cap in analysis.get("capabilities", [])
+            cap.get("kind") == "data_catalog" for cap in analysis.get("capabilities", [])
         )
         if has_data_catalog:
             api_entries = analyze_public_apis_readme(target_path)
@@ -330,7 +328,8 @@ class DigestionPipeline:
 
                 # Check for garbage entries
                 garbage = [
-                    e for e in entries
+                    e
+                    for e in entries
                     if e.get("API", "").startswith(":")
                     or e.get("API", "").startswith("-")
                     or len(e.get("API", "")) < 2
@@ -367,9 +366,7 @@ class DigestionPipeline:
         validate_artifacts = validate_result.get("artifacts", {})
         if not validate_artifacts.get("passed", False):
             issues = validate_artifacts.get("issues", [])
-            raise RuntimeError(
-                f"Cannot absorb — validation failed: {issues}"
-            )
+            raise RuntimeError(f"Cannot absorb — validation failed: {issues}")
 
         # Copy verified catalog to ARADHYA's data directory
         verified_catalog = target_path / ".parasite" / "verified_catalog.json"
@@ -461,11 +458,13 @@ class DigestionPipeline:
                     except Exception as error:
                         result["status"] = "failed"
                         result["error"] = str(error)
-                        errors.append({
-                            "target": child.name,
-                            "action": "strip_git",
-                            "error": str(error),
-                        })
+                        errors.append(
+                            {
+                                "target": child.name,
+                                "action": "strip_git",
+                                "error": str(error),
+                            }
+                        )
                         logger.warning("Failed to strip .git from {}: {}", child.name, error)
                 freed_bytes += size
                 results.append(result)
@@ -492,11 +491,13 @@ class DigestionPipeline:
                     except Exception as error:
                         result["status"] = "failed"
                         result["error"] = str(error)
-                        errors.append({
-                            "target": child.name,
-                            "action": "archive",
-                            "error": str(error),
-                        })
+                        errors.append(
+                            {
+                                "target": child.name,
+                                "action": "archive",
+                                "error": str(error),
+                            }
+                        )
                         logger.warning("Failed to archive {}: {}", child.name, error)
                 results.append(result)
 
@@ -520,11 +521,13 @@ class DigestionPipeline:
                     except Exception as error:
                         result["status"] = "failed"
                         result["error"] = str(error)
-                        errors.append({
-                            "target": child.name,
-                            "action": "delete",
-                            "error": str(error),
-                        })
+                        errors.append(
+                            {
+                                "target": child.name,
+                                "action": "delete",
+                                "error": str(error),
+                            }
+                        )
                         logger.warning("Failed to delete {}: {}", child.name, error)
                 freed_bytes += size
                 results.append(result)
@@ -580,11 +583,7 @@ class DigestionPipeline:
 
     @staticmethod
     def _directory_size(path: Path) -> int:
-        return sum(
-            child.stat().st_size
-            for child in path.rglob("*")
-            if child.is_file()
-        )
+        return sum(child.stat().st_size for child in path.rglob("*") if child.is_file())
 
     def _archive_destination(self, target_name: str) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -625,7 +624,7 @@ class DigestionPipeline:
 
     @staticmethod
     def _audit_gc_action(result: dict[str, Any]) -> None:
-        from src.aradhya.audit_logger import get_audit_logger
+        from src.aradhya.audit_logger import get_audit_logger  # pylint: disable=import-outside-toplevel
 
         get_audit_logger().log_event(
             "parasite_gc_action",
@@ -670,11 +669,13 @@ class DigestionPipeline:
     def _skill_intents(cls, target: str, capabilities: list[str]) -> list[str]:
         intents: list[str] = []
         if "agent_framework" in capabilities:
-            intents.extend([
-                "agent design pattern",
-                "orchestration workflow",
-                f"how does {target} work",
-            ])
+            intents.extend(
+                [
+                    "agent design pattern",
+                    "orchestration workflow",
+                    f"how does {target} work",
+                ]
+            )
         if "mcp_server" in capabilities:
             intents.extend(["MCP server pattern", "tool registration"])
         if "cli_tool" in capabilities:
@@ -705,9 +706,7 @@ class DigestionPipeline:
             else "- Reference material only"
         )
         dependency_line = (
-            ", ".join(f"`{dep}`" for dep in dependencies)
-            if dependencies
-            else "None detected"
+            ", ".join(f"`{dep}`" for dep in dependencies) if dependencies else "None detected"
         )
         return (
             "---\n"
@@ -733,7 +732,7 @@ class DigestionPipeline:
 
     @staticmethod
     def _validate_skill_content(content: str) -> None:
-        from src.aradhya.skills.skill_loader import _split_frontmatter
+        from src.aradhya.skills.skill_loader import _split_frontmatter  # pylint: disable=import-outside-toplevel
 
         frontmatter, body = _split_frontmatter(content)
         if not body.strip():
@@ -748,7 +747,8 @@ class DigestionPipeline:
 
     def _fetch_github_stars(self, url: str, token: str) -> int | None:
         """Fetch star count from GitHub API."""
-        import re
+        import re  # pylint: disable=import-outside-toplevel
+
         match = re.search(r"github\.com/([^/]+)/([^/.]+)", url)
         if not match:
             return None
@@ -756,7 +756,8 @@ class DigestionPipeline:
         owner, repo = match.group(1), match.group(2)
 
         try:
-            import requests
+            import requests  # pylint: disable=import-outside-toplevel
+
             headers = {"Authorization": f"token {token}"}
             resp = requests.get(
                 f"https://api.github.com/repos/{owner}/{repo}",

@@ -83,15 +83,15 @@ class AradhyaDaemon:
         logger.info("Aradhya daemon starting…")
 
         # Lazy imports so we only pull heavy modules when actually running.
-        from src.aradhya.assistant_core import AradhyaAssistant
-        from src.aradhya.assistant_models import WakeSource
-        from src.aradhya.daemon_api import DaemonAPIServer
-        from src.aradhya.utils.logging import configure_logging
-        from src.aradhya.model_provider import build_text_model_provider
-        from src.aradhya.model_setup import bootstrap_runtime_profile
-        from src.aradhya.runtime_profile import load_runtime_profile
-        from src.aradhya.scheduler import TaskScheduler
-        from src.aradhya.skills import load_skills
+        from src.aradhya.assistant_core import AradhyaAssistant  # pylint: disable=import-outside-toplevel
+        from src.aradhya.assistant_models import WakeSource  # pylint: disable=import-outside-toplevel
+        from src.aradhya.daemon_api import DaemonAPIServer  # pylint: disable=import-outside-toplevel
+        from src.aradhya.utils.logging import configure_logging  # pylint: disable=import-outside-toplevel
+        from src.aradhya.model_provider import build_text_model_provider  # pylint: disable=import-outside-toplevel
+        from src.aradhya.model_setup import bootstrap_runtime_profile  # pylint: disable=import-outside-toplevel
+        from src.aradhya.runtime_profile import load_runtime_profile  # pylint: disable=import-outside-toplevel
+        from src.aradhya.scheduler import TaskScheduler  # pylint: disable=import-outside-toplevel
+        from src.aradhya.skills import load_skills  # pylint: disable=import-outside-toplevel
 
         configure_logging(PROJECT_ROOT)
         runtime_profile = load_runtime_profile(PROJECT_ROOT)
@@ -164,7 +164,7 @@ class AradhyaDaemon:
         if self._assistant is None:
             return
 
-        from src.aradhya.assistant_models import WakeSource
+        from src.aradhya.assistant_models import WakeSource  # pylint: disable=import-outside-toplevel
 
         logger.info("Heartbeat agent_think triggered: {}", payload[:120])
 
@@ -185,7 +185,7 @@ class AradhyaDaemon:
     def _log_heartbeat(self, prompt: str, result: str) -> None:
         log_dir = PROJECT_ROOT / "core" / "memory" / "heartbeat_log"
         log_dir.mkdir(parents=True, exist_ok=True)
-        from datetime import datetime
+        from datetime import datetime  # pylint: disable=import-outside-toplevel
 
         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_file = log_dir / f"heartbeat_{stamp}.txt"
@@ -203,7 +203,7 @@ class AradhyaDaemon:
 
     def _run_tray(self) -> None:
         """Run the pystray icon in the current (main) thread."""
-        from src.aradhya.assistant_models import WakeSource
+        from src.aradhya.assistant_models import WakeSource  # pylint: disable=import-outside-toplevel
 
         def on_wake(_icon: Any, _item: Any) -> None:
             if self._assistant is not None:

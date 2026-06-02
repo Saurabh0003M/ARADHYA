@@ -61,6 +61,7 @@ def _detect_ollama_models() -> list[str]:
         result = subprocess.run(
             ["ollama", "list"],
             capture_output=True, text=True, timeout=10,
+            check=False,
         )
         if result.returncode == 0:
             lines = result.stdout.strip().split("\n")

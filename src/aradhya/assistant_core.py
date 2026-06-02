@@ -97,8 +97,7 @@ class AradhyaAssistant:
             skill_registry=skill_registry,
         )
         self._confirmation_phrases = {
-            self._normalize_phrase(phrase)
-            for phrase in self.preferences.confirmation_phrases
+            self._normalize_phrase(phrase) for phrase in self.preferences.confirmation_phrases
         }
 
         # ── Parasite OS subsystems ────────────────────────────────────
@@ -135,10 +134,13 @@ class AradhyaAssistant:
                     engine.total_hooks,
                 )
                 # Fire SessionStart hook
-                engine.fire(HookEvent.SESSION_START, {
-                    "session_name": "main",
-                    "project_root": str(self.project_root),
-                })
+                engine.fire(
+                    HookEvent.SESSION_START,
+                    {
+                        "session_name": "main",
+                        "project_root": str(self.project_root),
+                    },
+                )
             return engine
         except Exception as exc:
             logger.warning("Hook engine failed to load (non-fatal): {}", exc)
@@ -162,9 +164,9 @@ class AradhyaAssistant:
 
     def _load_mcp_manager(self):
         try:
-            from src.aradhya.mcp_client import MCPManager
+            from src.aradhya.mcp_client import MCPManager  # pylint: disable=import-outside-toplevel
         except ModuleNotFoundError as error:
-            missing_name = error.name or ""
+            missing_name = str(getattr(error, "name", "") or "")
             if missing_name != "mcp" and not missing_name.startswith("mcp."):
                 raise
             logger.warning("MCP support disabled because the mcp package is not installed.")
@@ -203,7 +205,9 @@ class AradhyaAssistant:
         return AssistantResponse(spoken_response="Aradhya is going idle.")
 
     def handle_transcript(
-        self, transcript: str, stream_handler: Callable[..., str] | None = None,
+        self,
+        transcript: str,
+        stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
     ) -> AssistantResponse:
         logger.info("Handling transcript: {}", transcript)
@@ -235,7 +239,9 @@ class AradhyaAssistant:
             self.state.pending_plan = None
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
-            result = self._execute_plan(plan, stream_handler=stream_handler, session_name=session_name)
+            result = self._execute_plan(
+                plan, stream_handler=stream_handler, session_name=session_name
+            )
             logger.info("Executed confirmed plan {} with success={}", plan.kind, result.success)
             return AssistantResponse(
                 spoken_response=result.message,
@@ -249,10 +255,7 @@ class AradhyaAssistant:
         self.state.pending_plan = None
 
         snapshot = None
-        if (
-            plan.uses_local_data
-            and self.preferences.directory_index_policy.refresh_on_local_query
-        ):
+        if plan.uses_local_data and self.preferences.directory_index_policy.refresh_on_local_query:
             snapshot = self.index_manager.last_snapshot
 
         if plan.kind == PlanKind.UNKNOWN or not plan.ready:
@@ -272,8 +275,7 @@ class AradhyaAssistant:
             prefix = "I replaced the earlier pending task. " if replacing_pending else ""
             return AssistantResponse(
                 spoken_response=(
-                    f"{prefix}{plan.summary} Say 'yes proceed' when you want me "
-                    "to execute it."
+                    f"{prefix}{plan.summary} Say 'yes proceed' when you want me " "to execute it."
                 ),
                 transcript_echo=transcript,
                 plan=plan,
@@ -301,17 +303,25 @@ class AradhyaAssistant:
         return normalized in {"cancel", "stop", "never mind", "nevermind", "no cancel"}
 
     def _execute_plan(
-        self, plan, stream_handler: Callable[..., str] | None = None,
+        self,
+        plan,
+        stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
     ) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
-            return self._execute_agent_task(plan, stream_handler=stream_handler, session_name=session_name)
+            return self._execute_agent_task(
+                plan, stream_handler=stream_handler, session_name=session_name
+            )
         if plan.kind == PlanKind.GENERAL_CHAT:
-            return self._execute_general_chat(plan, stream_handler=stream_handler, session_name=session_name)
+            return self._execute_general_chat(
+                plan, stream_handler=stream_handler, session_name=session_name
+            )
         return self.toolbox.execute(plan, self.state)
 
     def _execute_general_chat(
-        self, plan, stream_handler: Callable[..., str] | None = None,
+        self,
+        plan,
+        stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
     ) -> ExecutionResult:
         if self.model_provider is None:
@@ -321,7 +331,9 @@ class AradhyaAssistant:
         if not request:
             return ExecutionResult(False, "Chat plan missing request.")
 
-        session = self.session_manager.active_session or self.session_manager.load_or_create(session_name or "main")
+        session = self.session_manager.active_session or self.session_manager.load_or_create(
+            session_name or "main"
+        )
         history = self._build_agent_history(session)
 
         try:
@@ -358,7 +370,9 @@ class AradhyaAssistant:
             return ExecutionResult(False, f"[Chat Error: {e}]")
 
     def _execute_agent_task(
-        self, plan, stream_handler: Callable[..., str] | None = None,
+        self,
+        plan,
+        stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
     ) -> ExecutionResult:
         if self.model_provider is None:
@@ -372,7 +386,9 @@ class AradhyaAssistant:
             return ExecutionResult(False, "The agent task did not include a request.")
 
         # Gap G: named session per channel (NanoClaw pattern)
-        session = self.session_manager.active_session or self.session_manager.load_or_create(session_name or "main")
+        session = self.session_manager.active_session or self.session_manager.load_or_create(
+            session_name or "main"
+        )
         history = self._build_agent_history(session)
 
         # Build runtime policy and turn context (Codex-inspired)
@@ -417,9 +433,7 @@ class AradhyaAssistant:
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         # Log turn end
-        success = not final_text.startswith("[Error") and not final_text.startswith(
-            "[Agent loop"
-        )
+        success = not final_text.startswith("[Error") and not final_text.startswith("[Agent loop")
         audit.log_turn_end(
             turn_id=turn_ctx.turn_id,
             iterations=turn.iterations,
@@ -444,9 +458,7 @@ class AradhyaAssistant:
         self.session_manager.save(session)
         self.session_manager.compact_session(session)
 
-        failed_tool_names = tuple(
-            result.name for result in turn.tool_results if not result.success
-        )
+        failed_tool_names = tuple(result.name for result in turn.tool_results if not result.success)
         return ExecutionResult(
             success=success,
             message=final_text,
@@ -475,7 +487,7 @@ class AradhyaAssistant:
             *ALL_VISION_TOOLS,
             *ALL_SKILL_INSTALLER_TOOLS,
             *ALL_LEARNINGS_TOOLS,
-            *ALL_SCHEDULER_TOOLS,   # Gap F: expose scheduler to model
+            *ALL_SCHEDULER_TOOLS,  # Gap F: expose scheduler to model
         ):
             registry.register_function(tool)
 

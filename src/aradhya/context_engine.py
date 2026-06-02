@@ -53,13 +53,10 @@ class ContextSnapshot:
             parts.append(f"Active skills: {', '.join(self.active_skills)}")
         if self.recent_session_topics:
             parts.append(
-                "Recent conversation topics: "
-                + "; ".join(self.recent_session_topics[-5:])
+                "Recent conversation topics: " + "; ".join(self.recent_session_topics[-5:])
             )
         if self.recent_files:
-            parts.append(
-                "Recently modified files: " + ", ".join(self.recent_files[:10])
-            )
+            parts.append("Recently modified files: " + ", ".join(self.recent_files[:10]))
         if self.clipboard_text:
             clipped = self.clipboard_text[:200]
             parts.append(f"Clipboard preview: {clipped}")
@@ -153,6 +150,7 @@ class ContextEngine:
                 capture_output=True,
                 text=True,
                 timeout=2,
+                check=False,
             )
             if result.returncode == 0:
                 return result.stdout.strip()[:500]
@@ -165,7 +163,8 @@ class ContextEngine:
         try:
             if os.name != "nt":
                 return ""
-            import ctypes
+            import ctypes  # pylint: disable=import-outside-toplevel
+
             user32 = ctypes.windll.user32  # type: ignore[attr-defined]
             hwnd = user32.GetForegroundWindow()
             length = user32.GetWindowTextLengthW(hwnd)

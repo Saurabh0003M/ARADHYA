@@ -79,9 +79,7 @@ class SystemToolbox:
             )
 
         skipped_suffix = (
-            f" I skipped {skipped_url_count} invalid URL(s)."
-            if skipped_url_count
-            else ""
+            f" I skipped {skipped_url_count} invalid URL(s)." if skipped_url_count else ""
         )
         return PlanAction(
             kind=PlanKind.OPEN_SECURITY_BLOGS,
@@ -126,9 +124,7 @@ class SystemToolbox:
             yesterday = self._yesterday_label(now)
             return PlanAction(
                 kind=PlanKind.OPEN_YESTERDAYS_PROJECT,
-                summary=(
-                    f"I did not find a project with clear activity markers on {yesterday}."
-                ),
+                summary=(f"I did not find a project with clear activity markers on {yesterday}."),
                 requires_confirmation=False,
                 uses_local_data=True,
                 ready=False,

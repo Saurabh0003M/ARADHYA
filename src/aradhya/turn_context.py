@@ -113,7 +113,8 @@ def build_turn_context(
 
     # Detect timezone name
     try:
-        import time as _time
+        import time as _time  # pylint: disable=import-outside-toplevel
+
         tz_name = _time.tzname[_time.daylight] if _time.daylight else _time.tzname[0]
     except Exception:
         tz_name = "UTC"

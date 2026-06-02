@@ -140,9 +140,7 @@ class OllamaTextModelProvider:
             return health
 
         available_models = tuple(
-            model.get("name", "")
-            for model in payload.get("models", [])
-            if model.get("name")
+            model.get("name", "") for model in payload.get("models", []) if model.get("name")
         )
         ready = self.profile.model_name in available_models
         if ready:
@@ -276,7 +274,8 @@ class OllamaTextModelProvider:
         )
         self._raise_for_status_with_details(response)
 
-        import json
+        import json  # pylint: disable=import-outside-toplevel
+
         for line in response.iter_lines():
             if line:
                 chunk = json.loads(line)
@@ -318,8 +317,7 @@ class OllamaTextModelProvider:
         message = raw.get("message", {}) or {}
 
         tool_calls = tuple(
-            self._parse_tool_call(raw_call)
-            for raw_call in message.get("tool_calls", []) or []
+            self._parse_tool_call(raw_call) for raw_call in message.get("tool_calls", []) or []
         )
 
         return ModelChatResult(
@@ -355,7 +353,8 @@ class OllamaTextModelProvider:
         )
         self._raise_for_status_with_details(response)
 
-        import json
+        import json  # pylint: disable=import-outside-toplevel
+
         for line in response.iter_lines():
             if line:
                 chunk = json.loads(line)
@@ -368,7 +367,7 @@ class OllamaTextModelProvider:
         raw_arguments = function.get("arguments", {})
         if isinstance(raw_arguments, str):
             try:
-                import json
+                import json  # pylint: disable=import-outside-toplevel
 
                 arguments = json.loads(raw_arguments)
             except (TypeError, ValueError):
@@ -414,16 +413,15 @@ class OllamaTextModelProvider:
 def build_text_model_provider(profile: ModelProfile) -> TextModelProvider:
     """Construct the configured model provider."""
 
-
     provider = profile.provider.lower()
     if provider == "ollama":
         return OllamaTextModelProvider(profile)
 
     if provider == "openrouter":
-        from src.aradhya.providers.openrouter import OpenRouterTextModelProvider
+        from src.aradhya.providers.openrouter import OpenRouterTextModelProvider  # pylint: disable=import-outside-toplevel
+
         return OpenRouterTextModelProvider(profile)
 
     raise ValueError(
-        f"Unsupported model provider '{profile.provider}'. "
-        "Supported: ollama, openrouter."
+        f"Unsupported model provider '{profile.provider}'. " "Supported: ollama, openrouter."
     )

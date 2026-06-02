@@ -35,7 +35,9 @@ class IntentPlanner:
         self.skill_registry = skill_registry
         self.llm_planner = (
             LLMIntentPlanner(
-                toolbox, model_provider, now_provider,
+                toolbox,
+                model_provider,
+                now_provider,
                 skill_registry=skill_registry,
             )
             if model_provider is not None
@@ -187,9 +189,11 @@ class IntentPlanner:
             "highest number",
             "txt heavy",
         )
-        return any(term in normalized for term in txt_terms) and any(
-            term in normalized for term in folder_terms
-        ) and any(term in normalized for term in density_terms)
+        return (
+            any(term in normalized for term in txt_terms)
+            and any(term in normalized for term in folder_terms)
+            and any(term in normalized for term in density_terms)
+        )
 
     def _is_yesterdays_project_request(self, normalized: str) -> bool:
         return "yesterday" in normalized and "project" in normalized
