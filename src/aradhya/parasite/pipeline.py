@@ -36,6 +36,10 @@ from src.aradhya.parasite.analyzer import (
 from src.aradhya.cloud_safety import CloudPrivacyGate
 
 
+# Number of stages in the digestion pipeline.
+TOTAL_PIPELINE_STAGES = 7
+
+
 class DigestionPipeline:
     """Runs a target through the 7-stage digestion pipeline."""
 
@@ -440,7 +444,7 @@ class DigestionPipeline:
                 continue
 
             cp = load_checkpoint(self.hosts_root, child.name)
-            completed = cp is not None and len(cp.completed_stages) >= 7
+            completed = cp is not None and len(cp.completed_stages) >= TOTAL_PIPELINE_STAGES
 
             git_dir = child / ".git"
             if strip_git and git_dir.is_dir():
@@ -709,10 +713,13 @@ class DigestionPipeline:
             if dependencies
             else "None detected"
         )
+        # Quote YAML values to prevent injection from colons, hashes, etc.
+        safe_name = skill_name.replace('"', '')
+        safe_desc = description.replace('"', '')
         return (
             "---\n"
-            f"name: {skill_name}\n"
-            f"description: {description}\n"
+            f'name: "{safe_name}"\n'
+            f'description: "{safe_desc}"\n'
             "intents:\n"
             f"{intent_lines}\n"
             "---\n\n"
@@ -748,7 +755,6 @@ class DigestionPipeline:
 
     def _fetch_github_stars(self, url: str, token: str) -> int | None:
         """Fetch star count from GitHub API."""
-        import re
         match = re.search(r"github\.com/([^/]+)/([^/.]+)", url)
         if not match:
             return None

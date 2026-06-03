@@ -619,7 +619,6 @@ def _handle_parasite(*, command) -> None:
         return ""
 
     # /parasite candidates
-    # /parasite candidates
     if normalized in {"/parasite candidates", "parasite candidates"}:
         candidates = build_integration_ledger(PROJECT_ROOT)
         ledger_path = write_integration_ledger(PROJECT_ROOT, candidates)

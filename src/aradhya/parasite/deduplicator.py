@@ -14,7 +14,13 @@ from src.aradhya.runtime_profile import load_runtime_profile
 from src.aradhya.skills.skill_loader import _split_frontmatter, load_skills
 from src.aradhya.skills.skill_models import SkillDefinition
 
+# Use a type alias matching the project's ConfirmationGate protocol.
+# The gate returns (approved: bool, persist: bool).
 ConfirmationGate = Callable[[str, dict[str, Any]], tuple[bool, bool]]
+
+# Keyword overlap thresholds for duplicate detection.
+HOST_NATIVE_OVERLAP_THRESHOLD = 0.4
+HOST_HOST_OVERLAP_THRESHOLD = 0.5
 
 
 class SkillDeduplicator:
@@ -73,8 +79,13 @@ class SkillDeduplicator:
                 actions.append(action)
                 continue
 
-            self._merge_skills(base, duplicate)
-            action["status"] = "merged"
+            try:
+                self._merge_skills(base, duplicate)
+                action["status"] = "merged"
+            except Exception as error:
+                action["status"] = "error"
+                action["error"] = str(error)
+                logger.warning("Merge failed for {} into {}: {}", duplicate.name, base.name, error)
             actions.append(action)
             processed_duplicates.add(duplicate.name)
             self._audit_merge(action)
@@ -108,7 +119,7 @@ class SkillDeduplicator:
                     best_overlap = overlap
                     best_match = native_skill
 
-            if best_match is not None and best_overlap > 0.4:
+            if best_match is not None and best_overlap > HOST_NATIVE_OVERLAP_THRESHOLD:
                 pairs.append((best_match, host_skill))
 
         for index, left in enumerate(host_skills):
@@ -123,7 +134,7 @@ class SkillDeduplicator:
                     len(left_words),
                     len(right_words),
                 )
-                if overlap > 0.5:
+                if overlap > HOST_HOST_OVERLAP_THRESHOLD:
                     pairs.append((left, right))
 
         return pairs
@@ -206,7 +217,12 @@ class SkillDeduplicator:
             raise ValueError(f"Refusing to delete non-host skill: {duplicate.name}")
         if not self._is_relative_to(duplicate_dir, allowed_root):
             raise ValueError(f"Refusing to delete host skill outside core/skills: {duplicate_dir}")
-        shutil.rmtree(duplicate_dir)
+        try:
+            shutil.rmtree(duplicate_dir)
+        except OSError as error:
+            raise RuntimeError(
+                f"Skill file updated but failed to delete duplicate dir {duplicate_dir}: {error}"
+            ) from error
         logger.info("Merged {} into {} and deleted {}", duplicate.name, base.name, duplicate_dir)
 
     @staticmethod
