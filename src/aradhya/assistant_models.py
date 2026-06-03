@@ -230,29 +230,9 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
     )
 
 
-def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
-    """Load preferences from disk and merge them over the defaults."""
-
-    root = project_root or _project_root_from_here()
-    defaults = build_default_preferences(root)
-    preferences_path = root / "core" / "config" / "preferences.json"
-    if not preferences_path.exists():
-        # Fallback to legacy path for existing installs
-        preferences_path = root / "core" / "memory" / "preferences.json"
-
-    if not preferences_path.exists():
-        return defaults
-
-    raw_text = preferences_path.read_text(encoding="utf-8").strip()
-    if not raw_text:
-        return defaults
-
-    try:
-        data = json.loads(raw_text)
-    except json.JSONDecodeError:
-        return defaults
-
-    raw_policy = data.get("directory_index_policy", {})
+def _load_directory_index_policy(
+    raw_policy: dict[str, Any], defaults: AssistantPreferences
+) -> DirectoryIndexPolicy:
     configured_ignored_names = tuple(
         raw_policy.get(
             "ignored_names",
@@ -267,7 +247,7 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
             )
         )
     )
-    policy = DirectoryIndexPolicy(
+    return DirectoryIndexPolicy(
         refresh_on_wake=raw_policy.get(
             "refresh_on_wake", defaults.directory_index_policy.refresh_on_wake
         ),
@@ -296,6 +276,13 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
             defaults.directory_index_policy.miss_refresh_debounce_seconds,
         ),
     )
+
+
+def _build_preferences_from_dict(
+    data: dict[str, Any], root: Path, defaults: AssistantPreferences
+) -> AssistantPreferences:
+    raw_policy = data.get("directory_index_policy", {})
+    policy = _load_directory_index_policy(raw_policy, defaults)
 
     directory_index_paths = _resolve_paths(
         [data.get("directory_index_path")]
@@ -338,3 +325,28 @@ def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
         ),
         directory_index_policy=policy,
     )
+
+
+def load_preferences(project_root: Path | None = None) -> AssistantPreferences:
+    """Load preferences from disk and merge them over the defaults."""
+
+    root = project_root or _project_root_from_here()
+    defaults = build_default_preferences(root)
+    preferences_path = root / "core" / "config" / "preferences.json"
+    if not preferences_path.exists():
+        # Fallback to legacy path for existing installs
+        preferences_path = root / "core" / "memory" / "preferences.json"
+
+    if not preferences_path.exists():
+        return defaults
+
+    raw_text = preferences_path.read_text(encoding="utf-8").strip()
+    if not raw_text:
+        return defaults
+
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        return defaults
+
+    return _build_preferences_from_dict(data, root, defaults)
