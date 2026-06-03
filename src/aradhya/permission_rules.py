@@ -56,7 +56,7 @@ class PermissionRule:
 
     def matches(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """Check if this rule matches a given tool call."""
-        if self.tool_name != tool_name and self.tool_name != "*":
+        if not _tool_name_matches(self.tool_name, tool_name):
             return False
 
         if not self.arg_pattern:
@@ -87,7 +87,7 @@ class ConditionalBlockRule:
 
     def matches(self, tool_name: str, arguments: dict[str, Any]) -> bool:
         """Return True if the tool matches AND args do NOT satisfy the safe pattern."""
-        if self.tool_name != tool_name and self.tool_name != "*":
+        if not _tool_name_matches(self.tool_name, tool_name):
             return False
         arg_str = _arguments_to_match_string(tool_name, arguments)
         # If the safe pattern matches, the call is OK (not blocked)
@@ -122,6 +122,11 @@ def parse_rule(raw: str) -> PermissionRule | None:
         raw=raw,
     )
 
+
+
+def _tool_name_matches(rule_tool: str, tool_name: str) -> bool:
+    """Return True if the rule's tool name matches the invoked tool name."""
+    return rule_tool == tool_name or rule_tool == "*"
 
 def _arguments_to_match_string(tool_name: str, arguments: dict[str, Any]) -> str:
     """Convert tool arguments to a flat string for pattern matching.
@@ -289,6 +294,15 @@ def load_permissions(
     return engine
 
 
+
+def _parse_rules_from_list(raw_list: list[Any], rule_list: list[PermissionRule]) -> None:
+    """Helper to parse and append rules from a raw list."""
+    for raw in raw_list:
+        rule = parse_rule(raw)
+        if rule:
+            rule_list.append(rule)
+
+
 def _load_from_file(
     filepath: Path,
     allow_rules: list[PermissionRule],
@@ -305,15 +319,8 @@ def _load_from_file(
         logger.warning("Failed to load permissions from {}: {}", filepath, exc)
         return
 
-    for raw in data.get("allow", []):
-        rule = parse_rule(raw)
-        if rule:
-            allow_rules.append(rule)
-
-    for raw in data.get("deny", []):
-        rule = parse_rule(raw)
-        if rule:
-            deny_rules.append(rule)
+    _parse_rules_from_list(data.get("allow", []), allow_rules)
+    _parse_rules_from_list(data.get("deny", []), deny_rules)
 
     # Load conditional blocks: {"tool": "name", "safe_pattern": "regex"}
     for entry in data.get("block_unless_regex", []):
