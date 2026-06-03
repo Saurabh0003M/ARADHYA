@@ -157,33 +157,50 @@ def _candidate_from_checkpoint(
     digest_exists = (host_path / ".parasite" / "DIGEST.md").is_file()
 
     if cp is None:
-        return HostIntegrationCandidate(
-            repo=host_path.name,
-            host_path=str(host_path),
-            archived=archived,
-            status="not_digested",
-            priority="blocked",
-            score=0,
-            trust_score="",
-            project_type="unknown",
-            completed_stage_count=0,
-            current_stage="NOT_STARTED",
-            error="missing checkpoint",
-            validate_passed=False,
-            absorb_completed=False,
-            digest_exists=digest_exists,
-            files_scanned=0,
-            dependency_count=0,
-            capabilities=[],
-            integration_plan=[],
-            absorbed_count=0,
-            absorbed_artifacts=[],
-            description="",
-            benefits=[],
-            recommended_action="Run /parasite digest before considering integration.",
-            next_gate="Complete the 7-stage digestion pipeline.",
-        )
+        return _default_candidate(host_path, archived, digest_exists)
 
+    return _candidate_from_valid_checkpoint(host_path, archived, cp, digest_exists)
+
+
+def _default_candidate(
+    host_path: Path,
+    archived: bool,
+    digest_exists: bool,
+) -> HostIntegrationCandidate:
+    return HostIntegrationCandidate(
+        repo=host_path.name,
+        host_path=str(host_path),
+        archived=archived,
+        status="not_digested",
+        priority="blocked",
+        score=0,
+        trust_score="",
+        project_type="unknown",
+        completed_stage_count=0,
+        current_stage="NOT_STARTED",
+        error="missing checkpoint",
+        validate_passed=False,
+        absorb_completed=False,
+        digest_exists=digest_exists,
+        files_scanned=0,
+        dependency_count=0,
+        capabilities=[],
+        integration_plan=[],
+        absorbed_count=0,
+        absorbed_artifacts=[],
+        description="",
+        benefits=[],
+        recommended_action="Run /parasite digest before considering integration.",
+        next_gate="Complete the 7-stage digestion pipeline.",
+    )
+
+
+def _candidate_from_valid_checkpoint(
+    host_path: Path,
+    archived: bool,
+    cp: Checkpoint,
+    digest_exists: bool,
+) -> HostIntegrationCandidate:
     stage_results = cp.stage_results or {}
     analysis = _artifacts(stage_results, "SWALLOW")
     validate = _artifacts(stage_results, "EXTRACT")
