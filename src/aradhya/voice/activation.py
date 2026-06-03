@@ -10,6 +10,7 @@ from typing import Callable
 
 from loguru import logger
 
+from src.aradhya.paths import get_project_root
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import WakeSource
 from src.aradhya.hotkey_listener import HotkeyListener, build_hotkey_config
@@ -283,7 +284,7 @@ def create_voice_activated_aradhya(
 def main() -> None:
     """Standalone entry point for live voice activation tests."""
 
-    project_root = Path(__file__).resolve().parents[2]
+    project_root = get_project_root()
     configure_logging(project_root)
     voice_runtime = create_voice_activated_aradhya(
         project_root=project_root,

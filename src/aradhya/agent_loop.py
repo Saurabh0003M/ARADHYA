@@ -698,9 +698,9 @@ class AgentLoop:
         call log_error itself.
         """
         try:
-            from pathlib import Path as _Path
+            from src.aradhya.paths import get_project_root as _get_root
             from src.aradhya.learnings.learnings_engine import LearningsEngine
-            _root = _Path(__file__).resolve().parents[2]
+            _root = _get_root()
             LearningsEngine(_root).log_error(
                 tool_name=tool_name,
                 error_message=error_msg[:400],

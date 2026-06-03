@@ -20,6 +20,7 @@ from pathlib import Path
 
 from loguru import logger
 
+from src.aradhya.paths import get_project_root
 from src.aradhya.tools.tool_registry import tool_definition
 
 _PROMOTION_THRESHOLD = 3  # Promote to rules.md after this many occurrences
@@ -250,7 +251,7 @@ class LearningsEngine:
 )
 def log_error(tool_name: str, error_message: str, context: str = "") -> str:
     """Log an error to .learnings/ERRORS.md."""
-    engine = LearningsEngine(Path(__file__).resolve().parents[3])
+    engine = LearningsEngine(get_project_root())
     entry_id = engine.log_error(tool_name, error_message, context)
     return f"Error logged as {entry_id}."
 
@@ -284,7 +285,7 @@ def log_error(tool_name: str, error_message: str, context: str = "") -> str:
 )
 def log_learning(category: str, summary: str, details: str = "") -> str:
     """Log a learning to .learnings/LEARNINGS.md."""
-    engine = LearningsEngine(Path(__file__).resolve().parents[3])
+    engine = LearningsEngine(get_project_root())
     entry_id = engine.log_learning(category, summary, details)
     return f"Learning logged as {entry_id}."
 
@@ -312,7 +313,7 @@ def log_learning(category: str, summary: str, details: str = "") -> str:
 )
 def log_feature_request(capability: str, user_context: str = "") -> str:
     """Log a feature request to .learnings/FEATURES.md."""
-    engine = LearningsEngine(Path(__file__).resolve().parents[3])
+    engine = LearningsEngine(get_project_root())
     entry_id = engine.log_feature_request(capability, user_context)
     return f"Feature request logged as {entry_id}."
 
@@ -333,7 +334,7 @@ def log_feature_request(capability: str, user_context: str = "") -> str:
 )
 def search_learnings(keyword: str) -> str:
     """Search learning files."""
-    engine = LearningsEngine(Path(__file__).resolve().parents[3])
+    engine = LearningsEngine(get_project_root())
     return engine.search(keyword)
 
 
