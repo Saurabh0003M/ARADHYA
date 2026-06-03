@@ -2,7 +2,7 @@ import json
 from unittest.mock import MagicMock, patch
 
 
-from aradhya.setup_wizard import (
+from src.aradhya.setup_wizard import (
     _confirm,
     _detect_ollama_models,
     _detect_ollama_running,
@@ -37,19 +37,19 @@ def test_save_json(tmp_path):
     assert json.loads(file_path.read_text(encoding="utf-8")) == {"key": "value"}
 
 
-@patch("aradhya.setup_wizard.console.input")
+@patch("src.aradhya.setup_wizard.console.input")
 def test_prompt_with_input(mock_input):
     mock_input.return_value = "my answer  "
     assert _prompt("Question?") == "my answer"
 
 
-@patch("aradhya.setup_wizard.console.input")
+@patch("src.aradhya.setup_wizard.console.input")
 def test_prompt_empty_with_default(mock_input):
     mock_input.return_value = "  "
     assert _prompt("Question?", default="def") == "def"
 
 
-@patch("aradhya.setup_wizard.console.input")
+@patch("src.aradhya.setup_wizard.console.input")
 def test_confirm_yes(mock_input):
     mock_input.return_value = " y "
     assert _confirm("Question?") is True
@@ -58,7 +58,7 @@ def test_confirm_yes(mock_input):
     assert _confirm("Question?") is True
 
 
-@patch("aradhya.setup_wizard.console.input")
+@patch("src.aradhya.setup_wizard.console.input")
 def test_confirm_no(mock_input):
     mock_input.return_value = " n "
     assert _confirm("Question?") is False
@@ -67,7 +67,7 @@ def test_confirm_no(mock_input):
     assert _confirm("Question?") is False
 
 
-@patch("aradhya.setup_wizard.console.input")
+@patch("src.aradhya.setup_wizard.console.input")
 def test_confirm_empty_with_default(mock_input):
     mock_input.return_value = ""
     assert _confirm("Question?", default=True) is True
@@ -107,16 +107,16 @@ def test_detect_ollama_running_failure(mock_get):
     assert _detect_ollama_running() is False
 
 
-@patch("aradhya.setup_wizard.console.print")
+@patch("src.aradhya.setup_wizard.console.print")
 def test_step_welcome(mock_print):
     step_welcome()
     assert mock_print.called
 
 
-@patch("aradhya.setup_wizard._detect_ollama_running", return_value=True)
-@patch("aradhya.setup_wizard._detect_ollama_models", return_value=["gemma4:e4b", "llama3"])
-@patch("aradhya.setup_wizard._prompt")
-@patch("aradhya.setup_wizard._confirm", return_value=False)
+@patch("src.aradhya.setup_wizard._detect_ollama_running", return_value=True)
+@patch("src.aradhya.setup_wizard._detect_ollama_models", return_value=["gemma4:e4b", "llama3"])
+@patch("src.aradhya.setup_wizard._prompt")
+@patch("src.aradhya.setup_wizard._confirm", return_value=False)
 def test_step_model_ollama_running(mock_confirm, mock_prompt, mock_detect_models, mock_detect_running):
     # simulate user selecting model index 1 ("gemma4:e4b") and default base URL
     mock_prompt.side_effect = ["1", "http://127.0.0.1:11434"]
@@ -129,8 +129,8 @@ def test_step_model_ollama_running(mock_confirm, mock_prompt, mock_detect_models
     assert "system_prompt" in updated_profile["model"]
 
 
-@patch("aradhya.setup_wizard._confirm")
-@patch("aradhya.setup_wizard._prompt")
+@patch("src.aradhya.setup_wizard._confirm")
+@patch("src.aradhya.setup_wizard._prompt")
 def test_step_voice_enabled(mock_prompt, mock_confirm):
     mock_confirm.side_effect = [True, True]  # enable_voice, enabled_on_startup
     mock_prompt.side_effect = ["faster_whisper", "small", "cuda"]
@@ -144,7 +144,7 @@ def test_step_voice_enabled(mock_prompt, mock_confirm):
     assert updated_profile["voice_activation"]["enabled_on_startup"] is True
 
 
-@patch("aradhya.setup_wizard._confirm", return_value=False)
+@patch("src.aradhya.setup_wizard._confirm", return_value=False)
 def test_step_voice_disabled(mock_confirm):
     profile = {}
     updated_profile = step_voice(profile)
@@ -153,9 +153,9 @@ def test_step_voice_disabled(mock_confirm):
     assert updated_profile["voice_activation"]["enabled_on_startup"] is False
 
 
-@patch("aradhya.setup_wizard.USER_NOTES_PATH")
-@patch("aradhya.setup_wizard.USER_RULES_PATH")
-@patch("aradhya.setup_wizard._prompt")
+@patch("src.aradhya.setup_wizard.USER_NOTES_PATH")
+@patch("src.aradhya.setup_wizard.USER_RULES_PATH")
+@patch("src.aradhya.setup_wizard._prompt")
 def test_step_user_context_new(mock_prompt, mock_rules_path, mock_notes_path):
     mock_notes_path.is_file.return_value = False
     mock_rules_path.is_file.return_value = False
@@ -173,22 +173,22 @@ def test_step_user_context_new(mock_prompt, mock_rules_path, mock_notes_path):
     assert mock_rules_path.write_text.called
 
 
-@patch("aradhya.setup_wizard._confirm", return_value=True)
+@patch("src.aradhya.setup_wizard._confirm", return_value=True)
 def test_step_execution_careful(mock_confirm):
     preferences = {}
     updated_prefs = step_execution(preferences)
     assert updated_prefs["execution_policy"] == "careful"
 
 
-@patch("aradhya.setup_wizard._confirm", return_value=False)
+@patch("src.aradhya.setup_wizard._confirm", return_value=False)
 def test_step_execution_dry_run(mock_confirm):
     preferences = {}
     updated_prefs = step_execution(preferences)
     assert updated_prefs["execution_policy"] == "dry_run"
 
 
-@patch("aradhya.setup_wizard._save_json")
-@patch("aradhya.setup_wizard.console.print")
+@patch("src.aradhya.setup_wizard._save_json")
+@patch("src.aradhya.setup_wizard.console.print")
 def test_step_finish(mock_print, mock_save_json):
     profile = {"model": {"model_name": "test-model"}}
     preferences = {"execution_policy": "careful"}
@@ -199,13 +199,13 @@ def test_step_finish(mock_print, mock_save_json):
     assert mock_print.call_count == 2
 
 
-@patch("aradhya.setup_wizard.step_finish")
-@patch("aradhya.setup_wizard.step_execution", return_value={})
-@patch("aradhya.setup_wizard.step_user_context")
-@patch("aradhya.setup_wizard.step_voice", return_value={})
-@patch("aradhya.setup_wizard.step_model", return_value={})
-@patch("aradhya.setup_wizard._load_json", return_value={})
-@patch("aradhya.setup_wizard.step_welcome")
+@patch("src.aradhya.setup_wizard.step_finish")
+@patch("src.aradhya.setup_wizard.step_execution", return_value={})
+@patch("src.aradhya.setup_wizard.step_user_context")
+@patch("src.aradhya.setup_wizard.step_voice", return_value={})
+@patch("src.aradhya.setup_wizard.step_model", return_value={})
+@patch("src.aradhya.setup_wizard._load_json", return_value={})
+@patch("src.aradhya.setup_wizard.step_welcome")
 def test_run_wizard(mock_welcome, mock_load, mock_model, mock_voice, mock_context, mock_exec, mock_finish):
     run_wizard()
 
