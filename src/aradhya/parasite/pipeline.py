@@ -34,6 +34,7 @@ from src.aradhya.parasite.analyzer import (
     generate_digest,
 )
 from src.aradhya.cloud_safety import CloudPrivacyGate
+from src.aradhya.utils.helpers import load_json_file
 
 
 # Number of stages in the digestion pipeline.
@@ -326,8 +327,8 @@ class DigestionPipeline:
         # Validate catalog if present
         verified_catalog = target_path / ".parasite" / "verified_catalog.json"
         if verified_catalog.is_file():
-            try:
-                data = json.loads(verified_catalog.read_text(encoding="utf-8"))
+            data = load_json_file(verified_catalog)
+            if isinstance(data, dict):
                 entries = data.get("entries", [])
                 if not entries:
                     issues.append("Catalog has zero entries after validation")
@@ -341,9 +342,8 @@ class DigestionPipeline:
                 ]
                 if garbage:
                     issues.append(f"Found {len(garbage)} garbage entries in catalog")
-
-            except (json.JSONDecodeError, OSError) as e:
-                issues.append(f"Catalog JSON invalid: {e}")
+            else:
+                issues.append("Catalog JSON invalid or empty.")
 
         # Check DIGEST.md exists
         digest = target_path / ".parasite" / "DIGEST.md"

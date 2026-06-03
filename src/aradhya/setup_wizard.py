@@ -19,6 +19,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
+from src.aradhya.utils.helpers import load_json_file
+
 console = Console()
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -31,9 +33,7 @@ USER_NOTES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "notes.md"
 
 
 def _load_json(path: Path) -> dict:
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return {}
+    return load_json_file(path, default={})
 
 
 def _save_json(path: Path, data: dict) -> None:
