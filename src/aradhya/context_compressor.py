@@ -153,6 +153,39 @@ def _extractive_summary(messages: list[dict[str, Any]]) -> str:
 # ── Core compaction logic ─────────────────────────────────────────────
 
 
+def _needs_compaction(total_messages: int, total_tokens: int, policy: TruncationPolicy) -> bool:
+    """Check whether compaction is needed based on the given policy."""
+    if total_messages <= policy.min_keep:
+        return False
+    if policy.mode == "tokens":
+        return total_tokens > policy.limit
+    # "messages" mode
+    return total_messages > policy.limit
+
+
+def _calculate_keep_count(messages: list[dict[str, Any]], total_messages: int, policy: TruncationPolicy) -> int:
+    """Calculate the number of recent messages to keep at full fidelity."""
+    # Find the split point: keep as many recent messages as possible
+    # while staying under budget (with room for the summary)
+    summary_budget = 200  # Reserve ~200 tokens for the summary message
+    remaining_budget = policy.limit - summary_budget
+
+    # Start from the end and work backward
+    keep_count = 0
+    running_tokens = 0
+
+    for i in range(total_messages - 1, -1, -1):
+        msg_tokens = estimate_tokens(messages[i].get("content", "") or "") + 4
+        if running_tokens + msg_tokens > remaining_budget:
+            break
+        running_tokens += msg_tokens
+        keep_count += 1
+
+    # Enforce min/max keep bounds
+    keep_count = max(policy.min_keep, min(keep_count, policy.max_keep))
+    return min(keep_count, total_messages)
+
+
 def compact_history(
     messages: list[dict[str, Any]],
     policy: TruncationPolicy | None = None,
@@ -176,13 +209,7 @@ def compact_history(
     total_tokens = estimate_messages_tokens(messages)
     total_messages = len(messages)
 
-    # Check if compaction is needed
-    if policy.mode == "tokens":
-        needs_compaction = total_tokens > policy.limit
-    else:  # "messages" mode
-        needs_compaction = total_messages > policy.limit
-
-    if not needs_compaction or total_messages <= policy.min_keep:
+    if not _needs_compaction(total_messages, total_tokens, policy):
         return messages, CompactionResult(
             compacted=False,
             original_messages=total_messages,
@@ -192,25 +219,7 @@ def compact_history(
             estimated_tokens_after=total_tokens,
         )
 
-    # Find the split point: keep as many recent messages as possible
-    # while staying under budget (with room for the summary)
-    summary_budget = 200  # Reserve ~200 tokens for the summary message
-    remaining_budget = policy.limit - summary_budget
-
-    # Start from the end and work backward
-    keep_count = 0
-    running_tokens = 0
-
-    for i in range(total_messages - 1, -1, -1):
-        msg_tokens = estimate_tokens(messages[i].get("content", "") or "") + 4
-        if running_tokens + msg_tokens > remaining_budget:
-            break
-        running_tokens += msg_tokens
-        keep_count += 1
-
-    # Enforce min/max keep bounds
-    keep_count = max(policy.min_keep, min(keep_count, policy.max_keep))
-    keep_count = min(keep_count, total_messages)
+    keep_count = _calculate_keep_count(messages, total_messages, policy)
 
     if keep_count >= total_messages:
         # Can't compact further
