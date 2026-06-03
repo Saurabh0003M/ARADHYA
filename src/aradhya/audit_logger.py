@@ -34,6 +34,14 @@ MAX_LOG_SIZE_MB = 10
 MAX_LOG_FILES = 5
 
 
+def _truncate(text: str, max_length: int) -> str:
+    """Truncate text to max_length, appending an indicator if shortened."""
+    text_str = str(text)
+    if len(text_str) > max_length:
+        return text_str[:max_length] + "...[truncated]"
+    return text_str
+
+
 def _generate_turn_id() -> str:
     """Generate a compact, unique turn identifier."""
     return f"turn_{uuid.uuid4().hex[:12]}"
@@ -93,7 +101,7 @@ class AuditLogger:
         self._write({
             "type": "turn_start",
             "turn_id": self._turn_id,
-            "user_message": user_message[:500],
+            "user_message": _truncate(user_message, 500),
             "context": context or {},
         })
         return self._turn_id
@@ -113,7 +121,7 @@ class AuditLogger:
             "iterations": iterations,
             "tool_calls_count": tool_calls_count,
             "success": success,
-            "response_preview": final_response_preview[:300],
+            "response_preview": _truncate(final_response_preview, 300),
         })
         self._turn_id = ""
 
@@ -135,7 +143,7 @@ class AuditLogger:
             "tool": tool_name,
             "args": _sanitize_args(arguments or {}),
             "success": success,
-            "output": output_preview[:500],
+            "output": _truncate(output_preview, 500),
             "source": source,
         }
         if wall_time_ms is not None:
@@ -155,9 +163,9 @@ class AuditLogger:
         """Log a user command or slash command."""
         self._write({
             "type": "command",
-            "command": command[:200],
+            "command": _truncate(command, 200),
             "source": source,
-            "result": result[:200],
+            "result": _truncate(result, 200),
         })
 
     def log_state_change(
@@ -170,8 +178,8 @@ class AuditLogger:
         self._write({
             "type": "state_change",
             "field": field,
-            "old": str(old_value)[:100],
-            "new": str(new_value)[:100],
+            "old": _truncate(str(old_value), 100),
+            "new": _truncate(str(new_value), 100),
         })
 
     def log_security_event(
@@ -184,7 +192,7 @@ class AuditLogger:
         self._write({
             "type": "security",
             "event": event,
-            "details": details[:500],
+            "details": _truncate(details, 500),
             "severity": severity,
         })
 
@@ -281,10 +289,8 @@ def _sanitize_args(args: dict[str, Any]) -> dict[str, Any]:
     for k, v in args.items():
         if any(s in k.lower() for s in sensitive_keys):
             sanitized[k] = "***REDACTED***"
-        elif isinstance(v, str) and len(v) > 500:
-            sanitized[k] = v[:500] + "...[truncated]"
         else:
-            sanitized[k] = v
+            sanitized[k] = _truncate(v, 500) if isinstance(v, str) else v
     return sanitized
 
 
