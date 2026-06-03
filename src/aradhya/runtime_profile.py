@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
+from typing import Any, TypeVar
 
 DEFAULT_VOICE_EXTENSIONS = (
     ".aac",
@@ -133,6 +134,19 @@ def _load_profile_payload(profile_path: Path) -> dict[str, object]:
     return payload if isinstance(payload, dict) else {}
 
 
+T = TypeVar("T")
+
+
+def _apply_overrides(default_obj: T, raw_data: dict[str, Any], **overrides: Any) -> T:
+    """Merge a raw dictionary and explicit overrides into a dataclass instance."""
+    updates = {}
+    for f in fields(default_obj):  # type: ignore
+        if f.name in raw_data:
+            updates[f.name] = raw_data[f.name]
+    updates.update(overrides)
+    return replace(default_obj, **updates)  # type: ignore
+
+
 def _deep_merge_payloads(
     base_payload: dict[str, object],
     override_payload: dict[str, object],
@@ -236,149 +250,63 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     api_key = env_api_key or file_api_key
 
     return RuntimeProfile(
-        model=ModelProfile(
+        model=_apply_overrides(
+            defaults.model,
+            raw_model,
             provider=model_provider,
-            model_name=raw_model.get("model_name", defaults.model.model_name),
-            base_url=raw_model.get("base_url", defaults.model.base_url),
-            request_timeout_seconds=raw_model.get(
-                "request_timeout_seconds",
-                defaults.model.request_timeout_seconds,
-            ),
-            system_prompt=raw_model.get(
-                "system_prompt",
-                defaults.model.system_prompt,
-            ),
             ollama_home=_resolve_path(
-                raw_model.get("ollama_home"),
+                raw_model.get("ollama_home"),  # type: ignore
                 root,
                 defaults.model.ollama_home,
             ),
             ollama_models_path=_resolve_path(
-                raw_model.get("ollama_models_path"),
+                raw_model.get("ollama_models_path"),  # type: ignore
                 root,
                 defaults.model.ollama_models_path,
             ),
             api_key=api_key,
             api_key_env=api_key_env,
         ),
-        voice=VoiceProfile(
-            provider=raw_voice.get("provider", defaults.voice.provider),
+        voice=_apply_overrides(
+            defaults.voice,
+            raw_voice,
             audio_inbox_dir=_resolve_path(
-                raw_voice.get("audio_inbox_dir"),
+                raw_voice.get("audio_inbox_dir"),  # type: ignore
                 root,
                 defaults.voice.audio_inbox_dir,
             ),
             processed_audio_dir=_resolve_path(
-                raw_voice.get("processed_audio_dir"),
+                raw_voice.get("processed_audio_dir"),  # type: ignore
                 root,
                 defaults.voice.processed_audio_dir,
             ),
             transcripts_dir=_resolve_path(
-                raw_voice.get("transcripts_dir"),
+                raw_voice.get("transcripts_dir"),  # type: ignore
                 root,
                 defaults.voice.transcripts_dir,
             ),
             manual_transcripts_dir=_resolve_path(
-                raw_voice.get("manual_transcripts_dir"),
+                raw_voice.get("manual_transcripts_dir"),  # type: ignore
                 root,
                 defaults.voice.manual_transcripts_dir,
             ),
             supported_extensions=tuple(
-                raw_voice.get(
-                    "supported_extensions",
-                    defaults.voice.supported_extensions,
-                )
-            ),
-            whisper_command_template=raw_voice.get(
-                "whisper_command_template",
-                defaults.voice.whisper_command_template,
-            ),
-            faster_whisper_model_size=raw_voice.get(
-                "faster_whisper_model_size",
-                defaults.voice.faster_whisper_model_size,
-            ),
-            faster_whisper_device=raw_voice.get(
-                "faster_whisper_device",
-                defaults.voice.faster_whisper_device,
-            ),
-            faster_whisper_compute_type=raw_voice.get(
-                "faster_whisper_compute_type",
-                defaults.voice.faster_whisper_compute_type,
-            ),
-            language=raw_voice.get(
-                "language",
-                defaults.voice.language,
-            ),
-            poll_on_wake=raw_voice.get(
-                "poll_on_wake",
-                defaults.voice.poll_on_wake,
+                raw_voice.get("supported_extensions", defaults.voice.supported_extensions)
             ),
         ),
-        voice_activation=VoiceActivationProfile(
-            enabled_on_startup=raw_voice_activation.get(
-                "enabled_on_startup",
-                defaults.voice_activation.enabled_on_startup,
-            ),
+        voice_activation=_apply_overrides(
+            defaults.voice_activation,
+            raw_voice_activation,
             hotkey_modifiers=tuple(
                 raw_voice_activation.get(
                     "hotkey_modifiers",
                     defaults.voice_activation.hotkey_modifiers,
                 )
             ),
-            hotkey_key=raw_voice_activation.get(
-                "hotkey_key",
-                defaults.voice_activation.hotkey_key,
-            ),
-            preferred_backend=raw_voice_activation.get(
-                "preferred_backend",
-                defaults.voice_activation.preferred_backend,
-            ),
-            sample_rate=raw_voice_activation.get(
-                "sample_rate",
-                defaults.voice_activation.sample_rate,
-            ),
-            channels=raw_voice_activation.get(
-                "channels",
-                defaults.voice_activation.channels,
-            ),
-            chunk_size=raw_voice_activation.get(
-                "chunk_size",
-                defaults.voice_activation.chunk_size,
-            ),
-            silence_threshold=raw_voice_activation.get(
-                "silence_threshold",
-                defaults.voice_activation.silence_threshold,
-            ),
-            silence_duration=raw_voice_activation.get(
-                "silence_duration",
-                defaults.voice_activation.silence_duration,
-            ),
-            max_recording_duration=raw_voice_activation.get(
-                "max_recording_duration",
-                defaults.voice_activation.max_recording_duration,
-            ),
         ),
-        voice_output=VoiceOutputProfile(
-            enabled=raw_voice_output.get(
-                "enabled",
-                defaults.voice_output.enabled,
-            ),
-            provider=raw_voice_output.get(
-                "provider",
-                defaults.voice_output.provider,
-            ),
-            voice_id=raw_voice_output.get(
-                "voice_id",
-                defaults.voice_output.voice_id,
-            ),
-            rate=raw_voice_output.get(
-                "rate",
-                defaults.voice_output.rate,
-            ),
-            volume=raw_voice_output.get(
-                "volume",
-                defaults.voice_output.volume,
-            ),
+        voice_output=_apply_overrides(
+            defaults.voice_output,
+            raw_voice_output,
         ),
     )
 
