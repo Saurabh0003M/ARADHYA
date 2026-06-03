@@ -515,126 +515,22 @@ class AgentLoop:
         """
         assert self.tool_executor is not None
         audit = get_audit_logger()
-        # Lazy import avoids the circular dependency chain
-        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
-        rules = get_approved_rules()
 
         # ── Layer 0: Hook gate (PreToolUse) ───────────────────────────
-        if self.hook_engine is not None:
-            from src.aradhya.hooks.hook_engine import HookEvent, HookDecision  # noqa: PLC0415
-            hook_result = self.hook_engine.fire(
-                HookEvent.PRE_TOOL_USE,
-                {
-                    "tool_name": tool_call.name,
-                    "tool_input": tool_call.arguments,
-                },
-            )
-            if hook_result.decision in (HookDecision.DENY, HookDecision.BLOCK):
-                audit.log_security_event(
-                    "tool_blocked_by_hook",
-                    f"Hook denied tool '{tool_call.name}': {hook_result.system_message}",
-                    severity="warning",
-                )
-                return ToolResult(
-                    tool_call_id=tool_call.id,
-                    name=tool_call.name,
-                    output=(
-                        f"[Tool '{tool_call.name}' was blocked by a PreToolUse hook. "
-                        f"{hook_result.system_message}]"
-                    ),
-                    success=False,
-                    requires_confirmation=False,
-                )
-            # Apply input modifications from hooks
-            if hook_result.updated_input is not None:
-                tool_call = ToolCall(
-                    name=tool_call.name,
-                    arguments=hook_result.updated_input,
-                    id=tool_call.id,
-                )
+        hook_tool_call, hook_result_tool = self._apply_hook_gate(tool_call, audit)
+        if hook_result_tool:
+            return hook_result_tool
+        tool_call = hook_tool_call
 
         # ── Layer 0.5: PermissionEngine (deny/allow/conditional rules) ──
-        if self.permission_engine is not None:
-            decision = self.permission_engine.check(
-                tool_call.name, tool_call.arguments
-            )
-            if not decision.allowed:
-                audit.log_security_event(
-                    "tool_blocked_by_permission",
-                    f"Permission engine denied tool '{tool_call.name}': {decision.reason}",
-                    severity="warning",
-                )
-                return ToolResult(
-                    tool_call_id=tool_call.id,
-                    name=tool_call.name,
-                    output=(
-                        f"[Tool '{tool_call.name}' was blocked by permission policy. "
-                        f"{decision.reason}]"
-                    ),
-                    success=False,
-                    requires_confirmation=False,
-                )
+        permission_result = self._apply_permission_engine(tool_call, audit)
+        if permission_result:
+            return permission_result
 
         # ── Layer 1 fix + Gap A: allow-list + dry-run guard ───────────
-        if tool_call.name in self.DANGEROUS_TOOLS:
-            # Check allow-list first — skip prompt for pre-approved calls
-            if rules.is_approved(tool_call.name, tool_call.arguments):
-                logger.debug(
-                    "Tool '{}' auto-approved from allow-list", tool_call.name
-                )
-            elif self.confirmation_gate:
-                # Interactive path — ask the user
-                # Gate returns (approved: bool, persist: bool)
-                # persist=True when user answered 'always' instead of 'yes'
-                gate_result = self.confirmation_gate(
-                    tool_call.name, tool_call.arguments
-                )
-                # Support both old bool return and new (bool, bool) tuple
-                if isinstance(gate_result, tuple):
-                    approved, persist = gate_result
-                else:
-                    approved, persist = bool(gate_result), False
-
-                if not approved:
-                    audit.log_security_event(
-                        "tool_denied",
-                        f"User denied tool '{tool_call.name}'",
-                        severity="warning",
-                    )
-                    return ToolResult(
-                        tool_call_id=tool_call.id,
-                        name=tool_call.name,
-                        output=f"[Tool '{tool_call.name}' was denied by user]",
-                        success=False,
-                        requires_confirmation=True,
-                    )
-                # Record the approval in the allow-list
-                rules.record_approval(
-                    tool_call.name, tool_call.arguments, persist=persist
-                )
-                if persist:
-                    logger.info(
-                        "Tool '{}' permanently approved — won't ask again",
-                        tool_call.name,
-                    )
-            else:
-                # No gate at all — dry-run / headless mode.  Block the call.
-                audit.log_security_event(
-                    "tool_blocked_dry_run",
-                    f"Dangerous tool '{tool_call.name}' blocked — no confirmation gate (dry-run mode)",
-                    severity="warning",
-                )
-                return ToolResult(
-                    tool_call_id=tool_call.id,
-                    name=tool_call.name,
-                    output=(
-                        f"[Tool '{tool_call.name}' requires confirmation but no gate is "
-                        "configured (dry-run mode). Enable live execution or provide a "
-                        "confirmation_gate to run this tool.]"
-                    ),
-                    success=False,
-                    requires_confirmation=True,
-                )
+        dangerous_gate_result = self._apply_dangerous_tools_gate(tool_call, audit)
+        if dangerous_gate_result:
+            return dangerous_gate_result
 
         try:
             result = self.tool_executor.execute_tool(
@@ -647,26 +543,8 @@ class AgentLoop:
                 output_preview=result.output[:200] if result.output else "",
             )
             # ── PostToolUse hook ──────────────────────────────────────────
-            if self.hook_engine is not None:
-                from src.aradhya.hooks.hook_engine import HookEvent as _HE  # noqa: PLC0415
-                post_event = _HE.POST_TOOL_USE if result.success else _HE.POST_TOOL_USE_FAILURE
-                post_result = self.hook_engine.fire(
-                    post_event,
-                    {
-                        "tool_name": tool_call.name,
-                        "tool_input": tool_call.arguments,
-                        "output": result.output,
-                        "success": result.success,
-                    },
-                )
-                if post_result.updated_output is not None:
-                    result = ToolResult(
-                        tool_call_id=result.tool_call_id,
-                        name=result.name,
-                        output=post_result.updated_output,
-                        success=result.success,
-                        requires_confirmation=result.requires_confirmation,
-                    )
+            result = self._apply_post_tool_use_hook(tool_call, result)
+
             # ── Gap 2: auto-log tool failures to learnings engine ────────
             if not result.success:
                 self._auto_log_tool_failure(tool_call.name, result.output or "")
@@ -689,6 +567,163 @@ class AgentLoop:
                 output=error_msg,
                 success=False,
             )
+
+    def _apply_hook_gate(self, tool_call: ToolCall, audit: Any) -> tuple[ToolCall, ToolResult | None]:
+        if self.hook_engine is None:
+            return tool_call, None
+
+        from src.aradhya.hooks.hook_engine import HookEvent, HookDecision  # noqa: PLC0415
+        hook_result = self.hook_engine.fire(
+            HookEvent.PRE_TOOL_USE,
+            {
+                "tool_name": tool_call.name,
+                "tool_input": tool_call.arguments,
+            },
+        )
+        if hook_result.decision in (HookDecision.DENY, HookDecision.BLOCK):
+            audit.log_security_event(
+                "tool_blocked_by_hook",
+                f"Hook denied tool '{tool_call.name}': {hook_result.system_message}",
+                severity="warning",
+            )
+            return tool_call, ToolResult(
+                tool_call_id=tool_call.id,
+                name=tool_call.name,
+                output=(
+                    f"[Tool '{tool_call.name}' was blocked by a PreToolUse hook. "
+                    f"{hook_result.system_message}]"
+                ),
+                success=False,
+                requires_confirmation=False,
+            )
+        # Apply input modifications from hooks
+        if hook_result.updated_input is not None:
+            tool_call = ToolCall(
+                name=tool_call.name,
+                arguments=hook_result.updated_input,
+                id=tool_call.id,
+            )
+        return tool_call, None
+
+    def _apply_permission_engine(self, tool_call: ToolCall, audit: Any) -> ToolResult | None:
+        if self.permission_engine is None:
+            return None
+
+        decision = self.permission_engine.check(
+            tool_call.name, tool_call.arguments
+        )
+        if not decision.allowed:
+            audit.log_security_event(
+                "tool_blocked_by_permission",
+                f"Permission engine denied tool '{tool_call.name}': {decision.reason}",
+                severity="warning",
+            )
+            return ToolResult(
+                tool_call_id=tool_call.id,
+                name=tool_call.name,
+                output=(
+                    f"[Tool '{tool_call.name}' was blocked by permission policy. "
+                    f"{decision.reason}]"
+                ),
+                success=False,
+                requires_confirmation=False,
+            )
+        return None
+
+    def _apply_dangerous_tools_gate(self, tool_call: ToolCall, audit: Any) -> ToolResult | None:
+        if tool_call.name not in self.DANGEROUS_TOOLS:
+            return None
+
+        # Lazy import avoids the circular dependency chain
+        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
+        rules = get_approved_rules()
+
+        # Check allow-list first — skip prompt for pre-approved calls
+        if rules.is_approved(tool_call.name, tool_call.arguments):
+            logger.debug(
+                "Tool '{}' auto-approved from allow-list", tool_call.name
+            )
+            return None
+
+        if self.confirmation_gate:
+            # Interactive path — ask the user
+            # Gate returns (approved: bool, persist: bool)
+            # persist=True when user answered 'always' instead of 'yes'
+            gate_result = self.confirmation_gate(
+                tool_call.name, tool_call.arguments
+            )
+            # Support both old bool return and new (bool, bool) tuple
+            if isinstance(gate_result, tuple):
+                approved, persist = gate_result
+            else:
+                approved, persist = bool(gate_result), False
+
+            if not approved:
+                audit.log_security_event(
+                    "tool_denied",
+                    f"User denied tool '{tool_call.name}'",
+                    severity="warning",
+                )
+                return ToolResult(
+                    tool_call_id=tool_call.id,
+                    name=tool_call.name,
+                    output=f"[Tool '{tool_call.name}' was denied by user]",
+                    success=False,
+                    requires_confirmation=True,
+                )
+            # Record the approval in the allow-list
+            rules.record_approval(
+                tool_call.name, tool_call.arguments, persist=persist
+            )
+            if persist:
+                logger.info(
+                    "Tool '{}' permanently approved — won't ask again",
+                    tool_call.name,
+                )
+            return None
+
+        # No gate at all — dry-run / headless mode.  Block the call.
+        audit.log_security_event(
+            "tool_blocked_dry_run",
+            f"Dangerous tool '{tool_call.name}' blocked — no confirmation gate (dry-run mode)",
+            severity="warning",
+        )
+        return ToolResult(
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            output=(
+                f"[Tool '{tool_call.name}' requires confirmation but no gate is "
+                "configured (dry-run mode). Enable live execution or provide a "
+                "confirmation_gate to run this tool.]"
+            ),
+            success=False,
+            requires_confirmation=True,
+        )
+
+    def _apply_post_tool_use_hook(self, tool_call: ToolCall, result: ToolResult) -> ToolResult:
+        if self.hook_engine is None:
+            return result
+
+        from src.aradhya.hooks.hook_engine import HookEvent as _HE  # noqa: PLC0415
+        post_event = _HE.POST_TOOL_USE if result.success else _HE.POST_TOOL_USE_FAILURE
+        post_result = self.hook_engine.fire(
+            post_event,
+            {
+                "tool_name": tool_call.name,
+                "tool_input": tool_call.arguments,
+                "output": result.output,
+                "success": result.success,
+            },
+        )
+        if post_result.updated_output is not None:
+            return ToolResult(
+                tool_call_id=result.tool_call_id,
+                name=result.name,
+                output=post_result.updated_output,
+                success=result.success,
+                requires_confirmation=result.requires_confirmation,
+            )
+        return result
 
     def _auto_log_tool_failure(self, tool_name: str, error_msg: str) -> None:
         """Silently log a tool failure to the learnings engine.
