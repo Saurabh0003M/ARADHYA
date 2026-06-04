@@ -8,6 +8,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
+from src.aradhya.paths import get_project_root
+
 DEFAULT_VOICE_EXTENSIONS = (
     ".aac",
     ".flac",
@@ -92,7 +94,7 @@ class RuntimeProfile:
 
 
 def _project_root_from_here() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return get_project_root()
 
 
 def _runtime_profile_paths(project_root: Path) -> tuple[Path, Path]:

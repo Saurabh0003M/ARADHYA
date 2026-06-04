@@ -17,6 +17,7 @@ if __package__ in {None, ""}:
     if project_root_str not in sys.path:
         sys.path.insert(0, project_root_str)
 
+from src.aradhya.paths import get_project_root
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import PlanKind, WakeSource
 from src.aradhya.utils.cache_diagnostics import (
@@ -72,7 +73,7 @@ from src.aradhya.voice.pipeline import VoiceInboxManager
 from src.aradhya.voice.wake_word import WakeWordListener
 from src.aradhya.audit_logger import get_audit_logger
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = get_project_root()
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"
 IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"   # atomic append-only queue
 HEARTBEAT_FILE = PROJECT_ROOT / ".aradhya_heartbeat"   # touched by heartbeat thread

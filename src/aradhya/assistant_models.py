@@ -9,6 +9,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from src.aradhya.paths import get_project_root
+
 DEFAULT_SECURITY_BLOGS = (
     "https://krebsonsecurity.com/",
     "https://thehackernews.com/",
@@ -159,7 +161,7 @@ class AssistantResponse:
 
 
 def _project_root_from_here() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return get_project_root()
 
 
 def _build_default_user_roots(project_root: Path) -> tuple[Path, ...]:

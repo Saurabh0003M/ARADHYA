@@ -11,12 +11,13 @@ Enhanced with quick-access buttons for:
 """
 
 import tkinter as tk
-from pathlib import Path
+
+from src.aradhya.paths import get_project_root
 
 # We use a simple IPC queue file in the project root to send commands to main.py.
 # Using an append-only queue avoids the race condition where two rapid button
 # presses overwrote each other in the old single-shot file protocol.
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = get_project_root()
 IPC_FILE = PROJECT_ROOT / ".aradhya_ipc"            # legacy, kept for compat
 IPC_QUEUE_FILE = PROJECT_ROOT / ".aradhya_ipc_queue"  # new queue protocol
 

@@ -9,6 +9,7 @@ from typing import Callable
 
 from loguru import logger
 
+from src.aradhya.paths import get_project_root
 from src.aradhya.agent_loop import AgentLoop
 from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import (
@@ -71,7 +72,7 @@ class AradhyaAssistant:
         project_root: Path | None = None,
     ):
         self.preferences = preferences
-        self.project_root = project_root or Path(__file__).resolve().parents[2]
+        self.project_root = project_root or get_project_root()
         self.model_provider = model_provider
         self.now_provider = now_provider or datetime.now
         self.state = AssistantState()
@@ -116,7 +117,7 @@ class AradhyaAssistant:
         skill_registry: SkillRegistry | None = None,
         session_manager: SessionManager | None = None,
     ) -> "AradhyaAssistant":
-        root = project_root or Path(__file__).resolve().parents[2]
+        root = project_root or get_project_root()
         return cls(
             load_preferences(root),
             model_provider=model_provider,

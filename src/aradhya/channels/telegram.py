@@ -21,12 +21,13 @@ import json
 import os
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 from loguru import logger
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+from src.aradhya.paths import get_project_root
+
+PROJECT_ROOT = get_project_root()
 
 # ── Configuration ─────────────────────────────────────────────────────
 
