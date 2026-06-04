@@ -196,8 +196,16 @@ class TaskScheduler:
         logger.info("Executing scheduled task: {} ({})", task.id, task.action)
         try:
             if task.action == "shell":
+                # Use shlex.split with shell=False to prevent command injection.
+                # This treats shell metacharacters as literals rather than evaluating them,
+                # thereby preventing execution of injected secondary commands.
+                command_args = shlex.split(task.payload)
+                if not command_args:
+                    logger.warning("Task '{}': Empty shell command", task.id)
+                    return
+
                 result = subprocess.run(
-                    shlex.split(task.payload),
+                    command_args,
                     shell=False,
                     capture_output=True,
                     text=True,

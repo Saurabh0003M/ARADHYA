@@ -99,6 +99,12 @@ def ensure_aradhya_dir(*parts: str) -> Path:
 # ---------------------------------------------------------------------------
 
 @lru_cache(maxsize=1)
+def get_project_root() -> Path:
+    """Return the absolute path to the project root directory."""
+    return Path(__file__).resolve().parents[2]
+
+
+@lru_cache(maxsize=1)
 def find_project_root() -> Path | None:
     """Walk up from CWD looking for markers of the project root.
 
@@ -203,3 +209,4 @@ def reset_cache() -> None:
     """Clear cached path resolution. Used in tests."""
     aradhya_home.cache_clear()
     find_project_root.cache_clear()
+    get_project_root.cache_clear()

@@ -9,6 +9,8 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any, TypeVar
 
+from src.aradhya.paths import get_project_root
+
 DEFAULT_VOICE_EXTENSIONS = (
     ".aac",
     ".flac",
@@ -93,7 +95,7 @@ class RuntimeProfile:
 
 
 def _project_root_from_here() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return get_project_root()
 
 
 def _runtime_profile_paths(project_root: Path) -> tuple[Path, Path]:
@@ -227,6 +229,182 @@ def build_default_runtime_profile(project_root: Path | None = None) -> RuntimePr
     )
 
 
+def _load_model_profile(
+    raw_model: dict[str, object],
+    defaults: RuntimeProfile,
+    root: Path,
+) -> ModelProfile:
+    model_provider = str(raw_model.get("provider", defaults.model.provider))
+    api_key_env = str(raw_model.get("api_key_env", "") or _default_api_key_env(model_provider))
+    env_api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+    file_api_key = str(raw_model.get("api_key", defaults.model.api_key) or "")
+    api_key = env_api_key or file_api_key
+
+    return ModelProfile(
+        provider=model_provider,
+        model_name=raw_model.get("model_name", defaults.model.model_name),
+        base_url=raw_model.get("base_url", defaults.model.base_url),
+        request_timeout_seconds=raw_model.get(
+            "request_timeout_seconds",
+            defaults.model.request_timeout_seconds,
+        ),
+        system_prompt=raw_model.get(
+            "system_prompt",
+            defaults.model.system_prompt,
+        ),
+        ollama_home=_resolve_path(
+            raw_model.get("ollama_home"),
+            root,
+            defaults.model.ollama_home,
+        ),
+        ollama_models_path=_resolve_path(
+            raw_model.get("ollama_models_path"),
+            root,
+            defaults.model.ollama_models_path,
+        ),
+        api_key=api_key,
+        api_key_env=api_key_env,
+    )
+
+
+def _load_voice_profile(
+    raw_voice: dict[str, object],
+    defaults: RuntimeProfile,
+    root: Path,
+) -> VoiceProfile:
+    return VoiceProfile(
+        provider=raw_voice.get("provider", defaults.voice.provider),
+        audio_inbox_dir=_resolve_path(
+            raw_voice.get("audio_inbox_dir"),
+            root,
+            defaults.voice.audio_inbox_dir,
+        ),
+        processed_audio_dir=_resolve_path(
+            raw_voice.get("processed_audio_dir"),
+            root,
+            defaults.voice.processed_audio_dir,
+        ),
+        transcripts_dir=_resolve_path(
+            raw_voice.get("transcripts_dir"),
+            root,
+            defaults.voice.transcripts_dir,
+        ),
+        manual_transcripts_dir=_resolve_path(
+            raw_voice.get("manual_transcripts_dir"),
+            root,
+            defaults.voice.manual_transcripts_dir,
+        ),
+        supported_extensions=tuple(
+            raw_voice.get(
+                "supported_extensions",
+                defaults.voice.supported_extensions,
+            )
+        ),
+        whisper_command_template=raw_voice.get(
+            "whisper_command_template",
+            defaults.voice.whisper_command_template,
+        ),
+        faster_whisper_model_size=raw_voice.get(
+            "faster_whisper_model_size",
+            defaults.voice.faster_whisper_model_size,
+        ),
+        faster_whisper_device=raw_voice.get(
+            "faster_whisper_device",
+            defaults.voice.faster_whisper_device,
+        ),
+        faster_whisper_compute_type=raw_voice.get(
+            "faster_whisper_compute_type",
+            defaults.voice.faster_whisper_compute_type,
+        ),
+        language=raw_voice.get(
+            "language",
+            defaults.voice.language,
+        ),
+        poll_on_wake=raw_voice.get(
+            "poll_on_wake",
+            defaults.voice.poll_on_wake,
+        ),
+    )
+
+
+def _load_voice_activation_profile(
+    raw_voice_activation: dict[str, object],
+    defaults: RuntimeProfile,
+) -> VoiceActivationProfile:
+    return VoiceActivationProfile(
+        enabled_on_startup=raw_voice_activation.get(
+            "enabled_on_startup",
+            defaults.voice_activation.enabled_on_startup,
+        ),
+        hotkey_modifiers=tuple(
+            raw_voice_activation.get(
+                "hotkey_modifiers",
+                defaults.voice_activation.hotkey_modifiers,
+            )
+        ),
+        hotkey_key=raw_voice_activation.get(
+            "hotkey_key",
+            defaults.voice_activation.hotkey_key,
+        ),
+        preferred_backend=raw_voice_activation.get(
+            "preferred_backend",
+            defaults.voice_activation.preferred_backend,
+        ),
+        sample_rate=raw_voice_activation.get(
+            "sample_rate",
+            defaults.voice_activation.sample_rate,
+        ),
+        channels=raw_voice_activation.get(
+            "channels",
+            defaults.voice_activation.channels,
+        ),
+        chunk_size=raw_voice_activation.get(
+            "chunk_size",
+            defaults.voice_activation.chunk_size,
+        ),
+        silence_threshold=raw_voice_activation.get(
+            "silence_threshold",
+            defaults.voice_activation.silence_threshold,
+        ),
+        silence_duration=raw_voice_activation.get(
+            "silence_duration",
+            defaults.voice_activation.silence_duration,
+        ),
+        max_recording_duration=raw_voice_activation.get(
+            "max_recording_duration",
+            defaults.voice_activation.max_recording_duration,
+        ),
+    )
+
+
+def _load_voice_output_profile(
+    raw_voice_output: dict[str, object],
+    defaults: RuntimeProfile,
+) -> VoiceOutputProfile:
+    return VoiceOutputProfile(
+        enabled=raw_voice_output.get(
+            "enabled",
+            defaults.voice_output.enabled,
+        ),
+        provider=raw_voice_output.get(
+            "provider",
+            defaults.voice_output.provider,
+        ),
+        voice_id=raw_voice_output.get(
+            "voice_id",
+            defaults.voice_output.voice_id,
+        ),
+        rate=raw_voice_output.get(
+            "rate",
+            defaults.voice_output.rate,
+        ),
+        volume=raw_voice_output.get(
+            "volume",
+            defaults.voice_output.volume,
+        ),
+    )
+
+
 def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     """Load the runtime profile from disk, merging over defaults."""
 
@@ -243,71 +421,11 @@ def load_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
     raw_voice_activation = data.get("voice_activation", {})
     raw_voice_output = data.get("voice_output", {})
 
-    model_provider = str(raw_model.get("provider", defaults.model.provider))
-    api_key_env = str(raw_model.get("api_key_env", "") or _default_api_key_env(model_provider))
-    env_api_key = os.environ.get(api_key_env, "") if api_key_env else ""
-    file_api_key = str(raw_model.get("api_key", defaults.model.api_key) or "")
-    api_key = env_api_key or file_api_key
-
     return RuntimeProfile(
-        model=_apply_overrides(
-            defaults.model,
-            raw_model,
-            provider=model_provider,
-            ollama_home=_resolve_path(
-                raw_model.get("ollama_home"),  # type: ignore
-                root,
-                defaults.model.ollama_home,
-            ),
-            ollama_models_path=_resolve_path(
-                raw_model.get("ollama_models_path"),  # type: ignore
-                root,
-                defaults.model.ollama_models_path,
-            ),
-            api_key=api_key,
-            api_key_env=api_key_env,
-        ),
-        voice=_apply_overrides(
-            defaults.voice,
-            raw_voice,
-            audio_inbox_dir=_resolve_path(
-                raw_voice.get("audio_inbox_dir"),  # type: ignore
-                root,
-                defaults.voice.audio_inbox_dir,
-            ),
-            processed_audio_dir=_resolve_path(
-                raw_voice.get("processed_audio_dir"),  # type: ignore
-                root,
-                defaults.voice.processed_audio_dir,
-            ),
-            transcripts_dir=_resolve_path(
-                raw_voice.get("transcripts_dir"),  # type: ignore
-                root,
-                defaults.voice.transcripts_dir,
-            ),
-            manual_transcripts_dir=_resolve_path(
-                raw_voice.get("manual_transcripts_dir"),  # type: ignore
-                root,
-                defaults.voice.manual_transcripts_dir,
-            ),
-            supported_extensions=tuple(
-                raw_voice.get("supported_extensions", defaults.voice.supported_extensions)
-            ),
-        ),
-        voice_activation=_apply_overrides(
-            defaults.voice_activation,
-            raw_voice_activation,
-            hotkey_modifiers=tuple(
-                raw_voice_activation.get(
-                    "hotkey_modifiers",
-                    defaults.voice_activation.hotkey_modifiers,
-                )
-            ),
-        ),
-        voice_output=_apply_overrides(
-            defaults.voice_output,
-            raw_voice_output,
-        ),
+        model=_load_model_profile(raw_model, defaults, root),
+        voice=_load_voice_profile(raw_voice, defaults, root),
+        voice_activation=_load_voice_activation_profile(raw_voice_activation, defaults),
+        voice_output=_load_voice_output_profile(raw_voice_output, defaults),
     )
 
 

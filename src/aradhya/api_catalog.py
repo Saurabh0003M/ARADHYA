@@ -2,15 +2,126 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.aradhya.utils.helpers import load_json_file
 
 CATALOG_CACHE_PATH = Path("data/processed/context/public_apis_catalog.json")
 PUBLIC_APIS_REPO_URL = "https://github.com/public-apis/public-apis"
+
+_DEFAULT_SEED_ENTRIES: list[dict[str, Any]] = [
+    {
+        "API": "Open-Meteo",
+        "Description": "Weather forecasts and historical weather data",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Weather",
+        "Link": "https://open-meteo.com/",
+    },
+    {
+        "API": "REST Countries",
+        "Description": "Country names, regions, flags, currencies, and population data",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Open Data",
+        "Link": "https://restcountries.com/",
+    },
+    {
+        "API": "Frankfurter",
+        "Description": "Current and historical foreign exchange rates",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Currency Exchange",
+        "Link": "https://www.frankfurter.app/",
+    },
+    {
+        "API": "Hacker News",
+        "Description": "Stories, comments, jobs, polls, and user data",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Unknown",
+        "Category": "News",
+        "Link": "https://github.com/HackerNews/API",
+    },
+    {
+        "API": "Open Library",
+        "Description": "Book metadata, authors, covers, and search",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Books",
+        "Link": "https://openlibrary.org/developers/api",
+    },
+    {
+        "API": "Stack Exchange",
+        "Description": "Questions, answers, comments, users, and tags",
+        "Auth": "OAuth",
+        "HTTPS": True,
+        "Cors": "Unknown",
+        "Category": "Development",
+        "Link": "https://api.stackexchange.com/",
+    },
+    {
+        "API": "GitHub",
+        "Description": "Repositories, issues, pull requests, users, and releases",
+        "Auth": "OAuth",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Development",
+        "Link": "https://docs.github.com/en/rest",
+    },
+    {
+        "API": "Nominatim",
+        "Description": "OpenStreetMap geocoding and reverse geocoding",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Geocoding",
+        "Link": "https://nominatim.org/release-docs/latest/api/Overview/",
+    },
+    {
+        "API": "Data.gov",
+        "Description": "US government datasets and metadata catalog",
+        "Auth": "apiKey",
+        "HTTPS": True,
+        "Cors": "Unknown",
+        "Category": "Government",
+        "Link": "https://api.data.gov/",
+    },
+    {
+        "API": "URLhaus",
+        "Description": "URL reputation and malware URL intelligence",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Security",
+        "Link": "https://urlhaus-api.abuse.ch/",
+    },
+    {
+        "API": "Wikipedia REST API",
+        "Description": "Page summaries, search, media, and content metadata",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Open Data",
+        "Link": "https://www.mediawiki.org/wiki/API",
+    },
+    {
+        "API": "Agify",
+        "Description": "Estimate age from a first name using public aggregate data",
+        "Auth": "No",
+        "HTTPS": True,
+        "Cors": "Yes",
+        "Category": "Test Data",
+        "Link": "https://agify.io/",
+    },
+]
 
 
 @dataclass(frozen=True)
@@ -133,10 +244,8 @@ class PublicApiCatalog:
     def _load_cached_entries(self) -> list[PublicApiEntry]:
         if not self.cache_path.exists():
             return []
-        try:
-            payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return []
+
+        payload = load_json_file(self.cache_path)
 
         raw_entries = payload.get("entries") if isinstance(payload, dict) else payload
         if not isinstance(raw_entries, list):
@@ -171,118 +280,8 @@ class PublicApiCatalog:
         )
 
     def _seed_entries(self) -> list[PublicApiEntry]:
-        raw_seed = [
-            {
-                "API": "Open-Meteo",
-                "Description": "Weather forecasts and historical weather data",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Weather",
-                "Link": "https://open-meteo.com/",
-            },
-            {
-                "API": "REST Countries",
-                "Description": "Country names, regions, flags, currencies, and population data",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Open Data",
-                "Link": "https://restcountries.com/",
-            },
-            {
-                "API": "Frankfurter",
-                "Description": "Current and historical foreign exchange rates",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Currency Exchange",
-                "Link": "https://www.frankfurter.app/",
-            },
-            {
-                "API": "Hacker News",
-                "Description": "Stories, comments, jobs, polls, and user data",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Unknown",
-                "Category": "News",
-                "Link": "https://github.com/HackerNews/API",
-            },
-            {
-                "API": "Open Library",
-                "Description": "Book metadata, authors, covers, and search",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Books",
-                "Link": "https://openlibrary.org/developers/api",
-            },
-            {
-                "API": "Stack Exchange",
-                "Description": "Questions, answers, comments, users, and tags",
-                "Auth": "OAuth",
-                "HTTPS": True,
-                "Cors": "Unknown",
-                "Category": "Development",
-                "Link": "https://api.stackexchange.com/",
-            },
-            {
-                "API": "GitHub",
-                "Description": "Repositories, issues, pull requests, users, and releases",
-                "Auth": "OAuth",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Development",
-                "Link": "https://docs.github.com/en/rest",
-            },
-            {
-                "API": "Nominatim",
-                "Description": "OpenStreetMap geocoding and reverse geocoding",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Geocoding",
-                "Link": "https://nominatim.org/release-docs/latest/api/Overview/",
-            },
-            {
-                "API": "Data.gov",
-                "Description": "US government datasets and metadata catalog",
-                "Auth": "apiKey",
-                "HTTPS": True,
-                "Cors": "Unknown",
-                "Category": "Government",
-                "Link": "https://api.data.gov/",
-            },
-            {
-                "API": "URLhaus",
-                "Description": "URL reputation and malware URL intelligence",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Security",
-                "Link": "https://urlhaus-api.abuse.ch/",
-            },
-            {
-                "API": "Wikipedia REST API",
-                "Description": "Page summaries, search, media, and content metadata",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Open Data",
-                "Link": "https://www.mediawiki.org/wiki/API",
-            },
-            {
-                "API": "Agify",
-                "Description": "Estimate age from a first name using public aggregate data",
-                "Auth": "No",
-                "HTTPS": True,
-                "Cors": "Yes",
-                "Category": "Test Data",
-                "Link": "https://agify.io/",
-            },
-        ]
         return [
-            entry for item in raw_seed
+            entry for item in _DEFAULT_SEED_ENTRIES
             if (entry := self._entry_from_payload(item, source="seed")) is not None
         ]
 

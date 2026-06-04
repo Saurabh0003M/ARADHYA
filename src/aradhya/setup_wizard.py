@@ -14,14 +14,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from src.aradhya.paths import get_project_root
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
+from src.aradhya.utils.helpers import load_json_file
+
 console = Console()
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = get_project_root()
 _CONFIG_DIR = PROJECT_ROOT / "core" / "config"
 _LEGACY_DIR = PROJECT_ROOT / "core" / "memory"
 PROFILE_PATH = _CONFIG_DIR / "profile.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "profile.json"
@@ -31,9 +34,7 @@ USER_NOTES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "notes.md"
 
 
 def _load_json(path: Path) -> dict:
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return {}
+    return load_json_file(path, default={})
 
 
 def _save_json(path: Path, data: dict) -> None:

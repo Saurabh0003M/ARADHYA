@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from src.aradhya.parasite.checkpoint import STAGES, Checkpoint
+from src.aradhya.utils.helpers import load_json_file
 
 
 LEDGER_PATH = Path("data") / "processed" / "context" / "host_integration_ledger.json"
@@ -130,10 +131,8 @@ def _load_checkpoint_from_host(host_path: Path) -> Checkpoint | None:
     path = host_path / ".parasite" / "checkpoint.json"
     if not path.is_file():
         return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+
+    raw = load_json_file(path, default=None)
     if not isinstance(raw, dict):
         return None
     return Checkpoint(
@@ -157,33 +156,50 @@ def _candidate_from_checkpoint(
     digest_exists = (host_path / ".parasite" / "DIGEST.md").is_file()
 
     if cp is None:
-        return HostIntegrationCandidate(
-            repo=host_path.name,
-            host_path=str(host_path),
-            archived=archived,
-            status="not_digested",
-            priority="blocked",
-            score=0,
-            trust_score="",
-            project_type="unknown",
-            completed_stage_count=0,
-            current_stage="NOT_STARTED",
-            error="missing checkpoint",
-            validate_passed=False,
-            absorb_completed=False,
-            digest_exists=digest_exists,
-            files_scanned=0,
-            dependency_count=0,
-            capabilities=[],
-            integration_plan=[],
-            absorbed_count=0,
-            absorbed_artifacts=[],
-            description="",
-            benefits=[],
-            recommended_action="Run /parasite digest before considering integration.",
-            next_gate="Complete the 7-stage digestion pipeline.",
-        )
+        return _default_candidate(host_path, archived, digest_exists)
 
+    return _candidate_from_valid_checkpoint(host_path, archived, cp, digest_exists)
+
+
+def _default_candidate(
+    host_path: Path,
+    archived: bool,
+    digest_exists: bool,
+) -> HostIntegrationCandidate:
+    return HostIntegrationCandidate(
+        repo=host_path.name,
+        host_path=str(host_path),
+        archived=archived,
+        status="not_digested",
+        priority="blocked",
+        score=0,
+        trust_score="",
+        project_type="unknown",
+        completed_stage_count=0,
+        current_stage="NOT_STARTED",
+        error="missing checkpoint",
+        validate_passed=False,
+        absorb_completed=False,
+        digest_exists=digest_exists,
+        files_scanned=0,
+        dependency_count=0,
+        capabilities=[],
+        integration_plan=[],
+        absorbed_count=0,
+        absorbed_artifacts=[],
+        description="",
+        benefits=[],
+        recommended_action="Run /parasite digest before considering integration.",
+        next_gate="Complete the 7-stage digestion pipeline.",
+    )
+
+
+def _candidate_from_valid_checkpoint(
+    host_path: Path,
+    archived: bool,
+    cp: Checkpoint,
+    digest_exists: bool,
+) -> HostIntegrationCandidate:
     stage_results = cp.stage_results or {}
     analysis = _artifacts(stage_results, "SWALLOW")
     validate = _artifacts(stage_results, "EXTRACT")

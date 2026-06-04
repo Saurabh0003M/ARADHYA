@@ -82,67 +82,119 @@ def bootstrap_runtime_profile(
         return runtime_profile
 
     if not health.reachable:
-        output_handler(f"Model > {health.message}")
-        output_handler(
-            f"Model > Install Ollama from {OLLAMA_DOWNLOAD_URL} or start it, then restart Aradhya."
-        )
-        output_handler("")
-        return runtime_profile
+        return _handle_unreachable_provider(health, runtime_profile, output_handler)
 
     if health.configured_model in health.available_models:
-        output_handler(f"Model > {health.message}")
-        output_handler("Model > The installed model is not usable on the current machine state.")
-        output_handler("Model > Suggested smaller local models:")
-        for index, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
-            output_handler(f"Model >   {index}. {model.name} - {model.description}")
-        output_handler("Model > Pull a smaller model, then update the profile with /setup or profile.local.json.")
+        return _handle_unusable_model(health, runtime_profile, output_handler)
+
+    if len(health.available_models) == 1:
+        return _handle_single_available_model(
+            health, runtime_profile, project_root, output_handler
+        )
+
+    if health.available_models:
+        return _handle_multiple_available_models(
+            health, runtime_profile, project_root, input_func, output_handler
+        )
+
+    return _handle_no_local_models(
+        runtime_profile, project_root, input_func, output_handler
+    )
+
+
+def _handle_unreachable_provider(
+    health: ModelHealth,
+    runtime_profile: RuntimeProfile,
+    output_handler: Callable[[str], None],
+) -> RuntimeProfile:
+    output_handler(f"Model > {health.message}")
+    output_handler(
+        f"Model > Install Ollama from {OLLAMA_DOWNLOAD_URL} or start it, then restart Aradhya."
+    )
+    output_handler("")
+    return runtime_profile
+
+
+def _handle_unusable_model(
+    health: ModelHealth,
+    runtime_profile: RuntimeProfile,
+    output_handler: Callable[[str], None],
+) -> RuntimeProfile:
+    output_handler(f"Model > {health.message}")
+    output_handler("Model > The installed model is not usable on the current machine state.")
+    output_handler("Model > Suggested smaller local models:")
+    for index, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
+        output_handler(f"Model >   {index}. {model.name} - {model.description}")
+    output_handler(
+        "Model > Pull a smaller model, then update the profile with /setup or profile.local.json."
+    )
+    output_handler("")
+    return runtime_profile
+
+
+def _handle_single_available_model(
+    health: ModelHealth,
+    runtime_profile: RuntimeProfile,
+    project_root: Path,
+    output_handler: Callable[[str], None],
+) -> RuntimeProfile:
+    selected_model = health.available_models[0]
+    output_handler(
+        f"Model > Found one local Ollama model on this machine: {selected_model}. "
+        "Using it by default."
+    )
+    updated_profile = _apply_selected_model(
+        runtime_profile,
+        project_root,
+        selected_model,
+        output_handler,
+    )
+    output_handler("")
+    return updated_profile
+
+
+def _handle_multiple_available_models(
+    health: ModelHealth,
+    runtime_profile: RuntimeProfile,
+    project_root: Path,
+    input_func: Callable[[str], str],
+    output_handler: Callable[[str], None],
+) -> RuntimeProfile:
+    output_handler(
+        f"Model > The configured model {health.configured_model} is not installed locally."
+    )
+    output_handler("Model > Choose one of the installed models below:")
+    selected_model = _choose_from_catalog(
+        health.available_models,
+        input_func=input_func,
+        output_handler=output_handler,
+        prompt="Select a model number or press Enter to keep the current profile: ",
+        formatter=lambda model_name: model_name,
+    )
+    if selected_model is None:
+        output_handler(
+            "Model > No model selected. Aradhya will continue with limited "
+            "model-backed features."
+        )
         output_handler("")
         return runtime_profile
 
-    if len(health.available_models) == 1:
-        selected_model = health.available_models[0]
-        output_handler(
-            f"Model > Found one local Ollama model on this machine: {selected_model}. "
-            "Using it by default."
-        )
-        updated_profile = _apply_selected_model(
-            runtime_profile,
-            project_root,
-            selected_model,
-            output_handler,
-        )
-        output_handler("")
-        return updated_profile
+    updated_profile = _apply_selected_model(
+        runtime_profile,
+        project_root,
+        selected_model,
+        output_handler,
+    )
+    output_handler("")
+    return updated_profile
 
-    if health.available_models:
-        output_handler(
-            f"Model > The configured model {health.configured_model} is not installed locally."
-        )
-        output_handler("Model > Choose one of the installed models below:")
-        selected_model = _choose_from_catalog(
-            health.available_models,
-            input_func=input_func,
-            output_handler=output_handler,
-            prompt="Select a model number or press Enter to keep the current profile: ",
-            formatter=lambda model_name: model_name,
-        )
-        if selected_model is None:
-            output_handler(
-                "Model > No model selected. Aradhya will continue with limited "
-                "model-backed features."
-            )
-            output_handler("")
-            return runtime_profile
 
-        updated_profile = _apply_selected_model(
-            runtime_profile,
-            project_root,
-            selected_model,
-            output_handler,
-        )
-        output_handler("")
-        return updated_profile
-
+def _handle_no_local_models(
+    runtime_profile: RuntimeProfile,
+    project_root: Path,
+    input_func: Callable[[str], str],
+    output_handler: Callable[[str], None],
+) -> RuntimeProfile:
     output_handler("Model > Ollama is reachable, but no local models are installed yet.")
     output_handler(
         f"Model > Install Ollama from {OLLAMA_DOWNLOAD_URL} if this machine does not have it yet."
