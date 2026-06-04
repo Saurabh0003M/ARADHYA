@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from src.aradhya.parasite.checkpoint import STAGES, Checkpoint
+from src.aradhya.utils.helpers import load_json_file
 
 
 LEDGER_PATH = Path("data") / "processed" / "context" / "host_integration_ledger.json"
@@ -130,10 +131,8 @@ def _load_checkpoint_from_host(host_path: Path) -> Checkpoint | None:
     path = host_path / ".parasite" / "checkpoint.json"
     if not path.is_file():
         return None
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
+
+    raw = load_json_file(path, default=None)
     if not isinstance(raw, dict):
         return None
     return Checkpoint(

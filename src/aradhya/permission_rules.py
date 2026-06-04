@@ -23,7 +23,6 @@ Configuration lives in:
 from __future__ import annotations
 
 import fnmatch
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +31,7 @@ from src.aradhya.paths import aradhya_home
 from typing import Any
 
 from loguru import logger
+from src.aradhya.utils.helpers import load_json_file
 
 
 # ---------------------------------------------------------------------------
@@ -313,10 +313,9 @@ def _load_from_file(
     if not filepath.is_file():
         return
 
-    try:
-        data = json.loads(filepath.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError) as exc:
-        logger.warning("Failed to load permissions from {}: {}", filepath, exc)
+    data = load_json_file(filepath, default=None)
+    if not isinstance(data, dict):
+        logger.warning("Failed to load permissions from {}: Invalid JSON or not a dict", filepath)
         return
 
     _parse_rules_from_list(data.get("allow", []), allow_rules)

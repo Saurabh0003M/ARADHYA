@@ -6,7 +6,6 @@ summarizing what can be extracted and integrated into ARADHYA.
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from typing import Any
 from loguru import logger
 
 from src.aradhya.cloud_safety import CloudPrivacyGate
+from src.aradhya.utils.helpers import load_json_file
 
 
 # Files to read for understanding a repo
@@ -375,13 +375,11 @@ def _extract_dependencies(path: Path, project_type: str) -> list[str]:
     elif project_type == "node":
         pkg_json = path / "package.json"
         if pkg_json.is_file():
-            try:
-                pkg = json.loads(pkg_json.read_text(encoding="utf-8"))
+            pkg = load_json_file(pkg_json)
+            if isinstance(pkg, dict):
                 for section in ("dependencies", "devDependencies"):
                     for name in (pkg.get(section) or {}):
                         deps.append(name)
-            except (OSError, json.JSONDecodeError):
-                pass
 
     return sorted(set(deps))
 

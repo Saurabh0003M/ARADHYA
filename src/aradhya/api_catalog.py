@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.aradhya.utils.helpers import load_json_file
 
 CATALOG_CACHE_PATH = Path("data/processed/context/public_apis_catalog.json")
 PUBLIC_APIS_REPO_URL = "https://github.com/public-apis/public-apis"
@@ -133,10 +133,8 @@ class PublicApiCatalog:
     def _load_cached_entries(self) -> list[PublicApiEntry]:
         if not self.cache_path.exists():
             return []
-        try:
-            payload = json.loads(self.cache_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return []
+
+        payload = load_json_file(self.cache_path)
 
         raw_entries = payload.get("entries") if isinstance(payload, dict) else payload
         if not isinstance(raw_entries, list):
