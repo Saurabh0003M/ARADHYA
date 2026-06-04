@@ -315,6 +315,45 @@ class AradhyaTelegramBot:
         )
         return False
 
+    def _wake_assistant(self) -> None:
+        """Ensure the assistant is awake before processing."""
+        if self.assistant is not None and not self.assistant.state.is_awake:
+            from src.aradhya.assistant_models import WakeSource
+            self.assistant.handle_wake(WakeSource.FLOATING_ICON)
+
+    def _build_final_text(self, response: Any, accumulated_text: str) -> str:
+        """Construct the final message text from the assistant response."""
+        parts = []
+        if response.transcript_echo:
+            parts.append(f"_Heard: {response.transcript_echo}_")
+
+        # The full response might have formatting stripped or clean tags, use it over raw accumulation
+        if response.spoken_response:
+            parts.append(response.spoken_response)
+        elif accumulated_text:
+            parts.append(accumulated_text)
+
+        if response.awaiting_confirmation:
+            parts.append(
+                "\n-- Reply 'yes proceed' to execute, or 'cancel' to discard."
+            )
+
+        return "\n".join(parts)
+
+    def _deliver_final_text(self, chat_id: int, msg_id: int | None, final_text: str) -> None:
+        """Deliver the final text either by editing the placeholder or sending anew."""
+        if msg_id:
+            try:
+                self.api.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=msg_id,
+                    text=final_text,
+                )
+            except Exception:
+                self.api.send_message(chat_id, final_text)
+        else:
+            self.api.send_message(chat_id, final_text)
+
     def _process_message(self, chat_id: int, text: str) -> None:
         """Route a message through the Aradhya assistant with live streaming."""
         if self.assistant is None:
@@ -325,10 +364,7 @@ class AradhyaTelegramBot:
             return
 
         try:
-            # Ensure assistant is awake
-            if not self.assistant.state.is_awake:
-                from src.aradhya.assistant_models import WakeSource
-                self.assistant.handle_wake(WakeSource.FLOATING_ICON)
+            self._wake_assistant()
 
             # Send a placeholder message
             placeholder = self.api.send_message(chat_id, "🤔 *Thinking...*")
@@ -356,35 +392,8 @@ class AradhyaTelegramBot:
 
             response = self.assistant.handle_transcript(text, stream_handler=stream_handler)
 
-            parts = []
-            if response.transcript_echo:
-                parts.append(f"_Heard: {response.transcript_echo}_")
-
-            # The full response might have formatting stripped or clean tags, use it over raw accumulation
-            if response.spoken_response:
-                parts.append(response.spoken_response)
-            elif accumulated_text:
-                parts.append(accumulated_text)
-
-            if response.awaiting_confirmation:
-                parts.append(
-                    "\n-- Reply 'yes proceed' to execute, or 'cancel' to discard."
-                )
-
-            final_text = "\n".join(parts)
-
-            # Final replacement
-            if msg_id:
-                try:
-                    self.api.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=msg_id,
-                        text=final_text,
-                    )
-                except Exception:
-                    self.api.send_message(chat_id, final_text)
-            else:
-                self.api.send_message(chat_id, final_text)
+            final_text = self._build_final_text(response, accumulated_text)
+            self._deliver_final_text(chat_id, msg_id, final_text)
 
         except Exception as error:
             logger.error("Telegram message processing failed: {}", error)
