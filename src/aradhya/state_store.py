@@ -342,24 +342,28 @@ class StateStore:
         """Atomically replace all messages in a session (used for compaction)."""
         with self._transaction() as cur:
             cur.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
-            for i, msg in enumerate(messages):
-                meta_json = json.dumps(
-                    msg.get("metadata", {}), default=str, ensure_ascii=False
+
+            rows_to_insert = [
+                (
+                    session_id,
+                    msg["role"],
+                    msg["content"],
+                    msg.get("timestamp", ""),
+                    json.dumps(msg.get("metadata", {}), default=str, ensure_ascii=False),
+                    i,
                 )
-                cur.execute(
+                for i, msg in enumerate(messages)
+            ]
+
+            if rows_to_insert:
+                cur.executemany(
                     """
                     INSERT INTO messages (session_id, role, content, timestamp, metadata, sort_order)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (
-                        session_id,
-                        msg["role"],
-                        msg["content"],
-                        msg.get("timestamp", ""),
-                        meta_json,
-                        i,
-                    ),
+                    rows_to_insert,
                 )
+
             cur.execute(
                 "UPDATE sessions SET compacted = 1 WHERE id = ?",
                 (session_id,),
