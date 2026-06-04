@@ -144,14 +144,7 @@ class AgentLoop:
             thinking_level=thinking,
         )
 
-        # Build initial message list
-        messages: list[dict[str, Any]] = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        if history:
-            messages.extend(history)
-        messages.append({"role": "user", "content": user_message})
-
+        messages = self._build_initial_messages(system_prompt, history, user_message)
         turn.messages = messages
 
         # Per-turn token accumulator — prevents single-turn context overflow
@@ -178,118 +171,172 @@ class AgentLoop:
 
             # Execute tool calls
             for tool_call in tool_calls:
-                if self._is_repeated_tool_call(turn.tool_calls_made, tool_call):
-                    turn.final_response = (
-                        "[Agent loop stopped because the model repeated the same "
-                        f"tool call too many times: {tool_call.name}]"
-                    )
-                    logger.warning(
-                        "Agent loop stopped on repeated tool call {} with args {}",
-                        tool_call.name,
-                        tool_call.arguments,
-                    )
+                accumulated_result_tokens, stop = self._process_tool_call(
+                    tool_call, turn, messages, accumulated_result_tokens
+                )
+                if stop:
                     return turn
-
-                turn.tool_calls_made.append(tool_call)
-
-                if self.tool_executor is None:
-                    result = ToolResult(
-                        tool_call_id=tool_call.id,
-                        name=tool_call.name,
-                        output=f"[Tool '{tool_call.name}' not available — no executor configured]",
-                        success=False,
-                    )
-                else:
-                    result = self._execute_with_gate(tool_call)
-
-                turn.tool_results.append(result)
-
-                # ── Consecutive timeout kill switch (SWE-agent P1) ────
-                if result.output and ("timeout" in result.output.lower() or "timed out" in result.output.lower()):
-                    self._consecutive_timeouts += 1
-                    if self._consecutive_timeouts >= self.max_consecutive_timeouts:
-                        turn.final_response = (
-                            f"[Agent loop killed after {self._consecutive_timeouts} "
-                            f"consecutive command timeouts. The current approach is "
-                            f"stuck. Try a completely different strategy.]"
-                        )
-                        logger.error(
-                            "Kill switch: {} consecutive timeouts, aborting turn",
-                            self._consecutive_timeouts,
-                        )
-                        return turn
-                else:
-                    self._consecutive_timeouts = 0
-
-                # ── Per-turn token budget guard (Gap 3) ──────────────────
-                # Count tokens in this tool result and bail if we've
-                # accumulated too many, preventing context overflow.
-                result_tokens = max(1, len(result.output or "") // 4)
-                accumulated_result_tokens += result_tokens
-                if accumulated_result_tokens > self.turn_token_budget:
-                    logger.warning(
-                        "Turn token budget exceeded ({} > {}), injecting trim notice",
-                        accumulated_result_tokens,
-                        self.turn_token_budget,
-                    )
-                    # Add a trim notice so the model knows it hit the limit
-                    messages.append({
-                        "role": "assistant",
-                        "content": None,
-                        "tool_calls": [
-                            {
-                                "id": tool_call.id,
-                                "type": "function",
-                                "function": {
-                                    "name": tool_call.name,
-                                    "arguments": json.dumps(tool_call.arguments),
-                                },
-                            }
-                        ],
-                    })
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": (
-                            result.output[:500]
-                            + f"\n\n[Output trimmed — turn token budget ({self.turn_token_budget} tokens) reached. "
-                            "Summarize findings and respond now.]"
-                        ),
-                    })
-                    # Force one final model call to summarise
-                    try:
-                        final_resp = self._call_model(messages)
-                        turn.final_response = self._extract_text(final_resp)
-                    except Exception:
-                        turn.final_response = "[Tool results were trimmed due to token budget. Please ask a more focused question.]"
-                    return turn
-
-                # Add tool call and result to message history
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tool_call.id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_call.name,
-                                "arguments": json.dumps(tool_call.arguments),
-                            },
-                        }
-                    ],
-                })
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result.output,
-                })
         else:
             turn.final_response = (
                 "[Agent loop reached maximum iterations without completing]"
             )
 
         return turn
+
+    def _process_tool_call(
+        self,
+        tool_call: ToolCall,
+        turn: AgentTurn,
+        messages: list[dict[str, Any]],
+        accumulated_result_tokens: int,
+    ) -> tuple[int, bool]:
+        if self._is_repeated_tool_call(turn.tool_calls_made, tool_call):
+            turn.final_response = (
+                "[Agent loop stopped because the model repeated the same "
+                f"tool call too many times: {tool_call.name}]"
+            )
+            logger.warning(
+                "Agent loop stopped on repeated tool call {} with args {}",
+                tool_call.name,
+                tool_call.arguments,
+            )
+            return accumulated_result_tokens, True
+
+        turn.tool_calls_made.append(tool_call)
+
+        if self.tool_executor is None:
+            result = ToolResult(
+                tool_call_id=tool_call.id,
+                name=tool_call.name,
+                output=f"[Tool '{tool_call.name}' not available — no executor configured]",
+                success=False,
+            )
+        else:
+            result = self._execute_with_gate(tool_call)
+
+        turn.tool_results.append(result)
+
+        # ── Consecutive timeout kill switch (SWE-agent P1) ────
+        if self._check_consecutive_timeouts(result.output, turn):
+            return accumulated_result_tokens, True
+
+        # ── Per-turn token budget guard (Gap 3) ──────────────────
+        accumulated_result_tokens, stop = self._handle_token_budget(
+            accumulated_result_tokens, result, tool_call, messages, turn
+        )
+        if stop:
+            return accumulated_result_tokens, True
+
+        # Add tool call and result to message history
+        self._append_tool_messages(messages, tool_call, result)
+        return accumulated_result_tokens, False
+
+    def _build_initial_messages(
+        self,
+        system_prompt: str,
+        history: list[dict[str, Any]] | None,
+        user_message: str,
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        if history:
+            messages.extend(history)
+        messages.append({"role": "user", "content": user_message})
+        return messages
+
+    def _check_consecutive_timeouts(self, output: str, turn: AgentTurn) -> bool:
+        if output and ("timeout" in output.lower() or "timed out" in output.lower()):
+            self._consecutive_timeouts += 1
+            if self._consecutive_timeouts >= self.max_consecutive_timeouts:
+                turn.final_response = (
+                    f"[Agent loop killed after {self._consecutive_timeouts} "
+                    f"consecutive command timeouts. The current approach is "
+                    f"stuck. Try a completely different strategy.]"
+                )
+                logger.error(
+                    "Kill switch: {} consecutive timeouts, aborting turn",
+                    self._consecutive_timeouts,
+                )
+                return True
+        else:
+            self._consecutive_timeouts = 0
+        return False
+
+    def _handle_token_budget(
+        self,
+        accumulated_result_tokens: int,
+        result: ToolResult,
+        tool_call: ToolCall,
+        messages: list[dict[str, Any]],
+        turn: AgentTurn,
+    ) -> tuple[int, bool]:
+        result_tokens = max(1, len(result.output or "") // 4)
+        accumulated_result_tokens += result_tokens
+        if accumulated_result_tokens > self.turn_token_budget:
+            logger.warning(
+                "Turn token budget exceeded ({} > {}), injecting trim notice",
+                accumulated_result_tokens,
+                self.turn_token_budget,
+            )
+            # Add a trim notice so the model knows it hit the limit
+            messages.append({
+                "role": "assistant",
+                "content": None,
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_call.name,
+                            "arguments": json.dumps(tool_call.arguments),
+                        },
+                    }
+                ],
+            })
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": (
+                    result.output[:500]
+                    + f"\n\n[Output trimmed — turn token budget ({self.turn_token_budget} tokens) reached. "
+                    "Summarize findings and respond now.]"
+                ),
+            })
+            # Force one final model call to summarise
+            try:
+                final_resp = self._call_model(messages)
+                turn.final_response = self._extract_text(final_resp)
+            except Exception:
+                turn.final_response = "[Tool results were trimmed due to token budget. Please ask a more focused question.]"
+            return accumulated_result_tokens, True
+        return accumulated_result_tokens, False
+
+    def _append_tool_messages(
+        self,
+        messages: list[dict[str, Any]],
+        tool_call: ToolCall,
+        result: ToolResult,
+    ) -> None:
+        messages.append({
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [
+                {
+                    "id": tool_call.id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_call.name,
+                        "arguments": json.dumps(tool_call.arguments),
+                    },
+                }
+            ],
+        })
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tool_call.id,
+            "content": result.output,
+        })
 
     def _call_model(
         self,
