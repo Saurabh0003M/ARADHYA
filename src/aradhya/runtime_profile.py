@@ -5,8 +5,9 @@ from __future__ import annotations
 import json
 import os
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
+from typing import Any, TypeVar
 
 from src.aradhya.paths import get_project_root
 
@@ -133,6 +134,19 @@ def _load_profile_payload(profile_path: Path) -> dict[str, object]:
         return {}
 
     return payload if isinstance(payload, dict) else {}
+
+
+T = TypeVar("T")
+
+
+def _apply_overrides(default_obj: T, raw_data: dict[str, Any], **overrides: Any) -> T:
+    """Merge a raw dictionary and explicit overrides into a dataclass instance."""
+    updates = {}
+    for f in fields(default_obj):  # type: ignore
+        if f.name in raw_data:
+            updates[f.name] = raw_data[f.name]
+    updates.update(overrides)
+    return replace(default_obj, **updates)  # type: ignore
 
 
 def _deep_merge_payloads(
