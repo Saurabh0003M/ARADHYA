@@ -208,14 +208,18 @@ class RegexScrubber:
         r"\b[0-9a-fA-F]{40,}\b",
     ])
     replacement: str = "[REDACTED]"
+    _compiled: list[re.Pattern] = field(default_factory=list, repr=False, init=False)
+
+    def __post_init__(self) -> None:
+        """Pre-compile regex patterns once at init time."""
+        self._compiled = [re.compile(p, re.IGNORECASE) for p in self.patterns]
 
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        compiled = [re.compile(p, re.IGNORECASE) for p in self.patterns]
         result = []
         for msg in messages:
             content = msg.get("content", "")
             modified = content
-            for pattern in compiled:
+            for pattern in self._compiled:
                 modified = pattern.sub(self.replacement, modified)
             if modified != content:
                 result.append({**msg, "content": modified, "_scrubbed": True})
@@ -290,8 +294,8 @@ class HistoryProcessorPipeline:
         result = messages
         for processor in self.processors:
             before = len(result)
+            before_chars = sum(len(m.get("content", "")) for m in result)
             result = processor(result)
-            before_chars = sum(len(m.get("content", "")) for m in messages)
             after_chars = sum(len(m.get("content", "")) for m in result)
             if before != len(result):
                 logger.debug(

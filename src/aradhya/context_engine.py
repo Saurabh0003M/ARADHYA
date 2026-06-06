@@ -13,7 +13,7 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from loguru import logger
 
@@ -21,6 +21,10 @@ from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import AssistantPreferences
 from src.aradhya.session_manager import Session
 from src.aradhya.skills.skill_models import SkillRegistry
+
+if TYPE_CHECKING:
+    from src.aradhya.session_manager import SessionManager
+    from src.aradhya.learnings.learnings_engine import LearningsEngine
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,8 @@ class ContextSnapshot:
     project_roots: list[str]
     recent_files: list[str]
     clipboard_text: str
+    recent_session_summaries: list[str] = field(default_factory=list)
+    relevant_learnings: list[str] = field(default_factory=list)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_prompt_block(self) -> str:
@@ -51,6 +57,14 @@ class ContextSnapshot:
             parts.append(f"Active window: {self.active_window_title}")
         if self.active_skills:
             parts.append(f"Active skills: {', '.join(self.active_skills)}")
+        if self.recent_session_summaries:
+            parts.append("\n[Recent Session History]")
+            for i, summary in enumerate(self.recent_session_summaries, 1):
+                parts.append(f"  Session {i}: {summary}")
+        if self.relevant_learnings:
+            parts.append("\n[Relevant Learnings]")
+            for learning in self.relevant_learnings[:5]:
+                parts.append(f"  • {learning}")
         if self.recent_session_topics:
             parts.append(
                 "Recent conversation topics: "
@@ -67,17 +81,27 @@ class ContextSnapshot:
 
 
 class ContextEngine:
-    """Collects and merges context from available sources."""
+    """Collects and merges context from available sources.
+
+    Supports cross-session context injection: when a ``session_manager``
+    is provided, recent session summaries are included in the snapshot
+    so the LLM has awareness of prior conversations.  When a
+    ``learnings_engine`` is provided, relevant learnings are surfaced.
+    """
 
     def __init__(
         self,
         preferences: AssistantPreferences,
         index_manager: DirectoryIndexManager | None = None,
         skill_registry: SkillRegistry | None = None,
+        session_manager: SessionManager | None = None,
+        learnings_engine: LearningsEngine | None = None,
     ) -> None:
         self.preferences = preferences
         self.index_manager = index_manager
         self.skill_registry = skill_registry
+        self.session_manager = session_manager
+        self.learnings_engine = learnings_engine
 
     def build_snapshot(
         self,
@@ -100,6 +124,8 @@ class ContextEngine:
         recent_files = self._find_recent_files()
         clipboard_text = self._read_clipboard()
         active_window = self._get_active_window_title()
+        session_summaries = self._collect_session_summaries(session)
+        learnings = self._collect_relevant_learnings(recent_topics)
 
         return ContextSnapshot(
             timestamp=datetime.now().isoformat(timespec="seconds"),
@@ -112,6 +138,8 @@ class ContextEngine:
             project_roots=[str(r) for r in self.preferences.user_roots],
             recent_files=recent_files,
             clipboard_text=clipboard_text,
+            recent_session_summaries=session_summaries,
+            relevant_learnings=learnings,
         )
 
     def _find_recent_files(self, limit: int = 10) -> list[str]:

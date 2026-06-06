@@ -64,11 +64,15 @@ class CloudPrivacyGate:
             ),
             "Named secret assignment detected.",
         ),
-        (
-            "windows_absolute_path",
-            re.compile(r"\b[A-Za-z]:\\[^\s\"'<>|]+"),
-            "Local Windows path detected.",
-        ),
+    )
+
+    # Windows paths are flagged for review (not blocked) — they leak
+    # local directory structure but are not secrets.  Whitelisted prefixes
+    # suppress even the review finding.
+    _WINDOWS_PATH_PATTERN: tuple[str, re.Pattern[str], str] = (
+        "windows_absolute_path",
+        re.compile(r"\b[A-Za-z]:\\[^\s\"'<>|]+"),
+        "Local Windows path detected.",
     )
 
     _PRIVATE_TERMS: tuple[str, ...] = (
@@ -93,6 +97,22 @@ class CloudPrivacyGate:
         "address",
     )
 
+    def __init__(
+        self,
+        *,
+        path_whitelist: list[str] | None = None,
+    ) -> None:
+        # Normalised prefixes that are allowed to appear in cloud payloads.
+        # E.g. ["f:\\aradhya", "c:\\users\\saura\\projects"]
+        self._path_whitelist = [
+            p.lower().replace("/", "\\") for p in (path_whitelist or [])
+        ]
+
+    def _is_whitelisted_path(self, path: str) -> bool:
+        """Return True if *path* starts with a whitelisted prefix."""
+        normalised = path.lower().replace("/", "\\")
+        return any(normalised.startswith(prefix) for prefix in self._path_whitelist)
+
     def assess_text(self, text: str, *, source: str = "manual") -> CloudSafetyAssessment:
         """Return whether text may be sent to an optional cloud model."""
 
@@ -110,6 +130,20 @@ class CloudPrivacyGate:
                         evidence=self._redact(match.group(0)),
                     )
                 )
+
+        # Windows paths — review-level, skipped if whitelisted
+        code, pattern, message = self._WINDOWS_PATH_PATTERN
+        for match in pattern.finditer(normalized):
+            if not self._is_whitelisted_path(match.group(0)):
+                findings.append(
+                    CloudSafetyFinding(
+                        code=code,
+                        severity="review",
+                        message=message,
+                        evidence=self._redact(match.group(0)),
+                    )
+                )
+                break  # one finding is enough
 
         lowered = normalized.lower()
         for term in self._PRIVATE_TERMS:

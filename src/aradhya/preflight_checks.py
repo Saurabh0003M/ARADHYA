@@ -15,6 +15,7 @@ import ast
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
+from typing import Callable
 
 from loguru import logger
 
@@ -69,6 +70,26 @@ def check_json(content: str) -> PreflightResult:
     return result
 
 
+def check_jsonl(content: str) -> PreflightResult:
+    """Validate JSONL (JSON Lines) syntax — one JSON object per line."""
+    result = PreflightResult()
+    for line_num, line in enumerate(content.splitlines(), 1):
+        stripped = line.strip()
+        if not stripped:
+            continue  # blank lines are allowed in JSONL
+        try:
+            json.loads(stripped)
+        except json.JSONDecodeError as exc:
+            result.ok = False
+            result.errors.append(
+                f"JSONL syntax error at line {line_num}: {exc.msg}"
+            )
+            if len(result.errors) >= 5:
+                result.errors.append("(further JSONL errors suppressed)")
+                break
+    return result
+
+
 def check_yaml(content: str) -> PreflightResult:
     """Validate YAML syntax (if PyYAML is available)."""
     result = PreflightResult()
@@ -102,11 +123,11 @@ def check_toml(content: str) -> PreflightResult:
 
 
 # Extension -> checker mapping
-_CHECKERS: dict[str, callable] = {
+_CHECKERS: dict[str, Callable[[str], PreflightResult]] = {
     ".py": check_python,
     ".pyw": check_python,
     ".json": check_json,
-    ".jsonl": check_json,
+    ".jsonl": check_jsonl,
     ".yaml": check_yaml,
     ".yml": check_yaml,
     ".toml": check_toml,

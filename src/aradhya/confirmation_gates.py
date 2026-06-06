@@ -80,16 +80,42 @@ class HeadlessConfirmationGate:
 
 
 class TelegramConfirmationGate:
-    """Telegram-based confirmation (sends message, waits for reply).
+    """Telegram-based confirmation — sends a message and waits for reply.
 
-    Requires the Telegram bot instance to send/receive messages.
-    This is a stub — wire to actual bot.send_message + wait_for_reply
-    when integrating with telegram_bot.py.
+    Uses a threading.Event to bridge between the sync confirmation gate
+    protocol and Telegram's async message handling.  When a dangerous
+    tool needs approval, this gate:
+
+    1. Sends a formatted prompt to the user via Telegram.
+    2. Blocks until the user replies "yes"/"y"/"approve" or the timeout
+       expires (default 120 s).
+    3. Returns (approved, persist=False).
+
+    The Telegram channel must call ``receive_reply(text)`` when it gets
+    a reply from the authorised chat.
     """
 
-    def __init__(self, bot: Any = None, chat_id: int | None = None) -> None:
+    def __init__(
+        self,
+        bot: Any = None,
+        chat_id: int | None = None,
+        timeout: float = 120.0,
+    ) -> None:
         self.bot = bot
         self.chat_id = chat_id
+        self.timeout = timeout
+        # Synchronisation primitives for async→sync bridging
+        self._reply_event: Any = None   # threading.Event, created per call
+        self._reply_text: str = ""
+
+    def receive_reply(self, text: str) -> None:
+        """Called by the Telegram channel when the user replies.
+
+        This unblocks the waiting ``__call__`` method.
+        """
+        self._reply_text = text.strip().lower()
+        if self._reply_event is not None:
+            self._reply_event.set()
 
     def __call__(
         self, tool_name: str, arguments: dict[str, Any]
@@ -97,15 +123,63 @@ class TelegramConfirmationGate:
         if self.bot is None or self.chat_id is None:
             return (False, False)
 
+        import threading
+        from loguru import logger
+
+        # Build a human-readable confirmation prompt
+        arg_summary = "\n".join(
+            f"  • {k}: {v!r}" for k, v in (arguments or {}).items()
+        )
+        prompt_text = (
+            f"🔒 *Tool Confirmation Required*\n\n"
+            f"Tool: `{tool_name}`\n"
+            f"Arguments:\n{arg_summary}\n\n"
+            f"Reply *yes* to approve or *no* to deny.\n"
+            f"⏳ Auto-deny in {int(self.timeout)}s."
+        )
+
+        # Reset synchronisation state
+        self._reply_event = threading.Event()
+        self._reply_text = ""
+
         try:
-            # This would need async/sync bridge in real implementation
-            # For now, deny in Telegram mode (safe default)
-            from loguru import logger
+            # Send confirmation prompt to user via Telegram
+            self.bot.send_message(
+                chat_id=self.chat_id,
+                text=prompt_text,
+                parse_mode="Markdown",
+            )
+        except Exception as exc:
             logger.warning(
-                "Telegram gate: tool '{}' requires confirmation but "
-                "async Telegram approval is not yet wired. Denying.",
-                tool_name,
+                "Telegram gate: failed to send confirmation for '{}': {}",
+                tool_name, exc,
             )
             return (False, False)
-        except Exception:
+
+        # Block until user replies or timeout expires
+        replied = self._reply_event.wait(timeout=self.timeout)
+        self._reply_event = None
+
+        if not replied:
+            logger.info(
+                "Telegram gate: confirmation for '{}' timed out after {}s",
+                tool_name, self.timeout,
+            )
+            try:
+                self.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=f"⏰ Confirmation timed out for `{tool_name}` — denied.",
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                pass
             return (False, False)
+
+        approved = self._reply_text in ("y", "yes", "approve", "ok", "proceed")
+        logger.info(
+            "Telegram gate: user {} tool '{}' (reply: '{}')",
+            "approved" if approved else "denied",
+            tool_name,
+            self._reply_text,
+        )
+        return (approved, False)
