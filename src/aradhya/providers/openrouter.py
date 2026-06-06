@@ -278,24 +278,35 @@ class OpenRouterTextModelProvider:
             "messages": chat_messages,
         }
         if tools:
-            # Forward ARADHYA's OpenAI-style tool definitions unchanged when
-            # possible; older callers may still pass flat tool dictionaries.
-            openai_tools = []
-            for tool in tools:
-                if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
-                    openai_tools.append(tool)
-                else:
-                    openai_tools.append({
-                        "type": "function",
-                        "function": {
-                            "name": tool.get("name", ""),
-                            "description": tool.get("description", ""),
-                            "parameters": tool.get("parameters", {}),
-                        },
-                    })
-            payload["tools"] = openai_tools
+            payload["tools"] = self._format_tools(tools)
 
-        # Try primary model, then fallbacks on 429
+        response_or_error = self._execute_chat_with_fallbacks(payload)
+        if isinstance(response_or_error, ModelChatResult):
+            return response_or_error
+
+        return self._parse_chat_response(response_or_error)
+
+    def _format_tools(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Forward ARADHYA's OpenAI-style tool definitions unchanged when
+        possible; older callers may still pass flat tool dictionaries.
+        """
+        openai_tools = []
+        for tool in tools:
+            if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+                openai_tools.append(tool)
+            else:
+                openai_tools.append({
+                    "type": "function",
+                    "function": {
+                        "name": tool.get("name", ""),
+                        "description": tool.get("description", ""),
+                        "parameters": tool.get("parameters", {}),
+                    },
+                })
+        return openai_tools
+
+    def _execute_chat_with_fallbacks(self, payload: dict[str, Any]) -> requests.Response | ModelChatResult:
+        """Try primary model, then fallbacks on 429."""
         models_to_try = [payload["model"]] + self._get_fallback_models(payload["model"])
 
         last_error = ""
@@ -308,7 +319,7 @@ class OpenRouterTextModelProvider:
                     timeout=self.profile.request_timeout_seconds,
                 )
                 response.raise_for_status()
-                break  # Success — exit retry loop
+                return response
             except requests.HTTPError as e:
                 status_code = getattr(response, "status_code", 0)
                 error_detail = ""
@@ -339,18 +350,19 @@ class OpenRouterTextModelProvider:
                     provider="openrouter",
                     raw={},
                 )
-        else:
-            # All models exhausted
-            return ModelChatResult(
-                text=(
-                    f"[All free models are rate-limited right now. "
-                    f"Last error: {last_error}. Try again in 30 seconds.]"
-                ),
-                model=self.profile.model_name,
-                provider="openrouter",
-                raw={},
-            )
 
+        # All models exhausted
+        return ModelChatResult(
+            text=(
+                f"[All free models are rate-limited right now. "
+                f"Last error: {last_error}. Try again in 30 seconds.]"
+            ),
+            model=self.profile.model_name,
+            provider="openrouter",
+            raw={},
+        )
+
+    def _parse_chat_response(self, response: requests.Response) -> ModelChatResult:
         raw = response.json()
         choice = (raw.get("choices") or [{}])[0]
         message = choice.get("message", {})

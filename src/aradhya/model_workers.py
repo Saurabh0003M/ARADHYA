@@ -7,13 +7,13 @@ network calls.  Live cloud probes should stay behind an explicit user action.
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from src.aradhya.providers.openrouter import FREE_MODELS
+from src.aradhya.utils.helpers import load_json_file
 from src.aradhya.runtime_profile import RuntimeProfile, build_default_runtime_profile
 
 
@@ -210,21 +210,21 @@ class ModelWorkerRegistry:
 
     def _local_fallback_model_name(self) -> str:
         shared_profile = self.project_root / "core" / "config" / "profile.json"
-        try:
-            payload = json.loads(shared_profile.read_text(encoding="utf-8"))
+        payload = load_json_file(shared_profile)
+        if isinstance(payload, dict):
             raw_model = payload.get("model", {})
             if isinstance(raw_model, dict) and raw_model.get("provider") == "ollama":
                 model_name = str(raw_model.get("model_name", "")).strip()
                 if model_name:
                     return model_name
-        except (OSError, json.JSONDecodeError):
-            pass
         return build_default_runtime_profile(self.project_root).model.model_name
 
     def _apply_config_overrides(self, workers: list[ModelWorker]) -> list[ModelWorker]:
         by_id = {worker.worker_id: worker for worker in workers}
         for path in self._config_paths():
-            payload = self._load_payload(path)
+            payload = load_json_file(path)
+            if not isinstance(payload, dict):
+                continue
             for raw_worker in payload.get("workers", []):
                 if not isinstance(raw_worker, dict):
                     continue
@@ -241,15 +241,6 @@ class ModelWorkerRegistry:
     def _config_paths(self) -> tuple[Path, Path]:
         config_dir = self.project_root / "core" / "config"
         return config_dir / MODEL_WORKERS_FILENAME, config_dir / MODEL_WORKERS_LOCAL_FILENAME
-
-    def _load_payload(self, path: Path) -> dict[str, Any]:
-        if not path.exists():
-            return {}
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-        return payload if isinstance(payload, dict) else {}
 
     def _worker_from_payload(self, payload: dict[str, Any]) -> ModelWorker:
         worker_id = str(payload.get("worker_id") or payload.get("id") or "custom-worker")

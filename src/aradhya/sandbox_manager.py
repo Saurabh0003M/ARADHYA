@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from loguru import logger
+from src.aradhya.utils.helpers import load_json_file
 
 SANDBOX_MARKER = ".aradhya_sandbox.json"
 
@@ -152,10 +153,9 @@ class SandboxManager:
     def current_policy(self) -> dict[str, Any]:
         """Return the current sandbox policy dict."""
         if self._marker.is_file():
-            try:
-                return json.loads(self._marker.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                pass
+            data = load_json_file(self._marker, default=None)
+            if isinstance(data, dict):
+                return data
         return self._policy
 
     # ------------------------------------------------------------------
