@@ -177,4 +177,72 @@ def write_file(path: str, content: str) -> str:
         return f"Error writing file: {error}"
 
 
-ALL_FILE_TOOLS = [read_file, list_directory, search_files, write_file]
+@tool_definition(
+    name="delete_file",
+    description="Delete a file from the filesystem. Does not support deleting directories.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "The absolute or relative path to the file to delete.",
+            },
+        },
+        "required": ["path"],
+    },
+    requires_confirmation=True,
+)
+def delete_file(path: str) -> str:
+    """Delete a file from the filesystem."""
+    target = Path(path).resolve()
+    if not target.exists():
+        return f"Error: File not found: {target}"
+    if target.is_dir():
+        return f"Error: {target} is a directory. delete_file only deletes files."
+    try:
+        target.unlink()
+        return f"File deleted successfully: {target}"
+    except Exception as error:
+        return f"Failed to delete file: {error}"
+
+
+@tool_definition(
+    name="move_file",
+    description="Move or rename a file or directory on the filesystem.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "source": {
+                "type": "string",
+                "description": "The absolute or relative path to the existing file or directory.",
+            },
+            "destination": {
+                "type": "string",
+                "description": "The new path for the file or directory.",
+            },
+        },
+        "required": ["source", "destination"],
+    },
+    requires_confirmation=True,
+)
+def move_file(source: str, destination: str) -> str:
+    """Move or rename a file or directory."""
+    src = Path(source).resolve()
+    dst = Path(destination).resolve()
+
+    if not src.exists():
+        return f"Error: Source not found: {src}"
+    if dst.exists():
+        return f"Error: Destination already exists: {dst}"
+
+    try:
+        # Create parent directories if they do not exist
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        import shutil
+        shutil.move(str(src), str(dst))
+        return f"Moved successfully from {src} to {dst}"
+    except Exception as error:
+        return f"Failed to move file: {error}"
+
+
+ALL_FILE_TOOLS = [read_file, list_directory, search_files, write_file, delete_file, move_file]

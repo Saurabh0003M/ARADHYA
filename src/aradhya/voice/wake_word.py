@@ -66,7 +66,7 @@ class WakeWordListener:
             if result.success and result.audio_path:
                 # Transcribe the chunk without full archival process to save time
                 try:
-                    transcript_text = self.voice_manager.transcriber.transcribe(result.audio_path)
+                    transcript_text = self.voice_manager._get_transcriber().transcribe(result.audio_path, None).transcript_text
                     normalized = transcript_text.lower().strip()
 
                     if any(w in normalized for w in wake_words):
