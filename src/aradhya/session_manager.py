@@ -119,6 +119,13 @@ class SessionManager:
         self._store = state_store or StateStore(self.sessions_dir.parent)
         self._migrated = False
 
+        # Cursor: tracks how many messages have been persisted so
+        # append_message() only writes the new ones.
+        self._persisted_count: int = 0
+
+        # Optional LLM-backed summarizer for compact_session()
+        self._summarizer: Any = None
+
     @property
     def active_session(self) -> Session | None:
         return self._active_session
@@ -147,6 +154,7 @@ class SessionManager:
             session_id = f"session_{int(time.time() * 1000)}"
         session = Session(id=session_id)
         self._active_session = session
+        self._persisted_count = 0  # fresh session, nothing persisted yet
         self.save(session)
         logger.info("Created new session '{}'", session_id)
         return session
@@ -177,6 +185,7 @@ class SessionManager:
                 compacted=meta.get("compacted", False),
             )
             self._active_session = session
+            self._persisted_count = session.message_count
             logger.info(
                 "Loaded session '{}' with {} messages (SQLite)",
                 session_id,
@@ -234,6 +243,60 @@ class SessionManager:
             for m in session.messages
         ]
         self._store.replace_messages(session.id, messages_data)
+        self._persisted_count = len(messages_data)
+
+    def append_message(
+        self,
+        role: str,
+        content: str,
+        session: Session | None = None,
+        **metadata: Any,
+    ) -> None:
+        """Add a message to the session and persist it incrementally.
+
+        Unlike ``save()`` which replaces all messages, this method adds
+        only the new message to SQLite via ``StateStore.add_message()``.
+        This is much cheaper for the typical case of appending one or
+        two messages per turn.
+        """
+        session = session or self._active_session
+        if session is None:
+            logger.warning("append_message called with no active session")
+            return
+
+        # Add to in-memory session
+        session.add_message(role, content, **metadata)
+        msg = session.messages[-1]
+
+        # Persist only this message
+        self._store.add_message(
+            session_id=session.id,
+            role=msg.role,
+            content=msg.content,
+            timestamp=msg.timestamp,
+            metadata=msg.metadata,
+        )
+        self._persisted_count += 1
+
+        # Touch session metadata
+        self._store.upsert_session(
+            session_id=session.id,
+            title=session.title,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            compacted=session.compacted,
+        )
+
+    def set_summarizer(self, summarizer: Any) -> None:
+        """Set an LLM-backed summarizer for session compaction.
+
+        The summarizer must be a callable that accepts a
+        ``list[Message]`` and returns a ``str`` summary.  Typically
+        this is wired from ``assistant_core.py`` to use the active
+        model provider.
+        """
+        self._summarizer = summarizer
+        logger.debug("Session summarizer set")
 
     def list_sessions(self, limit: int = 20) -> list[dict[str, str]]:
         """Return metadata for recent sessions from SQLite."""
@@ -271,7 +334,8 @@ class SessionManager:
         """Compact older messages into a summary to reduce context size.
 
         If ``summarizer`` is provided, it is called with the older messages to
-        produce a summary string.  Otherwise, a simple concatenation is used.
+        produce a summary string.  Falls back to the stored ``_summarizer``,
+        then to a simple extractive summary.
         """
         session = session or self._active_session
         if session is None or session.message_count <= COMPACTION_TRIGGER:
@@ -281,9 +345,12 @@ class SessionManager:
         older_messages = session.messages[:-keep_count]
         recent_messages = session.messages[-keep_count:]
 
-        if summarizer is not None:
+        # Resolve summarizer: explicit arg > stored > simple fallback
+        effective_summarizer = summarizer or self._summarizer
+
+        if effective_summarizer is not None:
             try:
-                summary_text = summarizer(older_messages)
+                summary_text = effective_summarizer(older_messages)
             except Exception as error:
                 logger.warning("Compaction summarizer failed: {}", error)
                 summary_text = self._simple_summary(older_messages)

@@ -204,3 +204,80 @@ class ContextEngine:
             return buf.value
         except Exception:
             return ""
+
+    def _collect_session_summaries(
+        self,
+        current_session: Session | None = None,
+        max_sessions: int = 3,
+    ) -> list[str]:
+        """Load compact summaries of recent sessions for cross-session context.
+
+        Returns up to *max_sessions* summaries from previous sessions
+        (excluding the current one).  Each summary includes the session
+        title and a brief recap of topics discussed.
+        """
+        if self.session_manager is None:
+            return []
+
+        try:
+            recent = self.session_manager.list_sessions(limit=max_sessions + 1)
+            summaries: list[str] = []
+            for meta in recent:
+                # Skip the current session
+                if current_session and meta.get("id") == current_session.id:
+                    continue
+                title = meta.get("title", "Untitled session")
+                updated = meta.get("updated_at", "")
+                summary = f"{title}"
+                if updated:
+                    summary += f" (last active: {updated})"
+                summaries.append(summary)
+                if len(summaries) >= max_sessions:
+                    break
+            return summaries
+        except Exception as error:
+            logger.debug("Failed to collect session summaries: {}", error)
+            return []
+
+    def _collect_relevant_learnings(
+        self,
+        recent_topics: list[str],
+        max_learnings: int = 5,
+    ) -> list[str]:
+        """Search the learnings engine for insights relevant to current topics.
+
+        Extracts keywords from the most recent user messages and queries
+        the learnings engine.  Returns compact one-liners.
+        """
+        if self.learnings_engine is None or not recent_topics:
+            return []
+
+        try:
+            # Extract keywords from recent topics (words ≥ 4 chars)
+            import re
+            keywords: set[str] = set()
+            for topic in recent_topics[-3:]:
+                words = re.findall(r"\b\w{4,}\b", topic.lower())
+                keywords.update(words[:5])  # keep it bounded
+
+            if not keywords:
+                return []
+
+            results: list[str] = []
+            for keyword in list(keywords)[:3]:  # search top 3 keywords
+                hit = self.learnings_engine.search(keyword)
+                if "No learnings found" not in hit:
+                    # Extract first line of each hit
+                    for line in hit.splitlines():
+                        line = line.strip()
+                        if line and len(line) > 10 and line not in results:
+                            results.append(line[:200])
+                        if len(results) >= max_learnings:
+                            break
+                if len(results) >= max_learnings:
+                    break
+
+            return results[:max_learnings]
+        except Exception as error:
+            logger.debug("Failed to collect relevant learnings: {}", error)
+            return []

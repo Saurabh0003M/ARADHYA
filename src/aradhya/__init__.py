@@ -1,21 +1,8 @@
-"""Public package exports for Aradhya."""
+"""Public package exports for Aradhya.
 
-from src.aradhya.assistant_core import AradhyaAssistant
-from src.aradhya.assistant_models import (
-    AssistantPreferences,
-    AssistantResponse,
-    PlanAction,
-    PlanKind,
-    WakeSource,
-    build_default_preferences,
-    load_preferences,
-)
-from src.aradhya.runtime_profile import (
-    RuntimeProfile,
-    VoiceActivationProfile,
-    build_default_runtime_profile,
-    load_runtime_profile,
-)
+Exports are resolved lazily so importing a narrow subpackage such as
+``src.aradhya.smart_router`` does not pull in the full assistant runtime.
+"""
 
 __all__ = [
     "AradhyaAssistant",
@@ -31,3 +18,35 @@ __all__ = [
     "load_preferences",
     "load_runtime_profile",
 ]
+
+
+def __getattr__(name: str):
+    if name == "AradhyaAssistant":
+        from src.aradhya.assistant_core import AradhyaAssistant
+
+        return AradhyaAssistant
+
+    if name in {
+        "AssistantPreferences",
+        "AssistantResponse",
+        "PlanAction",
+        "PlanKind",
+        "WakeSource",
+        "build_default_preferences",
+        "load_preferences",
+    }:
+        from src.aradhya import assistant_models
+
+        return getattr(assistant_models, name)
+
+    if name in {
+        "RuntimeProfile",
+        "VoiceActivationProfile",
+        "build_default_runtime_profile",
+        "load_runtime_profile",
+    }:
+        from src.aradhya import runtime_profile
+
+        return getattr(runtime_profile, name)
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

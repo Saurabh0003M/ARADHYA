@@ -29,6 +29,7 @@ class PlanKind(str, Enum):
     """High-level action categories Aradhya can plan."""
 
     AGENT_TASK = "agent_task"
+    PLANNED_TASK = "planned_task"
     OPEN_PATH = "open_path"
     OPEN_SECURITY_BLOGS = "open_security_blogs"
     LOCATE_TXT_DENSE_FOLDER = "locate_txt_dense_folder"

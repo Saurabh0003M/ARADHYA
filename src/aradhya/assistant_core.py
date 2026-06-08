@@ -38,21 +38,29 @@ from src.aradhya.tools.tool_registry import ToolRegistry
 from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 from src.aradhya.tools.vision_tools import ALL_VISION_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS
+from src.aradhya.tools.subagent_tools import ALL_SUBAGENT_TOOLS
 from src.aradhya.turn_context import build_turn_context
 from src.aradhya.context_compressor import (
     TruncationPolicy,
     compact_history,
 )
 from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
-from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS
+from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS, LearningsEngine
 from src.aradhya.tools.scheduler_tool import ALL_SCHEDULER_TOOLS
 from src.aradhya.tools.web_tools import set_active_network_policy
 from src.aradhya.hooks.hook_config import load_hooks
 from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
 from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
+from src.aradhya.agents.subagent_runner import SubagentRunner
 from src.aradhya.permission_rules import PermissionEngine, load_permissions
 from src.aradhya.history_processors import default_pipeline
 from src.aradhya.confirmation_gates import CliConfirmationGate
+from src.aradhya.planning_workflow import (
+    ComplexityDetector,
+    PlanGenerator,
+    TaskPlan,
+    COMPLEXITY_THRESHOLD,
+)
 
 MAX_AGENT_CONTEXT_CHARS = 8000
 MAX_AGENT_HISTORY_MESSAGES = 40
@@ -89,6 +97,8 @@ class AradhyaAssistant:
             preferences,
             index_manager=self.index_manager,
             skill_registry=skill_registry,
+            session_manager=self.session_manager,
+            learnings_engine=self._init_learnings_engine(),
         )
         self.toolbox = SystemToolbox(preferences, self.index_manager)
         self.planner = IntentPlanner(
@@ -108,6 +118,19 @@ class AradhyaAssistant:
         self.permission_engine = self._load_permission_engine()
 
         self.mcp_manager = self._load_mcp_manager()
+
+        # ── Subagent orchestration ────────────────────────────────────
+        self._init_subagent_runner()
+
+        # ── LLM-backed session summarizer ─────────────────────────────
+        self._wire_session_summarizer()
+
+        # ── Planning workflow ─────────────────────────────────────────
+        self.complexity_detector = ComplexityDetector(model_provider)
+        self.plan_generator = (
+            PlanGenerator(model_provider) if model_provider else None
+        )
+        self._active_plan: TaskPlan | None = None
 
     @classmethod
     def from_project_root(
@@ -174,6 +197,127 @@ class AradhyaAssistant:
         manager = MCPManager()
         manager.load_from_profile(self.project_root / "core" / "memory" / "profile.json")
         return manager
+
+    def _init_learnings_engine(self) -> LearningsEngine | None:
+        """Initialise the learnings engine for cross-session knowledge."""
+        try:
+            return LearningsEngine(self.project_root)
+        except Exception as exc:
+            logger.debug("Learnings engine init failed (non-fatal): {}", exc)
+            return None
+
+    def _init_subagent_runner(self) -> None:
+        """Set up the SubagentRunner with a loop factory.
+
+        The factory creates a scoped AgentLoop for each subagent.  We
+        only wire it if a model provider is available.
+        """
+        if self.model_provider is None:
+            return
+
+        try:
+            runner = SubagentRunner.instance()
+
+            # Capture 'self' for the closure
+            assistant = self
+
+            def _subagent_loop_factory(
+                *,
+                subagent_id: str,
+                role: str,
+                prompt: str,
+                tools: list[str] | None = None,
+                model: str = "",
+                max_turns: int = 10,
+                system_prompt: str = "",
+            ) -> str:
+                """Run a subagent's ReAct loop and return the final response."""
+                policy = assistant._build_runtime_policy(mutation_granted=False)
+                registry = assistant._build_tool_registry_from_policy(policy)
+
+                # Build a minimal system prompt for the subagent
+                sub_system = system_prompt or (
+                    f"You are a subagent with the role '{role}'. "
+                    f"Complete the following task and provide a clear, "
+                    f"concise result. Use tools as needed but be efficient."
+                )
+
+                gate = CliConfirmationGate()  # subagents still respect gates
+                loop = AgentLoop(
+                    assistant.model_provider,
+                    tool_executor=registry,
+                    confirmation_gate=gate,
+                    max_iterations=max_turns,
+                    max_repeated_tool_calls=3,
+                    hook_engine=assistant.hook_engine,
+                    history_pipeline=default_pipeline(),
+                    permission_engine=assistant.permission_engine,
+                )
+
+                turn = loop.run(prompt, sub_system, history=[])
+                return turn.final_response.strip() or "[Subagent finished without output]"
+
+            runner.set_loop_factory(_subagent_loop_factory)
+            logger.info("SubagentRunner initialised with loop factory")
+
+        except Exception as exc:
+            logger.warning(
+                "SubagentRunner init failed (non-fatal): {}", exc
+            )
+
+    def _wire_session_summarizer(self) -> None:
+        """Wire an LLM-backed summarizer into SessionManager.
+
+        The summarizer uses the active model provider to generate
+        concise summaries of older messages during session compaction.
+        Falls back gracefully if no model is available.
+        """
+        if self.model_provider is None:
+            return
+
+        provider = self.model_provider
+
+        def _llm_summarizer(messages: list) -> str:
+            """Summarize a list of Message objects using the LLM."""
+            # Build a compact transcript of older messages
+            lines = []
+            for m in messages:
+                role = getattr(m, "role", "unknown")
+                content = getattr(m, "content", str(m))
+                lines.append(f"[{role}] {content[:300]}")
+
+            transcript = "\n".join(lines[-20:])  # last 20 messages max
+
+            try:
+                result = provider.chat(
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            "Summarize this conversation excerpt in 3-5 sentences. "
+                            "Focus on: what the user asked, key decisions made, "
+                            "tools used, and outcomes. Be concise.\n\n"
+                            f"{transcript}"
+                        ),
+                    }],
+                    system_prompt=(
+                        "You are a conversation summarizer. Output ONLY "
+                        "the summary, no preamble."
+                    ),
+                    tools=None,
+                )
+                return result.text.strip()
+            except Exception as error:
+                logger.debug("LLM summarizer failed: {}", error)
+                # Fallback to extractive
+                user_msgs = [
+                    getattr(m, "content", "")[:120]
+                    for m in messages
+                    if getattr(m, "role", "") == "user"
+                ]
+                return "Earlier topics: " + "; ".join(user_msgs[-10:])
+
+        self.session_manager.set_summarizer(_llm_summarizer)
+        logger.info("LLM session summarizer wired")
 
     def handle_wake(self, source: WakeSource) -> AssistantResponse:
         self.state.is_awake = True
@@ -249,6 +393,17 @@ class AradhyaAssistant:
         plan = self.planner.build_plan(transcript, self.state)
         self.state.pending_plan = None
 
+        # Intercept complex agent tasks → upgrade to structured plans
+        if plan.kind == PlanKind.AGENT_TASK and plan.ready:
+            planned = self.maybe_plan_complex_request(transcript)
+            if planned is not None:
+                plan = planned
+                self._active_plan = plan.metadata.get("task_plan")
+                logger.info(
+                    "Upgraded agent task to planned task (complexity {:.0%})",
+                    plan.metadata.get("complexity_score", 0),
+                )
+
         snapshot = None
         if (
             plan.uses_local_data
@@ -307,6 +462,8 @@ class AradhyaAssistant:
     ) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
             return self._execute_agent_task(plan, stream_handler=stream_handler, session_name=session_name)
+        if plan.kind == PlanKind.PLANNED_TASK:
+            return self._execute_planned_task(plan, stream_handler=stream_handler, session_name=session_name)
         if plan.kind == PlanKind.GENERAL_CHAT:
             return self._execute_general_chat(plan, stream_handler=stream_handler, session_name=session_name)
         return self.toolbox.execute(plan, self.state)
@@ -429,20 +586,21 @@ class AradhyaAssistant:
             final_response_preview=final_text,
         )
 
-        session.add_message(
+        self.session_manager.append_message(
             "user",
             request,
+            session=session,
             plan_kind=PlanKind.AGENT_TASK.value,
         )
-        session.add_message(
+        self.session_manager.append_message(
             "assistant",
             final_text,
+            session=session,
             plan_kind=PlanKind.AGENT_TASK.value,
             iterations=turn.iterations,
             tool_calls=[tool.name for tool in turn.tool_calls_made],
             tool_success=[result.success for result in turn.tool_results],
         )
-        self.session_manager.save(session)
         self.session_manager.compact_session(session)
 
         failed_tool_names = tuple(
@@ -452,6 +610,136 @@ class AradhyaAssistant:
             success=success,
             message=final_text,
             artifacts=failed_tool_names,
+        )
+
+    def _execute_planned_task(
+        self, plan, stream_handler: Callable[..., str] | None = None,
+        session_name: str | None = None,
+    ) -> ExecutionResult:
+        """Execute a structured multi-step plan.
+
+        Each step is run through the agent loop with a focused prompt.
+        Progress is tracked on the ``TaskPlan`` object and reported
+        to the user at the end.
+        """
+        task_plan: TaskPlan | None = plan.metadata.get("task_plan")
+        if task_plan is None:
+            return ExecutionResult(
+                False,
+                "No task plan found in plan metadata.",
+            )
+
+        if self.model_provider is None:
+            return ExecutionResult(
+                False,
+                "The planned task path needs a configured backend model.",
+            )
+
+        session = (
+            self.session_manager.active_session
+            or self.session_manager.load_or_create(session_name or "main")
+        )
+
+        step_results: list[str] = []
+
+        while not task_plan.is_complete:
+            step = task_plan.get_next_step()
+            if step is None:
+                break
+
+            step.status = step.status.__class__("in_progress")
+            step_prompt = (
+                f"You are executing step {step.index + 1} of a {task_plan.total_steps}-step plan.\n"
+                f"Goal: {task_plan.goal}\n"
+                f"Current step: {step.title}\n"
+                f"Instructions: {step.description}\n\n"
+                f"Complete this step and provide a clear result summary."
+            )
+
+            logger.info(
+                "Executing plan step {}/{}: {}",
+                step.index + 1,
+                task_plan.total_steps,
+                step.title,
+            )
+
+            try:
+                # Build a single-step agent task and execute it
+                step_plan = PlanAction(
+                    kind=PlanKind.AGENT_TASK,
+                    summary=step.title,
+                    requires_confirmation=False,
+                    metadata={"request": step_prompt},
+                )
+                step_result = self._execute_agent_task(
+                    step_plan,
+                    stream_handler=stream_handler,
+                    session_name=session_name,
+                )
+                task_plan.advance(
+                    result=step_result.message[:500],
+                    success=step_result.success,
+                )
+                step_results.append(
+                    f"**Step {step.index + 1} ({step.title})**: "
+                    f"{'✅' if step_result.success else '❌'} "
+                    f"{step_result.message[:200]}"
+                )
+            except Exception as exc:
+                task_plan.advance(result=str(exc), success=False)
+                step_results.append(
+                    f"**Step {step.index + 1} ({step.title})**: ❌ Error: {exc}"
+                )
+                logger.error("Plan step {} failed: {}", step.index + 1, exc)
+
+        # Build consolidated report
+        report_lines = [
+            f"📋 **Plan completed: {task_plan.goal}**",
+            f"Progress: {task_plan.progress_summary}",
+            "",
+            *step_results,
+        ]
+        report = "\n".join(report_lines)
+
+        self._active_plan = None  # Clear the plan
+        return ExecutionResult(
+            success=task_plan.completed_steps == task_plan.total_steps,
+            message=report,
+        )
+
+    def maybe_plan_complex_request(
+        self, request: str
+    ) -> PlanAction | None:
+        """Check if a request is complex enough to warrant planning.
+
+        Returns a ``PLANNED_TASK`` PlanAction if planning is warranted,
+        or ``None`` if the request should proceed as a normal agent task.
+        """
+        if self.plan_generator is None:
+            return None
+
+        score, reasoning = self.complexity_detector.score(request)
+        logger.debug(
+            "Complexity score for '{}': {:.2f} ({})",
+            request[:60], score, reasoning,
+        )
+
+        if score < COMPLEXITY_THRESHOLD:
+            return None
+
+        # Generate a structured plan
+        task_plan = self.plan_generator.generate(request, score)
+
+        return PlanAction(
+            kind=PlanKind.PLANNED_TASK,
+            summary=task_plan.format_for_user(),
+            requires_confirmation=True,
+            metadata={
+                "request": request,
+                "task_plan": task_plan,
+                "complexity_score": score,
+                "complexity_reasoning": reasoning,
+            },
         )
 
     def _build_runtime_policy(self, *, mutation_granted: bool) -> ToolRuntimePolicy:
@@ -477,6 +765,7 @@ class AradhyaAssistant:
             *ALL_SKILL_INSTALLER_TOOLS,
             *ALL_LEARNINGS_TOOLS,
             *ALL_SCHEDULER_TOOLS,   # Gap F: expose scheduler to model
+            *ALL_SUBAGENT_TOOLS,    # Subagent orchestration tools
         ):
             registry.register_function(tool)
 
