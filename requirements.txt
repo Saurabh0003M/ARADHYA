@@ -20,3 +20,4 @@ numpy>=1.24.0
 # Optional stacks live in separate files so a fresh clone keeps a lightweight
 # install path. See requirements-voice.txt for Faster-Whisper support and
 # requirements-windows.txt for future tray/hotkey packages.
+pydantic>=2.0
