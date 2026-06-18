@@ -136,6 +136,16 @@ class ToolRegistry:
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)
 
+    def requires_confirmation(self, name: str) -> bool:
+        """Return True if the named tool is registered and flagged dangerous.
+
+        This is the single source of truth the agent loop consults to decide
+        whether a tool call must pass the confirmation gate — it reads the
+        per-tool ``requires_confirmation`` flag set via ``@tool_definition``.
+        """
+        tool_def = self._tools.get(name)
+        return bool(tool_def and tool_def.requires_confirmation)
+
     @property
     def count(self) -> int:
         return len(self._tools)

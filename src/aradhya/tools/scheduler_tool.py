@@ -64,6 +64,7 @@ from src.aradhya.tools.tool_registry import tool_definition
         },
         "required": ["description", "action", "payload"],
     },
+    requires_confirmation=True,
 )
 def schedule_task(
     description: str,

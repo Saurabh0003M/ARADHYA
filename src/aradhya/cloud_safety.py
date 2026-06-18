@@ -192,23 +192,23 @@ class CloudPrivacyGate:
         *,
         source: str = "chat messages",
     ) -> CloudSafetyAssessment:
-        """Assess OpenAI-style chat messages.
+        """Assess OpenAI-style chat messages before optional cloud routing.
 
-        Only USER messages are scanned.  System messages are ARADHYA's
-        own internal context, and assistant messages are prior model
-        responses — both will always contain internal paths and terms
-        that would trigger false positives.  The gate exists to prevent
-        the user's private data from reaching cloud models.
+        Scans USER messages and TOOL results. System and assistant messages
+        are ARADHYA's own context / prior model output and reference internal
+        paths that would only cause false positives. Tool results, however, can
+        carry data the agent read from disk (e.g. a file containing an API key
+        or a command's output), so they are scanned too — otherwise a secret
+        read by ``read_file`` could be relayed to a cloud model on the next turn.
         """
 
         text_parts: list[str] = []
         for message in messages:
             role = str(message.get("role", "message"))
-            # Only scan what the USER actually typed.  System messages
-            # are ARADHYA's own code context, assistant messages are
-            # prior model responses — both legitimately reference
-            # internal paths like core/memory.
-            if role != "user":
+            # Scan what the user typed and what tools returned (file reads,
+            # command output). Skip system/assistant — they legitimately
+            # reference internal paths like core/memory and would false-positive.
+            if role not in ("user", "tool"):
                 continue
             content = self._extract_text(message.get("content", ""))
             if content:
