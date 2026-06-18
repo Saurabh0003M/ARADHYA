@@ -100,6 +100,7 @@ class AssistantPreferences:
     game_library_roots: tuple[Path, ...]
     allow_live_execution: bool = False
     use_docker_sandbox: bool = False
+    write_roots: tuple[Path, ...] = ()
     directory_index_policy: DirectoryIndexPolicy = field(
         default_factory=DirectoryIndexPolicy
     )
@@ -190,6 +191,17 @@ def _build_default_user_roots(project_root: Path) -> tuple[Path, ...]:
     return tuple(roots)
 
 
+def _build_default_write_roots(project_root: Path) -> tuple[Path, ...]:
+    """Return the default write-roots: the project workspace only.
+
+    Reads may range across ``user_roots`` (Documents, Desktop, ...) but writes
+    are confined to the project workspace, so that even with live execution
+    enabled a tool cannot create or overwrite files across the user's
+    documents. Widen this deliberately via the ``write_roots`` preference.
+    """
+    return (project_root,)
+
+
 def _resolve_paths(
     raw_paths: list[str] | tuple[str, ...] | None,
     project_root: Path,
@@ -229,6 +241,7 @@ def build_default_preferences(project_root: Path | None = None) -> AssistantPref
         game_library_roots=tuple(),
         allow_live_execution=False,
         use_docker_sandbox=False,
+        write_roots=_build_default_write_roots(root),
         directory_index_policy=DirectoryIndexPolicy(),
     )
 
@@ -326,6 +339,7 @@ def _build_preferences_from_dict(
         use_docker_sandbox=data.get(
             "use_docker_sandbox", defaults.use_docker_sandbox
         ),
+        write_roots=_resolve_paths(data.get("write_roots"), root, defaults.write_roots),
         directory_index_policy=policy,
     )
 

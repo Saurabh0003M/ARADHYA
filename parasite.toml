@@ -31,15 +31,13 @@ version = "0.1.0"
 # repos = "D:\\ParasiteOS\\Repos"
 
 [sandbox]
-# OS-level ACL enforcement (Codex-style)
-# When true, SandboxManager applies icacls rules before tool execution
-enabled = false
-
-# Paths the agent may read (globs supported in future)
-# read_roots = ["C:\\"]
-
-# Paths the agent may write
-# write_roots = []
+# Filesystem access is enforced in software by ToolRuntimePolicy, not by OS
+# ACLs: reads are allowed across `user_roots`, and writes are confined to
+# `write_roots` (the project workspace by default). Configure both in
+# core/config/preferences.json — for example:
+#   "user_roots":  ["C:\\Users\\me\\Documents", "F:\\ARADHYA"]
+#   "write_roots": ["F:\\ARADHYA"]
+# Mutating tools additionally require allow_live_execution = true.
 
 [digestion]
 # 7-stage lifecycle: ENGULF → ISOLATE → CHEW → SWALLOW → DIGEST → EXTRACT → ABSORB

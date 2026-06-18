@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from loguru import logger
 
-from src.aradhya.agent_loop import ToolResult
+from src.aradhya.tools.tool_types import ToolResult
 from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 
 

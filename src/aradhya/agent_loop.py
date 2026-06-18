@@ -20,8 +20,8 @@ from typing import Any, Callable, Protocol, TYPE_CHECKING
 from loguru import logger
 
 from src.aradhya.audit_logger import get_audit_logger
-# NOTE: approved_rules is imported lazily inside _execute_with_gate to avoid
-# the circular import chain: agent_loop -> tools/__init__ -> tool_registry -> agent_loop
+from src.aradhya.tools.approved_rules import get_approved_rules
+from src.aradhya.tools.tool_types import ToolCall, ToolResult
 
 from src.aradhya.utils.json_extractor import (
     JSONExtractionError,
@@ -40,24 +40,6 @@ class ThinkingLevel(Enum):
     LOW = auto()
     MEDIUM = auto()
     HIGH = auto()
-
-
-@dataclass
-class ToolCall:
-    """A single tool call requested by the model."""
-    name: str
-    arguments: dict[str, Any] = field(default_factory=dict)
-    id: str = ""
-
-
-@dataclass
-class ToolResult:
-    """The result of executing a tool call."""
-    tool_call_id: str
-    name: str
-    output: str
-    success: bool = True
-    requires_confirmation: bool = False
 
 
 @dataclass
@@ -681,8 +663,6 @@ class AgentLoop:
         if tool_call.name not in self.DANGEROUS_TOOLS:
             return None
 
-        # Lazy import avoids the circular dependency chain
-        from src.aradhya.tools.approved_rules import get_approved_rules  # noqa: PLC0415
         rules = get_approved_rules()
 
         # Check allow-list first — skip prompt for pre-approved calls

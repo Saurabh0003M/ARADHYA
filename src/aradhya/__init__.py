@@ -1,7 +1,7 @@
 """Public package exports for Aradhya.
 
-Exports are resolved lazily so importing a narrow subpackage such as
-``src.aradhya.smart_router`` does not pull in the full assistant runtime.
+Exports are resolved lazily so importing a narrow subpackage does not pull
+in the full assistant runtime.
 """
 
 __all__ = [

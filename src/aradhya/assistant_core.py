@@ -743,9 +743,17 @@ class AradhyaAssistant:
         )
 
     def _build_runtime_policy(self, *, mutation_granted: bool) -> ToolRuntimePolicy:
-        """Build a ToolRuntimePolicy from current preferences."""
+        """Build a ToolRuntimePolicy from current preferences.
+
+        Reads are permitted across the broad ``user_roots``; writes are
+        confined to the narrower ``write_roots`` (the project workspace by
+        default) so that, even with live execution enabled, a tool cannot
+        create or overwrite files across the user's documents. Falls back to
+        ``user_roots`` only when no write roots are configured.
+        """
         return ToolRuntimePolicy(
-            allowed_roots=self.preferences.user_roots,
+            read_roots=self.preferences.user_roots,
+            write_roots=self.preferences.write_roots or self.preferences.user_roots,
             live_execution_enabled=self.preferences.allow_live_execution,
             mutation_granted=mutation_granted,
         )
