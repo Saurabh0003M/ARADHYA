@@ -94,7 +94,7 @@ def test_dispatch_parasite_candidates_command(monkeypatch, tmp_path):
             record_stage_complete(cp, stage, artifacts=artifacts)
     save_checkpoint(hosts, cp)
 
-    monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.aradhya.commands.parasite.PROJECT_ROOT", tmp_path)
 
     from unittest.mock import patch
     # Mock rich console print to avoid emoji rendering errors in Windows CI
@@ -123,11 +123,11 @@ def test_dispatch_parasite_gc_defaults_to_dry_run(monkeypatch, tmp_path):
                 "freed_mb": "0.0",
             }
 
-    monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.aradhya.commands.parasite.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr("src.aradhya.parasite.pipeline.DigestionPipeline", FakePipeline)
-    monkeypatch.setattr(main, "render_info", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_error", lambda *_args, **_kwargs: None)
 
     handled = main._dispatch_command("/parasite gc")
 
@@ -150,12 +150,12 @@ def test_dispatch_parasite_absorb_calls_reabsorb(monkeypatch, tmp_path):
                 stage_results={"ABSORB": {"artifacts": {"count": 2}}},
             )
 
-    monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.aradhya.commands.parasite.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr("src.aradhya.parasite.pipeline.DigestionPipeline", FakePipeline)
-    monkeypatch.setattr(main, "render_info", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_error", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_warning", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_warning", lambda *_args, **_kwargs: None)
 
     handled = main._dispatch_command("/parasite absorb demo")
 
@@ -179,12 +179,12 @@ def test_dispatch_parasite_dedup_defaults_to_dry_run(monkeypatch, tmp_path):
             captured["dry_run"] = dry_run
             return [{"status": "planned", "duplicate": "host-demo", "base": "native"}]
 
-    monkeypatch.setattr(main, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr("src.aradhya.commands.parasite.PROJECT_ROOT", tmp_path)
     monkeypatch.setattr("src.aradhya.parasite.pipeline.DigestionPipeline", FakePipeline)
     monkeypatch.setattr("src.aradhya.parasite.deduplicator.SkillDeduplicator", FakeDeduper)
-    monkeypatch.setattr(main, "render_info", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_success", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(main, "render_error", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_info", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_success", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("src.aradhya.commands.parasite.render_error", lambda *_args, **_kwargs: None)
 
     handled = main._dispatch_command("/parasite dedup")
 
