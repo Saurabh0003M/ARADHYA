@@ -19,6 +19,7 @@ sys.modules['selenium'] = MagicMock()
 sys.modules['openai'] = MagicMock()
 sys.modules['playwright'] = MagicMock()
 
+import os
 import pytest
 from src.aradhya.tools.shell_tools import run_command
 
@@ -50,6 +51,15 @@ def test_run_command_prevents_injection():
     result = run_command(command=command)
     assert "Exit code: 0" in result
     assert "hello > test_file.txt" in result
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-specific command-line tokenization")
+def test_run_command_preserves_windows_backslash_paths():
+    r"""Regression: POSIX shlex.split() would turn C:\Users\foo into C:Usersfoo."""
+    result = run_command(command=r"echo C:\Users\foo")
+    assert "Exit code: 0" in result
+    assert r"C:\Users\foo" in result
+
 
 from src.aradhya.hooks.hook_engine import HookEngine, HookDefinition, HookEvent, HookType
 from src.aradhya.voice.transcriber import WhisperCommandFileTranscriber

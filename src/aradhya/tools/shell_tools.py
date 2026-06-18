@@ -63,8 +63,18 @@ def run_command(command: str, cwd: str = ".", timeout: int = 30) -> str:
         prefs = load_preferences()
 
         # Sandboxing support (ZeroClaw feature)
+        import os
         import shlex
-        final_command_args = shlex.split(command)
+
+        # Tokenize for the non-sandboxed path. On Windows, pass the raw command
+        # string so the OS parses arguments natively: shlex.split() defaults to
+        # POSIX mode and strips backslashes, mangling paths like C:\Users\foo
+        # into "C:Usersfoo". shell=False still prevents shell-metacharacter
+        # interpretation (|, &&, >) on both platforms.
+        if os.name == "nt":
+            final_command_args = command
+        else:
+            final_command_args = shlex.split(command)
         is_sandboxed = False
 
         if getattr(prefs, "use_docker_sandbox", False):

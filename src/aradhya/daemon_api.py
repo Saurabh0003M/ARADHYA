@@ -15,15 +15,51 @@ POST /shutdown      Gracefully shut down the daemon.
 
 from __future__ import annotations
 
+import hmac
 import json
+import os
+import secrets
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Callable
 
 from loguru import logger
 
+from src.aradhya.confirmation_gates import HeadlessConfirmationGate
+from src.aradhya.paths import aradhya_path
+
 DEFAULT_PORT = 19842
 DEFAULT_HOST = "127.0.0.1"
+
+
+def get_or_create_daemon_token() -> str:
+    """Return the daemon API bearer token, creating and persisting one if absent.
+
+    The token lives in ``~/.aradhya/daemon_token`` (best-effort 0600 perms).
+    Local clients must send it as ``Authorization: Bearer <token>`` — binding to
+    loopback is not sufficient on its own, since any local process (or a browser
+    via a crafted request) can reach a loopback port.
+    """
+    token_path = aradhya_path("daemon_token")
+    try:
+        if token_path.is_file():
+            existing = token_path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+    except OSError:
+        pass
+
+    token = secrets.token_urlsafe(32)
+    try:
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(token, encoding="utf-8")
+        try:
+            os.chmod(token_path, 0o600)
+        except OSError:
+            pass
+    except OSError as exc:
+        logger.warning("Could not persist daemon API token: {}", exc)
+    return token
 
 
 class _DaemonRequestHandler(BaseHTTPRequestHandler):
@@ -38,6 +74,9 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_GET(self) -> None:  # noqa: N802
+        if not self._is_authorized():
+            self._unauthorized()
+            return
         if self.path == "/status":
             self._handle_status()
         else:
@@ -48,6 +87,9 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_POST(self) -> None:  # noqa: N802
+        if not self._is_authorized():
+            self._unauthorized()
+            return
         if self.path == "/wake":
             self._handle_wake()
         elif self.path == "/sleep":
@@ -85,7 +127,11 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
             return
 
         assistant = self.server.assistant  # type: ignore[attr-defined]
-        response = assistant.handle_transcript(text)
+        # Headless channel: deny dangerous tools rather than prompting a TTY
+        # that does not exist in the daemon process.
+        response = assistant.handle_transcript(
+            text, confirmation_gate=HeadlessConfirmationGate()
+        )
         result_payload: dict[str, Any] = {
             "spoken_response": response.spoken_response,
             "awaiting_confirmation": response.awaiting_confirmation,
@@ -115,6 +161,19 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _is_authorized(self) -> bool:
+        """Return True only if the request carries the correct bearer token."""
+        token = getattr(self.server, "auth_token", None)  # type: ignore[attr-defined]
+        if not token:
+            return True  # no token configured — should not happen in practice
+        provided = self.headers.get("Authorization", "")
+        return hmac.compare_digest(provided, f"Bearer {token}")
+
+    def _unauthorized(self) -> None:
+        self._json_response(
+            401, {"error": "Unauthorized: missing or invalid bearer token."}
+        )
 
     def _read_json_body(self) -> dict[str, Any] | None:
         content_length = int(self.headers.get("Content-Length", 0))
@@ -161,12 +220,15 @@ class DaemonAPIServer:
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
         shutdown_callback: Callable[[], None] | None = None,
+        auth_token: str | None = None,
     ) -> None:
         self.host = host
         self.port = port
+        self.auth_token = auth_token or get_or_create_daemon_token()
         self._server = HTTPServer((host, port), _DaemonRequestHandler)
         self._server.assistant = assistant  # type: ignore[attr-defined]
         self._server.shutdown_callback = shutdown_callback  # type: ignore[attr-defined]
+        self._server.auth_token = self.auth_token  # type: ignore[attr-defined]
         self._thread: threading.Thread | None = None
 
     def start(self) -> None:
@@ -178,6 +240,10 @@ class DaemonAPIServer:
         )
         self._thread.start()
         logger.info("Daemon API listening on http://{}:{}", self.host, self.port)
+        logger.info(
+            "Daemon API requires a bearer token; clients read it from {}",
+            aradhya_path("daemon_token"),
+        )
 
     def stop(self) -> None:
         """Shut down the HTTP server."""
