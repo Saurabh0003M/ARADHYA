@@ -103,9 +103,9 @@ class TestDangerousToolBlockedNullGate:
     """Dangerous tools must be blocked when confirmation_gate is None."""
 
     @pytest.mark.parametrize("tool", [
-        "run_command", "write_file", "delete_file", "move_file",
-        "browser_click", "browser_type", "browser_submit",
-        "open_path", "open_url", "clipboard_write",
+        "run_command", "write_file", "browser_click", "browser_type",
+        "browser_execute_js", "open_path", "open_url", "clipboard_write",
+        "schedule_task",
     ])
     def test_dangerous_tool_blocked(self, tool):
         loop = AgentLoop(
@@ -167,6 +167,34 @@ class TestDangerousToolBlockedNullGate:
         result = turn.tool_results[0]
         assert result.success is False
         assert "denied" in result.output.lower()
+
+    def test_registry_flag_is_authoritative_over_fallback_set(self):
+        """A real ToolRegistry's requires_confirmation flag drives the gate.
+
+        schedule_task is flagged requires_confirmation=True, so it must be
+        blocked in dry-run mode — proving the gate consults the registry flag,
+        not just the hardcoded fallback set.
+        """
+        from src.aradhya.tools.tool_registry import ToolRegistry
+        from src.aradhya.tools.scheduler_tool import schedule_task
+
+        registry = ToolRegistry()
+        registry.register_function(schedule_task)
+        assert registry.requires_confirmation("schedule_task") is True
+
+        loop = AgentLoop(
+            model_provider=_ToolCallModel("schedule_task"),
+            tool_executor=registry,
+            confirmation_gate=None,  # dry-run → dangerous tools blocked
+        )
+        with patch("src.aradhya.agent_loop.get_audit_logger") as mock_audit:
+            mock_audit.return_value = MagicMock()
+            turn = loop.run(user_message="schedule it", system_prompt="")
+
+        assert len(turn.tool_results) == 1
+        result = turn.tool_results[0]
+        assert result.success is False
+        assert result.requires_confirmation is True
 
 
 # ── Gap 2: Auto-log tool failures to learnings engine ────────────────────────

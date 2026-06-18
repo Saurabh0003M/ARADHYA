@@ -39,3 +39,30 @@ def test_cloud_privacy_gate_assesses_chat_messages():
 
     assert assessment.allowed is False
     assert any(finding.code == "private_term" for finding in assessment.findings)
+
+
+def test_cloud_privacy_gate_scans_tool_results():
+    """A secret in a tool result (e.g. a file the agent read) must block routing."""
+    assessment = CloudPrivacyGate().assess_messages(
+        [
+            {"role": "user", "content": "Summarize this file."},
+            {"role": "tool", "content": "API_KEY = sk-or-v1-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        ],
+        source="unit-tool",
+    )
+
+    assert assessment.allowed is False
+    assert assessment.risk_level == "blocked"
+
+
+def test_cloud_privacy_gate_ignores_system_and_assistant_messages():
+    """System/assistant messages are ARADHYA's own context — not scanned."""
+    assessment = CloudPrivacyGate().assess_messages(
+        [
+            {"role": "system", "content": "Context root: F:\\ARADHYA\\core\\memory"},
+            {"role": "assistant", "content": "I will read F:\\ARADHYA\\core\\config next."},
+        ],
+        source="unit-internal",
+    )
+
+    assert assessment.allowed is True
