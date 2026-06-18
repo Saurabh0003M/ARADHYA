@@ -166,6 +166,7 @@ class AradhyaDaemon:
             return
 
         from src.aradhya.assistant_models import WakeSource
+        from src.aradhya.confirmation_gates import HeadlessConfirmationGate
 
         logger.info("Heartbeat agent_think triggered: {}", payload[:120])
 
@@ -173,7 +174,10 @@ class AradhyaDaemon:
         if not self._assistant.state.is_awake:
             self._assistant.handle_wake(WakeSource.FLOATING_ICON)
 
-        response = self._assistant.handle_transcript(payload)
+        # Headless heartbeat: deny dangerous tools instead of prompting a TTY.
+        response = self._assistant.handle_transcript(
+            payload, confirmation_gate=HeadlessConfirmationGate()
+        )
         logger.info(
             "Heartbeat result: awake={} spoken={}",
             self._assistant.state.is_awake,
