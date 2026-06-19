@@ -93,6 +93,24 @@ class TextModelProvider(Protocol):
     ) -> Iterator[str]:
         """Stream a chat response, yielding text chunks."""
 
+    def describe_image(
+        self,
+        image_path: str,
+        prompt: str,
+        *,
+        model: str | None = None,
+    ) -> ModelResult:
+        """Describe an image using a multimodal model."""
+
+
+def _encode_image_base64(image_path: str) -> str:
+    """Return the base64 contents of an image file (no data-URI prefix)."""
+    import base64
+    from pathlib import Path
+
+    data = Path(image_path).read_bytes()
+    return base64.b64encode(data).decode("ascii")
+
 
 class OllamaTextModelProvider:
     """Ollama-backed provider for local text generation."""
@@ -362,6 +380,52 @@ class OllamaTextModelProvider:
                 message = chunk.get("message", {}) or {}
                 if "content" in message:
                     yield message["content"]
+
+    def describe_image(
+        self,
+        image_path: str,
+        prompt: str,
+        *,
+        model: str | None = None,
+    ) -> ModelResult:
+        """Describe an image with a multimodal Ollama model.
+
+        Resolves the vision model from (in order) the ``model`` override, the
+        profile's ``vision_model``, then ``model_name``. Ollama accepts the
+        image as a base64 string in the message's ``images`` array.
+        """
+        vision_model = model or self.profile.vision_model or self.profile.model_name
+        try:
+            encoded = _encode_image_base64(image_path)
+        except OSError as error:
+            return ModelResult(
+                text=f"Could not read image at {image_path}: {error}",
+                model=vision_model,
+                provider=self.profile.provider,
+                raw={"error": str(error)},
+            )
+
+        payload = {
+            "model": vision_model,
+            "messages": [
+                {"role": "user", "content": prompt, "images": [encoded]},
+            ],
+            "stream": False,
+        }
+        response = self.session.post(
+            f"{self.profile.base_url}/api/chat",
+            json=payload,
+            timeout=self.profile.request_timeout_seconds,
+        )
+        self._raise_for_status_with_details(response)
+        raw = response.json()
+        message = raw.get("message", {}) or {}
+        return ModelResult(
+            text=str(message.get("content", "") or "").strip(),
+            model=raw.get("model", vision_model),
+            provider=self.profile.provider,
+            raw=raw,
+        )
 
     def _parse_tool_call(self, raw_call: dict[str, Any]) -> ModelToolCall:
         function = raw_call.get("function", {}) or {}

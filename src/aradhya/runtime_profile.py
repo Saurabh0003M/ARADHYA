@@ -37,6 +37,10 @@ class ModelProfile:
     ollama_models_path: Path
     api_key: str = ""
     api_key_env: str = ""
+    # Optional multimodal model used for screenshot/image description. When
+    # empty, vision falls back to model_name (fine if that model is multimodal,
+    # otherwise describe_image reports that no vision model is configured).
+    vision_model: str = ""
 
 
 @dataclass(frozen=True)
@@ -264,6 +268,7 @@ def _load_model_profile(
         ),
         api_key=api_key,
         api_key_env=api_key_env,
+        vision_model=str(raw_model.get("vision_model", defaults.model.vision_model) or ""),
     )
 
 

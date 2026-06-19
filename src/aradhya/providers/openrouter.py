@@ -286,6 +286,31 @@ class OpenRouterTextModelProvider:
 
         return self._parse_chat_response(response_or_error)
 
+    def describe_image(
+        self,
+        image_path: str,
+        prompt: str,
+        *,
+        model: str | None = None,
+    ) -> ModelResult:
+        """Cloud vision is intentionally disabled to keep screen content local.
+
+        Screenshots and on-screen content are sensitive; the screen-reader
+        capability promises they never leave the machine. Configure a local
+        Ollama ``vision_model`` to describe images instead.
+        """
+        del image_path, prompt, model
+        return ModelResult(
+            text=(
+                "Image description is disabled for the cloud provider to keep "
+                "screen content on this machine. Configure a local Ollama "
+                "vision_model (e.g. moondream or llava) to use describe_screen."
+            ),
+            model=self.profile.model_name,
+            provider=self.profile.provider,
+            raw={"vision": "disabled_cloud_local_first"},
+        )
+
     def _format_tools(self, tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Forward ARADHYA's OpenAI-style tool definitions unchanged when
         possible; older callers may still pass flat tool dictionaries.

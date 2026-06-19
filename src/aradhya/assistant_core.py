@@ -49,6 +49,7 @@ from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
 from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS, LearningsEngine
 from src.aradhya.tools.scheduler_tool import ALL_SCHEDULER_TOOLS
 from src.aradhya.tools.web_tools import set_active_network_policy
+from src.aradhya.tools.vision_tools import set_active_vision_provider
 from src.aradhya.hooks.hook_config import load_hooks
 from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
 from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
@@ -569,10 +570,13 @@ class AradhyaAssistant:
 
         # Gap E: set active network policy so web_fetch/web_search can check it
         set_active_network_policy(policy)
+        # P1-3: expose the model provider to describe_screen for this turn
+        set_active_vision_provider(self.model_provider)
         try:
             turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
         finally:
             set_active_network_policy(None)  # always clear after turn
+            set_active_vision_provider(None)
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         # Log turn end
