@@ -39,6 +39,7 @@ from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 from src.aradhya.tools.vision_tools import ALL_VISION_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS
 from src.aradhya.tools.subagent_tools import ALL_SUBAGENT_TOOLS
+from src.aradhya.tools.maintenance_tools import ALL_MAINTENANCE_TOOLS
 from src.aradhya.turn_context import build_turn_context
 from src.aradhya.context_compressor import (
     TruncationPolicy,
@@ -766,6 +767,7 @@ class AradhyaAssistant:
             *ALL_LEARNINGS_TOOLS,
             *ALL_SCHEDULER_TOOLS,   # Gap F: expose scheduler to model
             *ALL_SUBAGENT_TOOLS,    # Subagent orchestration tools
+            *ALL_MAINTENANCE_TOOLS,  # P1-2: read-only disk-usage analysis
         ):
             registry.register_function(tool)
 
