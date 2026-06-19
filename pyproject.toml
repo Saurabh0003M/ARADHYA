@@ -24,3 +24,7 @@ line_length = 100
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=src --cov=core --cov-report=html"
+asyncio_mode = "strict"
+markers = [
+    "asyncio: mark a test as asyncio-driven (handled by pytest-asyncio)",
+]

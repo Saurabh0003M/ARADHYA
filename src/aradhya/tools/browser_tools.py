@@ -476,6 +476,63 @@ def browser_execute_js(script: str) -> str:
         return f"JavaScript execution failed: {error}"
 
 
+@tool_definition(
+    name="browser_submit",
+    description=(
+        "Submit a form on the page. This is the explicit, confirmation-gated "
+        "checkpoint before sending a form (search, login, job application). "
+        "Finds the form by selector or name, otherwise submits the form "
+        "containing the currently focused element."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "selector": {
+                "type": "string",
+                "description": "CSS selector of the form or a field inside it.",
+            },
+            "name": {
+                "type": "string",
+                "description": "Name attribute of the form or a field inside it.",
+            },
+        },
+    },
+    requires_confirmation=True,
+)
+def browser_submit(selector: str = "", name: str = "") -> str:
+    """Submit a form via Selenium's ``element.submit()``."""
+    if _active_driver is None:
+        return "No browser session. Call browser_open() first."
+
+    from selenium.webdriver.common.by import By
+
+    element = None
+
+    if selector:
+        try:
+            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
+        except Exception:
+            pass
+
+    if name and element is None:
+        try:
+            element = _active_driver.find_element(By.NAME, name)
+        except Exception:
+            pass
+
+    # Fallback: submit the form containing the focused element.
+    if element is None:
+        element = _active_driver.switch_to.active_element
+
+    try:
+        # submit() walks up from any field to its enclosing <form>.
+        element.submit()
+        time.sleep(1)
+        return f"Submitted form. Now on: {_active_driver.current_url}"
+    except Exception as error:
+        return f"Submit failed: {error}"
+
+
 ALL_BROWSER_TOOLS = [
     browser_open,
     browser_navigate,
@@ -485,4 +542,5 @@ ALL_BROWSER_TOOLS = [
     browser_screenshot,
     browser_close,
     browser_execute_js,
+    browser_submit,
 ]

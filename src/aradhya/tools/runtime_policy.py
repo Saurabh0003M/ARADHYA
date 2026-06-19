@@ -63,6 +63,8 @@ class ToolRuntimePolicy:
 
     _MUTATING_TOOLS = {
         "write_file",
+        "delete_file",
+        "move_file",
         "run_command",
         "open_path",
         "open_url",
@@ -78,6 +80,8 @@ class ToolRuntimePolicy:
 
     _WRITE_TOOLS = {
         "write_file",
+        "delete_file",
+        "move_file",
         "open_path",
     }
 
@@ -86,6 +90,8 @@ class ToolRuntimePolicy:
         "list_directory": ("path",),
         "search_files": ("path",),
         "write_file": ("path",),
+        "delete_file": ("path",),
+        "move_file": ("source", "destination"),
         "open_path": ("path",),
     }
 

@@ -2,6 +2,7 @@
 
 import threading
 import time
+from pathlib import Path
 
 from loguru import logger
 
@@ -12,6 +13,8 @@ from src.aradhya.assistant_models import WakeSource
 
 
 class WakeWordListener:
+    WAKE_WORDS = ("wakeup", "wake up", "arise")
+
     def __init__(self, assistant: AradhyaAssistant, voice_manager: VoiceInboxManager):
         self.assistant = assistant
         self.voice_manager = voice_manager
@@ -47,8 +50,6 @@ class WakeWordListener:
             logger.info("Wake word listener stopped.")
 
     def _listen_loop(self):
-        wake_words = ["wakeup", "wake up", "arise"]
-
         while self.running:
             # If Aradhya is already awake, don't spam recordings
             if self.assistant.state.is_awake:
@@ -64,26 +65,45 @@ class WakeWordListener:
                 break
 
             if result.success and result.audio_path:
-                # Transcribe the chunk without full archival process to save time
-                try:
-                    transcript_text = self.voice_manager.transcriber.transcribe(result.audio_path)
-                    normalized = transcript_text.lower().strip()
-
-                    if any(w in normalized for w in wake_words):
-                        logger.info(f"Wake word detected in transcript: {normalized}")
-                        print("\nVoice > Wake word detected!")
-                        # Trigger the wake action
-                        wake_response = self.assistant.handle_wake(WakeSource.VOICE)
-                        print(f"Aradhya > {wake_response.spoken_response}")
-                        print("You > ", end="", flush=True)  # Reprompt input cleanly
-                except Exception as e:
-                    logger.debug(f"Wake word transcription failed: {e}")
-                finally:
-                    # Clean up the temp file
-                    try:
-                        if result.audio_path.exists():
-                            result.audio_path.unlink()
-                    except OSError:
-                        pass
+                self._handle_audio_chunk(result.audio_path)
 
             time.sleep(0.1)
+
+    def _handle_audio_chunk(self, audio_path: Path) -> bool:
+        """Transcribe one captured chunk and trigger wake on a match.
+
+        Returns ``True`` when a wake word was detected. Temporary audio and
+        transcript files are always cleaned up, so the inbox stays empty even
+        when transcription fails.
+        """
+
+        # Keep the throwaway transcript next to the temp audio so a single
+        # cleanup pass removes both regardless of which provider wrote it.
+        transcript_destination = audio_path.with_suffix(".wake.txt")
+        detected = False
+        try:
+            transcription = self.voice_manager.transcribe_audio(
+                audio_path, transcript_destination
+            )
+            normalized = (transcription.transcript_text or "").lower().strip()
+
+            if normalized and any(w in normalized for w in self.WAKE_WORDS):
+                logger.info(f"Wake word detected in transcript: {normalized}")
+                print("\nVoice > Wake word detected!")
+                # Trigger the wake action
+                wake_response = self.assistant.handle_wake(WakeSource.VOICE)
+                print(f"Aradhya > {wake_response.spoken_response}")
+                print("You > ", end="", flush=True)  # Reprompt input cleanly
+                detected = True
+        except Exception as e:
+            logger.debug(f"Wake word transcription failed: {e}")
+        finally:
+            # Clean up the temp audio and transcript files
+            for cleanup_path in (audio_path, transcript_destination):
+                try:
+                    if cleanup_path.exists():
+                        cleanup_path.unlink()
+                except OSError:
+                    pass
+
+        return detected

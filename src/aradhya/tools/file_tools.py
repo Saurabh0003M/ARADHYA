@@ -177,4 +177,105 @@ def write_file(path: str, content: str) -> str:
         return f"Error writing file: {error}"
 
 
-ALL_FILE_TOOLS = [read_file, list_directory, search_files, write_file]
+@tool_definition(
+    name="delete_file",
+    description=(
+        "Delete a single file at the given path. Refuses to delete directories "
+        "to avoid accidentally wiping a tree. Requires confirmation."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path to the file to delete.",
+            },
+        },
+        "required": ["path"],
+    },
+    requires_confirmation=True,
+)
+def delete_file(path: str) -> str:
+    """Delete a single file, refusing directories for safety."""
+    target = Path(path).resolve()
+
+    if target.is_dir():
+        return (
+            f"Error: {target} is a directory. delete_file only removes single "
+            "files; refusing to delete a directory tree."
+        )
+    if not target.exists():
+        return f"Error: File not found: {target}"
+    if not target.is_file():
+        return f"Error: {target} is not a regular file; refusing to delete."
+
+    try:
+        target.unlink()
+        return f"Successfully deleted {target}"
+    except Exception as error:
+        return f"Error deleting file: {error}"
+
+
+@tool_definition(
+    name="move_file",
+    description=(
+        "Move or rename a file from a source path to a destination path. "
+        "Creates the destination's parent folders if needed. Requires confirmation."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "source": {
+                "type": "string",
+                "description": "Path to the existing file to move.",
+            },
+            "destination": {
+                "type": "string",
+                "description": "New path for the file (including the new file name).",
+            },
+            "overwrite": {
+                "type": "boolean",
+                "description": "Allow replacing an existing destination file. Default false.",
+            },
+        },
+        "required": ["source", "destination"],
+    },
+    requires_confirmation=True,
+)
+def move_file(source: str, destination: str, overwrite: bool = False) -> str:
+    """Move or rename a file, with guards against clobbering and missing sources."""
+    src = Path(source).resolve()
+    dst = Path(destination).resolve()
+
+    if not src.exists():
+        return f"Error: Source file not found: {src}"
+    if not src.is_file():
+        return f"Error: {src} is not a regular file; refusing to move."
+    if dst.exists():
+        if dst.is_dir():
+            return (
+                f"Error: Destination {dst} is a directory. Provide a full target "
+                "file path, not a folder."
+            )
+        if not overwrite:
+            return (
+                f"Error: Destination already exists: {dst}. Pass overwrite=true to "
+                "replace it."
+            )
+
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        src.replace(dst)
+        return f"Successfully moved {src} -> {dst}"
+    except Exception as error:
+        return f"Error moving file: {error}"
+
+
+ALL_FILE_TOOLS = [
+    read_file,
+    list_directory,
+    search_files,
+    write_file,
+    delete_file,
+    move_file,
+]

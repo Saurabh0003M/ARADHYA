@@ -23,6 +23,7 @@ class WakeSource(str, Enum):
 
     FLOATING_ICON = "floating_icon"
     HOTKEY = "ctrl+win"
+    VOICE = "voice"
 
 
 class PlanKind(str, Enum):
