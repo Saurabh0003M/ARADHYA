@@ -549,7 +549,7 @@ class AradhyaAssistant:
             context=turn_ctx.to_dict(),
         )
 
-        system_prompt = self._build_agent_system_prompt(session, turn_ctx)
+        system_prompt = self._build_agent_system_prompt(session, turn_ctx, user_prompt=request)
         registry = self._build_tool_registry_from_policy(policy)
 
         # ── Gap A: CLI confirmation gate (now a reusable typed class) ──
@@ -783,6 +783,7 @@ class AradhyaAssistant:
         self,
         session: Session | None,
         turn_ctx: "object | None" = None,
+        user_prompt: str = "",
     ) -> str:
         parts = [
             (
@@ -818,7 +819,9 @@ class AradhyaAssistant:
             parts.append(user_context)
 
         if self.skill_registry is not None:
-            skill_instructions = self.skill_registry.active_instructions()
+            # Inject only the skills whose intents match this turn's request,
+            # so the prompt stays focused instead of carrying every skill.
+            skill_instructions = self.skill_registry.instructions_for_prompt(user_prompt)
             if skill_instructions:
                 parts.append("[Active skills]\n" + skill_instructions[:MAX_AGENT_CONTEXT_CHARS])
 

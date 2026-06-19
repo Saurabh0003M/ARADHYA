@@ -96,6 +96,55 @@ class SkillRegistry:
                 )
         return "\n\n---\n\n".join(parts)
 
+    def select_for_prompt(
+        self, user_prompt: str, max_skills: int = 5
+    ) -> list[SkillDefinition]:
+        """Return up to ``max_skills`` active skills most relevant to the prompt.
+
+        Mirrors the intent matching in ``skill_loader.load_skills_for_intent``
+        but operates on the already-loaded registry, so it is cheap enough to
+        run on every agent turn (no disk rescans or requirement re-checks).
+        Skills that declare no ``intents`` are treated as general-purpose and
+        are always candidates.
+        """
+        active = self.active_skills()
+        if not user_prompt or len(active) <= max_skills:
+            return active
+
+        prompt_lower = user_prompt.lower()
+        scored: list[tuple[int, SkillDefinition]] = []
+        for skill in active:
+            if skill.intents:
+                score = sum(
+                    1 for intent in skill.intents if intent.lower() in prompt_lower
+                )
+            else:
+                score = 1  # general-purpose skills are always candidates
+            scored.append((score, skill))
+
+        # Highest score first, then name for deterministic ties.
+        scored.sort(key=lambda pair: (-pair[0], pair[1].name))
+        selected = [skill for score, skill in scored if score > 0][:max_skills]
+        if not selected:
+            selected = [skill for _, skill in scored[:max_skills]]
+        return selected
+
+    def instructions_for_prompt(self, user_prompt: str, max_skills: int = 5) -> str:
+        """Combine instructions from the skills most relevant to ``user_prompt``.
+
+        Intent-filtered counterpart to :meth:`active_instructions` — injects
+        only the top matching skills so the agent prompt stays focused.
+        """
+        parts: list[str] = []
+        for skill in self.select_for_prompt(user_prompt, max_skills):
+            if skill.instructions.strip():
+                parts.append(
+                    f"## Skill: {skill.name}\n"
+                    f"{skill.description}\n\n"
+                    f"{skill.instructions}"
+                )
+        return "\n\n---\n\n".join(parts)
+
     def active_intents(self) -> set[str]:
         """Return the union of all intents declared by active skills."""
         intents: set[str] = set()

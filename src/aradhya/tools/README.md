@@ -45,8 +45,8 @@ graph TD
 **Role:** The actual implementations of the capabilities.
 - **`shell_tools.py`:** Provides `run_command`. Uses safe `subprocess` wrappers. Automatically handles timeouts and large stdout truncation to prevent blowing out the LLM's context window.
 - **`file_tools.py`:** Provides safe file reading, writing, moving, and deleting. Prevents arbitrary access to sensitive system paths unless elevated.
-- **`browser_tools.py` & `web_tools.py`:** `web_tools` uses raw HTTP requests for fast API scraping. `browser_tools` spawns headless Playwright or Selenium instances to click buttons, type into fields, and execute Javascript for complex SPAs.
-- **`vision_tools.py`:** Takes screen captures using PyAutoGUI or Pillow, compresses them, and formats them for multi-modal LLM analysis (locating buttons by coordinates).
+- **`browser_tools.py` & `web_tools.py`:** `web_tools` uses raw HTTP requests for fast API scraping. `browser_tools` drives a Selenium-controlled Chrome/Edge browser to navigate, click buttons, type into fields, submit forms, and execute JavaScript for complex SPAs.
+- **`vision_tools.py`:** Takes screen captures using `mss` or Pillow's `ImageGrab` (with a PowerShell fallback), compresses them, and formats them for multi-modal LLM analysis.
 - **`power_tools.py` & `system_tools.py`:** Exposes Windows-specific API calls to sleep, restart, or lock the machine, as well as clipboard read/write access.
 - **`scheduler_tool.py`:** Allows the LLM to register delayed or recurring cron-like jobs into the Daemon's background loop.
 - **`subagent_tools.py`:** A wrapper over the `agents/` module, providing the `invoke_subagent` and `send_message` tools directly to the LLM.

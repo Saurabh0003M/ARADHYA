@@ -215,6 +215,31 @@ class LLMIntentPlanner:
         if decision.intent == "GENERAL_CHAT":
             return self.toolbox.plan_general_chat(transcript)
 
+        # Skill intents are advertised to the classifier in _build_system_prompt
+        # (via active_intents). When the model picks one, run it as a
+        # model-driven agent task — the matching skill's instructions are
+        # injected into the agent system prompt by
+        # assistant_core._build_agent_system_prompt. Compare uppercased because
+        # _parse_decision upper-cases the model's intent while SKILL.md may
+        # declare intents in any case.
+        if self.skill_registry is not None:
+            skill_intents = {intent.upper() for intent in self.skill_registry.active_intents()}
+            if decision.intent in skill_intents:
+                return PlanAction(
+                    kind=PlanKind.AGENT_TASK,
+                    summary=(
+                        f"Routing '{decision.intent}' to a model-driven agent task "
+                        "using the matching skill. The agent will choose read/search "
+                        "tools and stop with a final answer; machine-changing tools "
+                        "stay policy-gated."
+                    ),
+                    requires_confirmation=False,
+                    metadata={
+                        "request": transcript,
+                        "route_reason": f"skill_intent:{decision.intent}",
+                    },
+                )
+
         return PlanAction(
             kind=PlanKind.UNKNOWN,
             summary=(
