@@ -18,6 +18,7 @@ from src.aradhya.assistant_models import (
     AssistantState,
     PlanAction,
     ExecutionResult,
+    PlanAction,
     PlanKind,
     WakeSource,
     load_preferences,
@@ -635,11 +636,6 @@ class AradhyaAssistant:
                 False,
                 "The planned task path needs a configured backend model.",
             )
-
-        _session = (
-            self.session_manager.active_session
-            or self.session_manager.load_or_create(session_name or "main")
-        )
 
         step_results: list[str] = []
 
