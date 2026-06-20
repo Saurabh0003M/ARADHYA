@@ -215,6 +215,16 @@ class LLMIntentPlanner:
         if decision.intent == "GENERAL_CHAT":
             return self.toolbox.plan_general_chat(transcript)
 
+        # Gap P0-4: Route skill intents -> AGENT_TASK
+        if self.skill_registry is not None and decision.intent in self.skill_registry.active_intents():
+            return PlanAction(
+                kind=PlanKind.AGENT_TASK,
+                summary=f"Running skill task: {decision.intent}",
+                requires_confirmation=False,
+                ready=True,
+                metadata={"request": transcript, "intent": decision.intent},
+            )
+
         return PlanAction(
             kind=PlanKind.UNKNOWN,
             summary=(

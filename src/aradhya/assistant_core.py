@@ -20,6 +20,7 @@ from src.aradhya.assistant_models import (
     ExecutionResult,
     PlanAction,
     PlanKind,
+    PlanAction,
     WakeSource,
     load_preferences,
 )
@@ -551,7 +552,7 @@ class AradhyaAssistant:
             context=turn_ctx.to_dict(),
         )
 
-        system_prompt = self._build_agent_system_prompt(session, turn_ctx)
+        system_prompt = self._build_agent_system_prompt(session, turn_ctx, request)
         registry = self._build_tool_registry_from_policy(policy)
 
         # ── Gap A: CLI confirmation gate (now a reusable typed class) ──
@@ -780,6 +781,7 @@ class AradhyaAssistant:
         self,
         session: Session | None,
         turn_ctx: "object | None" = None,
+        request: str | None = None,
     ) -> str:
         parts = [
             (
@@ -815,7 +817,14 @@ class AradhyaAssistant:
             parts.append(user_context)
 
         if self.skill_registry is not None:
-            skill_instructions = self.skill_registry.active_instructions()
+            if request:
+                from src.aradhya.skills.skill_loader import load_skills_for_intent
+                from src.aradhya.paths import get_project_root
+                active_registry = load_skills_for_intent(get_project_root(), request)
+                skill_instructions = active_registry.active_instructions()
+            else:
+                skill_instructions = self.skill_registry.active_instructions()
+
             if skill_instructions:
                 parts.append("[Active skills]\n" + skill_instructions[:MAX_AGENT_CONTEXT_CHARS])
 

@@ -476,11 +476,48 @@ def browser_execute_js(script: str) -> str:
         return f"JavaScript execution failed: {error}"
 
 
+@tool_definition(
+    name="browser_submit",
+    description="Submit a form on the current page. If a selector is provided, submits that form. Otherwise, finds the first form and submits it.",
+    parameters={
+        "type": "object",
+        "properties": {
+            "selector": {
+                "type": "string",
+                "description": "CSS selector for the form to submit. Optional.",
+            },
+        },
+    },
+    requires_confirmation=True,
+)
+def browser_submit(selector: str = "") -> str:
+    """Submit a form on the current page."""
+    if _active_driver is None:
+        return "No browser session. Call browser_open() first."
+
+    from selenium.webdriver.common.by import By
+    from selenium.common.exceptions import NoSuchElementException
+
+    try:
+        if selector:
+            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
+        else:
+            element = _active_driver.find_element(By.TAG_NAME, "form")
+
+        element.submit()
+        return "Form submitted successfully."
+    except NoSuchElementException:
+        return "Form not found on the page."
+    except Exception as error:
+        return f"Failed to submit form: {error}"
+
+
 ALL_BROWSER_TOOLS = [
     browser_open,
     browser_navigate,
     browser_click,
     browser_type,
+    browser_submit,
     browser_read,
     browser_screenshot,
     browser_close,
