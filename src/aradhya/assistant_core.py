@@ -42,6 +42,7 @@ from src.aradhya.tools.subagent_tools import ALL_SUBAGENT_TOOLS
 from src.aradhya.tools.maintenance_tools import ALL_MAINTENANCE_TOOLS
 from src.aradhya.tools.hardware_tools import ALL_HARDWARE_TOOLS
 from src.aradhya.tools.profile_tools import ALL_PROFILE_TOOLS, set_active_user_profile
+from src.aradhya.tools.desktop_tools import ALL_DESKTOP_TOOLS
 from src.aradhya.user_profile import StructuredProfile, field_label, profile_path
 from src.aradhya.turn_context import build_turn_context
 from src.aradhya.context_compressor import (
@@ -781,6 +782,7 @@ class AradhyaAssistant:
             *ALL_MAINTENANCE_TOOLS,  # P1-2: read-only disk-usage analysis
             *ALL_HARDWARE_TOOLS,     # P1-6: hardware profile + model recommendations
             *ALL_PROFILE_TOOLS,      # P1-4: structured user profile for form-fill
+            *ALL_DESKTOP_TOOLS,      # P1-8: UI Automation desktop control
         ):
             registry.register_function(tool)
 
