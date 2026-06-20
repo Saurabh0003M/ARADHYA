@@ -200,6 +200,34 @@ def _handle_help(*, command: str) -> None:
     render_help(topic)
 
 
+def _handle_mentor(*, assistant, command: str) -> None:
+    """/mentor [do|teach] [skill_level] — switch how Aradhya helps."""
+    rest = command.strip()
+    for prefix in ("/mentor", "mentor"):
+        if rest.lower().startswith(prefix):
+            rest = rest[len(prefix):].strip()
+            break
+
+    if not rest:
+        state = assistant.state
+        level = f", skill level '{state.skill_level}'" if state.skill_level else ""
+        render_info(
+            f"Mentor mode is '{state.mentor_mode}'{level}. "
+            "Use /mentor do or /mentor teach [beginner|intermediate|advanced]."
+        )
+        return
+
+    parts = rest.split()
+    mode = parts[0]
+    skill_level = parts[1] if len(parts) > 1 else None
+    try:
+        message = assistant.set_mentor_mode(mode, skill_level)
+    except ValueError as error:
+        render_error(str(error))
+        return
+    render_info(message)
+
+
 def _handle_status(*, assistant, runtime_profile, model_provider,
                    live_voice_runtime) -> None:
     model_ok = None
@@ -846,6 +874,7 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     # Core
     (["/help", "help"], _handle_help),
     (["/status"], _handle_status),
+    (["/mentor"], _handle_mentor),
     (["/topology rescan", "topology rescan"], _handle_topology),
     (["/topology", "topology"], _handle_topology),
     (["/federation doctor", "federation doctor"], _handle_federation_doctor),

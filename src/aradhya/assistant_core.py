@@ -807,6 +807,8 @@ class AradhyaAssistant:
             ),
         ]
 
+        parts.append(self._mentor_mode_block())
+
         # Inject per-turn context (Codex-style permission matrix)
         if turn_ctx is not None and hasattr(turn_ctx, "to_prompt_block"):
             parts.append(turn_ctx.to_prompt_block())
@@ -834,6 +836,53 @@ class AradhyaAssistant:
                 parts.append("[Active skills]\n" + skill_instructions[:MAX_AGENT_CONTEXT_CHARS])
 
         return "\n\n".join(part for part in parts if part.strip())
+
+    MENTOR_MODES = ("do", "teach")
+
+    def set_mentor_mode(self, mode: str, skill_level: str | None = None) -> str:
+        """Set mentor mode to 'do' or 'teach' (optionally a skill level).
+
+        Returns a short human-readable confirmation. Raises ValueError for an
+        unknown mode so callers can surface a usage hint.
+        """
+        normalized = (mode or "").strip().lower()
+        if normalized not in self.MENTOR_MODES:
+            raise ValueError(
+                f"Unknown mentor mode '{mode}'. Use one of: {', '.join(self.MENTOR_MODES)}."
+            )
+        self.state.mentor_mode = normalized
+        if skill_level is not None:
+            self.state.skill_level = skill_level.strip().lower()
+
+        if normalized == "teach":
+            detail = "I'll guide you step by step and let you do each action yourself."
+        else:
+            detail = "I'll carry out tasks for you directly (still policy-gated)."
+        level = f" (skill level: {self.state.skill_level})" if self.state.skill_level else ""
+        return f"Mentor mode is now '{normalized}'{level}. {detail}"
+
+    def _mentor_mode_block(self) -> str:
+        """Return the do/teach pedagogy instructions for the agent prompt."""
+        level = self.state.skill_level
+        level_line = (
+            f" The user's self-described skill level is '{level}'; pace accordingly."
+            if level
+            else ""
+        )
+        if self.state.mentor_mode == "teach":
+            return (
+                "Mentor mode: TEACH. Do NOT perform actions for the user. Instead, "
+                "guide them: explain what to do, one small step at a time, and wait "
+                "for them to do it. Use read-only tools to see current state and "
+                "verify their progress, but let the user click, type, and decide. "
+                "Explain the why, not just the how, and check understanding before "
+                "moving on." + level_line
+            )
+        return (
+            "Mentor mode: DO. Carry out the task for the user directly, using tools "
+            "as needed (machine-changing actions stay policy-gated). Be concise; "
+            "report what you did and the outcome." + level_line
+        )
 
     def _read_user_context(self) -> str:
         context_dir = self.project_root / "core" / "memory" / "user_context"
