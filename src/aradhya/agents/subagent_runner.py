@@ -30,7 +30,7 @@ import uuid
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol
 
 from loguru import logger
 

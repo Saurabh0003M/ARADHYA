@@ -24,3 +24,5 @@ line_length = 100
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-v --cov=src --cov=core --cov-report=html"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 
-from loguru import logger
 
 from src.aradhya.tools.tool_registry import tool_definition
 from src.aradhya.agents.subagent_runner import SubagentRunner

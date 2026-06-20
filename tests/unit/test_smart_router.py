@@ -222,7 +222,7 @@ async def test_weighted_round_robin_distributes_by_weight(tmp_path):
     await router.initialize()
 
     selected = []
-    for _ in range(4):
+    for _ in range(5):
         decision = await router.decide(
             ChatRequest(
                 messages=[{"role": "user", "content": "quick reply"}],
