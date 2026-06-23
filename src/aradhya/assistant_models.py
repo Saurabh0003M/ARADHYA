@@ -23,6 +23,7 @@ class WakeSource(str, Enum):
 
     FLOATING_ICON = "floating_icon"
     HOTKEY = "ctrl+win"
+    VOICE = "voice"
 
 
 class PlanKind(str, Enum):
@@ -147,6 +148,11 @@ class AssistantState:
     is_awake: bool = False
     debate_mode_enabled: bool = False
     pending_plan: PlanAction | None = None
+    # Mentor mode: "do" (act for the user) or "teach" (guide the user to act
+    # themselves). skill_level optionally tunes pacing ("beginner"/"intermediate"
+    # /"advanced"); empty means unspecified.
+    mentor_mode: str = "do"
+    skill_level: str = ""
 
 
 @dataclass(frozen=True)

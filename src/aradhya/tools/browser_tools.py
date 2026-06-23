@@ -478,38 +478,153 @@ def browser_execute_js(script: str) -> str:
 
 @tool_definition(
     name="browser_submit",
-    description="Submit a form on the current page. If a selector is provided, submits that form. Otherwise, finds the first form and submits it.",
+    description=(
+        "Submit a form on the page. This is the explicit, confirmation-gated "
+        "checkpoint before sending a form (search, login, job application). "
+        "Finds the form by selector or name, otherwise submits the form "
+        "containing the currently focused element."
+    ),
     parameters={
         "type": "object",
         "properties": {
             "selector": {
                 "type": "string",
-                "description": "CSS selector for the form to submit. Optional.",
+                "description": "CSS selector of the form or a field inside it.",
+            },
+            "name": {
+                "type": "string",
+                "description": "Name attribute of the form or a field inside it.",
             },
         },
     },
     requires_confirmation=True,
 )
-def browser_submit(selector: str = "") -> str:
-    """Submit a form on the current page."""
+def browser_submit(selector: str = "", name: str = "") -> str:
+    """Submit a form via Selenium's ``element.submit()``."""
     if _active_driver is None:
         return "No browser session. Call browser_open() first."
 
     from selenium.webdriver.common.by import By
-    from selenium.common.exceptions import NoSuchElementException
+
+    element = None
+
+    if selector:
+        try:
+            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
+        except Exception:
+            pass
+
+    if name and element is None:
+        try:
+            element = _active_driver.find_element(By.NAME, name)
+        except Exception:
+            pass
+
+    # Fallback: submit the form containing the focused element.
+    if element is None:
+        element = _active_driver.switch_to.active_element
 
     try:
-        if selector:
-            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
-        else:
-            element = _active_driver.find_element(By.TAG_NAME, "form")
-
+        # submit() walks up from any field to its enclosing <form>.
         element.submit()
-        return "Form submitted successfully."
-    except NoSuchElementException:
-        return "Form not found on the page."
+        time.sleep(1)
+        return f"Submitted form. Now on: {_active_driver.current_url}"
     except Exception as error:
-        return f"Failed to submit form: {error}"
+        return f"Submit failed: {error}"
+
+
+@tool_definition(
+    name="browser_new_tab",
+    description=(
+        "Open a new browser tab, optionally navigating it to a URL, and switch "
+        "to it. Use this to open several sources at once for comparison. Tabs "
+        "are numbered (1-based) in open order."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string",
+                "description": "Optional URL to open in the new tab.",
+            },
+        },
+    },
+    requires_confirmation=True,
+)
+def browser_new_tab(url: str = "") -> str:
+    """Open (and switch to) a new tab, optionally navigating to a URL."""
+    if _active_driver is None:
+        return "No browser session. Call browser_open() first."
+    try:
+        _active_driver.switch_to.new_window("tab")
+        if url:
+            _active_driver.get(url)
+            time.sleep(2)  # wait for page load
+        handles = _active_driver.window_handles
+        index = handles.index(_active_driver.current_window_handle) + 1
+        suffix = f" at {url} (title: {_active_driver.title})" if url else ""
+        return f"Opened tab {index} of {len(handles)}{suffix}."
+    except Exception as error:
+        return f"Failed to open tab: {error}"
+
+
+@tool_definition(
+    name="browser_list_tabs",
+    description=(
+        "List all open browser tabs with their 1-based index, title, and URL. "
+        "Read-only. Use this to see what's open before switching or comparing."
+    ),
+    parameters={"type": "object", "properties": {}},
+)
+def browser_list_tabs() -> str:
+    """List open tabs with index, title, and URL (restores focus afterward)."""
+    if _active_driver is None:
+        return "No browser session. Call browser_open() first."
+    try:
+        handles = list(_active_driver.window_handles)
+        current = _active_driver.current_window_handle
+        lines = [f"{len(handles)} open tab(s):"]
+        for i, handle in enumerate(handles, start=1):
+            _active_driver.switch_to.window(handle)
+            marker = " (current)" if handle == current else ""
+            lines.append(
+                f"  {i}. {_active_driver.title} — {_active_driver.current_url}{marker}"
+            )
+        _active_driver.switch_to.window(current)  # restore original focus
+        return "\n".join(lines)
+    except Exception as error:
+        return f"Failed to list tabs: {error}"
+
+
+@tool_definition(
+    name="browser_switch_tab",
+    description=(
+        "Switch focus to an open tab by its 1-based index (see browser_list_tabs). "
+        "Subsequent read/click/type tools act on the focused tab."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "index": {
+                "type": "integer",
+                "description": "1-based tab number to switch to.",
+            },
+        },
+        "required": ["index"],
+    },
+)
+def browser_switch_tab(index: int) -> str:
+    """Switch focus to the tab at the given 1-based index."""
+    if _active_driver is None:
+        return "No browser session. Call browser_open() first."
+    try:
+        handles = list(_active_driver.window_handles)
+        if index < 1 or index > len(handles):
+            return f"Tab {index} does not exist. There are {len(handles)} tab(s)."
+        _active_driver.switch_to.window(handles[index - 1])
+        return f"Switched to tab {index}: {_active_driver.title} — {_active_driver.current_url}"
+    except Exception as error:
+        return f"Failed to switch tab: {error}"
 
 
 ALL_BROWSER_TOOLS = [
@@ -517,9 +632,12 @@ ALL_BROWSER_TOOLS = [
     browser_navigate,
     browser_click,
     browser_type,
-    browser_submit,
     browser_read,
     browser_screenshot,
     browser_close,
     browser_execute_js,
+    browser_submit,
+    browser_new_tab,
+    browser_list_tabs,
+    browser_switch_tab,
 ]

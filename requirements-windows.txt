@@ -1,2 +1,5 @@
 # Optional Windows integration helpers.
 pywin32>=306
+# UI Automation backend for desktop control tools (P1-8). Tools degrade
+# gracefully when this is not installed.
+uiautomation>=2.0.18

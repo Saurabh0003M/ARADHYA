@@ -162,6 +162,26 @@ class VoiceInboxManager:
             archived_audio_path=archived_audio_path,
         )
 
+    def transcribe_audio(
+        self,
+        audio_path: Path,
+        transcript_destination: Path | None = None,
+    ) -> FileTranscription:
+        """Transcribe a single audio file without archiving it.
+
+        Unlike :meth:`process_audio_file`, this reuses the cached transcriber
+        but skips the archive/cleanup pipeline. It is meant for low-latency
+        paths such as the wake-word listener that only need the recognised text
+        and manage their own temporary files.
+        """
+
+        self.ensure_directories()
+        if transcript_destination is None:
+            transcript_destination = self._unique_destination(
+                self.profile.transcripts_dir / f"{audio_path.stem}.txt"
+            )
+        return self._get_transcriber().transcribe(audio_path, transcript_destination)
+
     def _write_transcript(self, stem: str, transcript_text: str) -> Path:
         destination = self._unique_destination(
             self.profile.transcripts_dir / f"{stem}.txt"

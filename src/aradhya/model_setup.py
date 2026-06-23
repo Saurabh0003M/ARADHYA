@@ -8,6 +8,7 @@ from typing import Callable, Sequence, TypeVar
 
 from src.aradhya.model_provider import ModelHealth, build_text_model_provider
 from src.aradhya.runtime_profile import RuntimeProfile, persist_model_name
+from src.aradhya.utils.hardware_profile import HardwareProfile
 
 OLLAMA_DOWNLOAD_URL = "https://ollama.com/download"
 
@@ -34,6 +35,127 @@ RECOMMENDED_OLLAMA_MODELS = (
         description="Coding-focused model for local development workflows.",
     ),
 )
+
+@dataclass(frozen=True)
+class CatalogModel:
+    """A local model with an approximate memory footprint (Q4 quantized)."""
+
+    name: str
+    description: str
+    params_b: float
+    min_ram_gb: float
+
+
+# Ordered small → large. ``min_ram_gb`` is the rough working-set for a Q4
+# quantization; real usage varies, so recommendations keep headroom.
+FEASIBLE_MODEL_CATALOG: tuple[CatalogModel, ...] = (
+    CatalogModel("gemma3:1b", "Tiny model for very constrained machines.", 1.0, 2.0),
+    CatalogModel("llama3.2:3b", "Small general-purpose model, fits most laptops.", 3.0, 4.0),
+    CatalogModel("phi4-mini", "Compact reasoning-focused model.", 3.8, 4.5),
+    CatalogModel("gemma3:4b", "Balanced general-purpose model.", 4.0, 5.0),
+    CatalogModel("qwen2.5-coder:7b", "Coding-focused 7B model.", 7.0, 8.0),
+    CatalogModel("llama3.1:8b", "Capable general 8B model.", 8.0, 9.0),
+    CatalogModel("gemma3:12b", "Stronger reasoning, needs a roomy machine.", 12.0, 12.0),
+    CatalogModel("qwen2.5:14b", "High-quality 14B model for workstations.", 14.0, 14.0),
+    CatalogModel("qwen2.5:32b", "Large model; needs lots of RAM or VRAM.", 32.0, 22.0),
+)
+
+# Below this budget, local inference isn't worthwhile — suggest gated cloud.
+_MIN_LOCAL_BUDGET_GB = 2.0
+# Fraction of system RAM usable for CPU/iGPU inference (leave room for the OS).
+_CPU_RAM_FRACTION = 0.6
+
+
+@dataclass(frozen=True)
+class HardwareRecommendation:
+    """What this machine can realistically run locally."""
+
+    budget_gb: float | None
+    basis: str  # "vram" | "system_ram"
+    feasible: tuple[CatalogModel, ...]
+    suggest_cloud: bool
+    note: str
+
+    def format_for_user(self) -> str:
+        lines = [self.note]
+        if self.feasible:
+            lines.append("")
+            lines.append("Models you can run locally (largest first):")
+            for model in self.feasible:
+                lines.append(
+                    f"  • {model.name} (~{model.params_b:g}B, needs ~{model.min_ram_gb:g} GB) "
+                    f"— {model.description}"
+                )
+            lines.append(f"\nPull one with `ollama pull {self.feasible[0].name}`.")
+        if self.suggest_cloud:
+            lines.append("")
+            lines.append(
+                "For anything heavier, route to gated cloud (OpenRouter) through "
+                "the privacy gate rather than running it locally."
+            )
+        return "\n".join(lines)
+
+
+def recommend_for_profile(
+    profile: HardwareProfile,
+    *,
+    max_results: int = 3,
+) -> HardwareRecommendation:
+    """Map a detected HardwareProfile to feasible local models.
+
+    Uses discrete-GPU VRAM when present, otherwise a fraction of system RAM
+    (CPU/iGPU inference shares system memory). Returns the largest models that
+    fit, plus whether to suggest gated cloud for heavier work.
+    """
+    if profile.has_discrete_gpu and profile.total_vram_mb:
+        budget_gb: float | None = round(profile.total_vram_mb / 1024.0, 1)
+        basis = "vram"
+    elif profile.ram_gb:
+        budget_gb = round(profile.ram_gb * _CPU_RAM_FRACTION, 1)
+        basis = "system_ram"
+    else:
+        budget_gb = None
+        basis = "system_ram"
+
+    if budget_gb is None or budget_gb < _MIN_LOCAL_BUDGET_GB:
+        return HardwareRecommendation(
+            budget_gb=budget_gb,
+            basis=basis,
+            feasible=(),
+            suggest_cloud=True,
+            note=(
+                "Could not detect enough usable memory for comfortable local "
+                "inference. Prefer gated cloud, or detect hardware again."
+            ),
+        )
+
+    fitting = [m for m in FEASIBLE_MODEL_CATALOG if m.min_ram_gb <= budget_gb]
+    # Largest-fitting first, capped.
+    fitting.sort(key=lambda m: m.params_b, reverse=True)
+    feasible = tuple(fitting[:max_results])
+
+    basis_label = "discrete-GPU VRAM" if basis == "vram" else "system RAM (CPU/iGPU)"
+    note = (
+        f"Based on ~{budget_gb:g} GB usable ({basis_label}), here's what runs "
+        "comfortably locally."
+    )
+    # Anything in the catalog bigger than the budget → cloud is the better path.
+    suggest_cloud = any(m.min_ram_gb > budget_gb for m in FEASIBLE_MODEL_CATALOG)
+    if not feasible:
+        note = (
+            f"With ~{budget_gb:g} GB usable, even the smallest catalog model is a "
+            "tight fit. Try gemma3:1b, or use gated cloud."
+        )
+        suggest_cloud = True
+
+    return HardwareRecommendation(
+        budget_gb=budget_gb,
+        basis=basis,
+        feasible=feasible,
+        suggest_cloud=suggest_cloud,
+        note=note,
+    )
+
 
 _CatalogItem = TypeVar("_CatalogItem")
 

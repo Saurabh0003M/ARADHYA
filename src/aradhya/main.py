@@ -20,6 +20,7 @@ if __package__ in {None, ""}:
 from src.aradhya.paths import get_project_root
 from src.aradhya.assistant_core import AradhyaAssistant
 from src.aradhya.assistant_models import PlanKind, WakeSource
+from src.aradhya.user_profile import field_label, is_sensitive_key
 from src.aradhya.utils.cache_diagnostics import (
     format_cache_validation_report,
     run_cache_validation,
@@ -198,6 +199,89 @@ def _handle_help(*, command: str) -> None:
     elif normalized.startswith("help "):
         topic = command.strip()[5:].strip()
     render_help(topic)
+
+
+def _handle_profile(*, assistant, command: str) -> None:
+    """/profile [set <field> <value> | clear <field>] — manage saved form fields."""
+    rest = command.strip()
+    if rest.lower().startswith("/profile"):
+        rest = rest[len("/profile"):].strip()
+    profile = assistant.user_profile
+
+    if not rest:
+        data = profile.as_dict()
+        if not data:
+            render_info(
+                "No profile fields saved. Use /profile set <field> <value> "
+                "(e.g. /profile set email me@example.com)."
+            )
+            return
+        lines = ["Saved profile fields:"]
+        for key in sorted(data):
+            shown = "(saved)" if is_sensitive_key(key) else data[key]
+            lines.append(f"  - {field_label(key)} [{key}]: {shown}")
+        render_info("\n".join(lines))
+        return
+
+    parts = rest.split(maxsplit=1)
+    action = parts[0].lower()
+    argument = parts[1].strip() if len(parts) > 1 else ""
+
+    if action == "set":
+        field_value = argument.split(maxsplit=1)
+        if len(field_value) < 2:
+            render_error("Usage: /profile set <field> <value>")
+            return
+        field, value = field_value[0], field_value[1]
+        try:
+            profile.set(field, value)
+            profile.save()
+        except (ValueError, OSError) as error:
+            render_error(f"Could not save profile: {error}")
+            return
+        render_info(f"Saved {field_label(field)}.")
+        return
+
+    if action == "clear":
+        if not argument:
+            render_error("Usage: /profile clear <field>")
+            return
+        if profile.clear(argument):
+            profile.save()
+            render_info(f"Cleared {field_label(argument)}.")
+        else:
+            render_warning(f"No saved field '{argument}'.")
+        return
+
+    render_error("Usage: /profile [set <field> <value> | clear <field>]")
+
+
+def _handle_mentor(*, assistant, command: str) -> None:
+    """/mentor [do|teach] [skill_level] — switch how Aradhya helps."""
+    rest = command.strip()
+    for prefix in ("/mentor", "mentor"):
+        if rest.lower().startswith(prefix):
+            rest = rest[len(prefix):].strip()
+            break
+
+    if not rest:
+        state = assistant.state
+        level = f", skill level '{state.skill_level}'" if state.skill_level else ""
+        render_info(
+            f"Mentor mode is '{state.mentor_mode}'{level}. "
+            "Use /mentor do or /mentor teach [beginner|intermediate|advanced]."
+        )
+        return
+
+    parts = rest.split()
+    mode = parts[0]
+    skill_level = parts[1] if len(parts) > 1 else None
+    try:
+        message = assistant.set_mentor_mode(mode, skill_level)
+    except ValueError as error:
+        render_error(str(error))
+        return
+    render_info(message)
 
 
 def _handle_status(*, assistant, runtime_profile, model_provider,
@@ -846,6 +930,8 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
     # Core
     (["/help", "help"], _handle_help),
     (["/status"], _handle_status),
+    (["/mentor"], _handle_mentor),
+    (["/profile"], _handle_profile),
     (["/topology rescan", "topology rescan"], _handle_topology),
     (["/topology", "topology"], _handle_topology),
     (["/federation doctor", "federation doctor"], _handle_federation_doctor),

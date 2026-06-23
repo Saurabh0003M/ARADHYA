@@ -221,6 +221,9 @@ async def test_weighted_round_robin_distributes_by_weight(tmp_path):
     router = SmartModelRouter(build_config(), store, FakeInvoker())
     await router.initialize()
 
+    # Smooth weighted round-robin distributes exactly weight[i] picks over one
+    # full cycle of sum(weights) selections. fast-coder=3, cheap-summary=2, so a
+    # 5-pick cycle yields 3:2; sampling fewer lands mid-cycle (e.g. 2:2 at 4).
     selected = []
     for _ in range(5):
         decision = await router.decide(

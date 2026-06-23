@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.aradhya.tools.file_tools import read_file, write_file
+from src.aradhya.tools.file_tools import delete_file, move_file, read_file, write_file
 from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 from src.aradhya.tools.tool_registry import ToolRegistry
 
@@ -9,7 +9,17 @@ def build_registry(policy: ToolRuntimePolicy) -> ToolRegistry:
     registry = ToolRegistry(policy=policy)
     registry.register_function(read_file)
     registry.register_function(write_file)
+    registry.register_function(delete_file)
+    registry.register_function(move_file)
     return registry
+
+
+def _granted_policy(*roots) -> ToolRuntimePolicy:
+    return ToolRuntimePolicy(
+        allowed_roots=tuple(roots),
+        live_execution_enabled=True,
+        mutation_granted=True,
+    )
 
 
 def test_policy_allows_read_inside_configured_roots(tmp_path):
@@ -79,3 +89,86 @@ def test_policy_blocks_file_tools_outside_configured_roots(tmp_path):
     assert result.success is False
     assert "outside configured" in result.output
     assert not outside.exists()
+
+
+def test_delete_file_requires_grant(tmp_path):
+    target = tmp_path / "doomed.txt"
+    target.write_text("bye", encoding="utf-8")
+    registry = build_registry(ToolRuntimePolicy(allowed_roots=(tmp_path,)))
+
+    result = registry.execute_tool("delete_file", {"path": str(target)})
+
+    assert result.success is False
+    assert result.requires_confirmation is True
+    # Blocked before any deletion happened.
+    assert target.exists()
+
+
+def test_delete_file_blocked_outside_write_roots(tmp_path):
+    outside = tmp_path.parent / "outside_delete.txt"
+    outside.write_text("precious", encoding="utf-8")
+    registry = build_registry(_granted_policy(tmp_path))
+
+    result = registry.execute_tool("delete_file", {"path": str(outside)})
+
+    assert result.success is False
+    assert "outside configured" in result.output
+    # Confinement must protect files outside the workspace.
+    assert outside.exists()
+    outside.unlink()
+
+
+def test_delete_file_removes_file_inside_roots(tmp_path):
+    target = tmp_path / "doomed.txt"
+    target.write_text("bye", encoding="utf-8")
+    registry = build_registry(_granted_policy(tmp_path))
+
+    result = registry.execute_tool("delete_file", {"path": str(target)})
+
+    assert result.success is True
+    assert not target.exists()
+
+
+def test_delete_file_refuses_directories(tmp_path):
+    folder = tmp_path / "keepme"
+    folder.mkdir()
+    registry = build_registry(_granted_policy(tmp_path))
+
+    result = registry.execute_tool("delete_file", {"path": str(folder)})
+
+    assert result.success is True  # tool ran, but returned a guarded error string
+    assert "directory" in result.output.lower()
+    assert folder.exists()
+
+
+def test_move_file_blocked_outside_write_roots(tmp_path):
+    src = tmp_path / "note.txt"
+    src.write_text("data", encoding="utf-8")
+    outside = tmp_path.parent / "escaped.txt"
+    registry = build_registry(_granted_policy(tmp_path))
+
+    result = registry.execute_tool(
+        "move_file",
+        {"source": str(src), "destination": str(outside)},
+    )
+
+    assert result.success is False
+    assert "outside configured" in result.output
+    assert src.exists()
+    assert not outside.exists()
+
+
+def test_move_file_renames_inside_roots(tmp_path):
+    src = tmp_path / "note.txt"
+    src.write_text("data", encoding="utf-8")
+    dst = tmp_path / "renamed.txt"
+    registry = build_registry(_granted_policy(tmp_path))
+
+    result = registry.execute_tool(
+        "move_file",
+        {"source": str(src), "destination": str(dst)},
+    )
+
+    assert result.success is True
+    assert not src.exists()
+    assert dst.read_text(encoding="utf-8") == "data"

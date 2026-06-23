@@ -16,11 +16,8 @@ from src.aradhya.assistant_models import (
     AssistantPreferences,
     AssistantResponse,
     AssistantState,
-    PlanAction,
     ExecutionResult,
-    PlanAction,
     PlanKind,
-    PlanAction,
     WakeSource,
     load_preferences,
 )
@@ -42,6 +39,11 @@ from src.aradhya.tools.runtime_policy import ToolRuntimePolicy
 from src.aradhya.tools.vision_tools import ALL_VISION_TOOLS
 from src.aradhya.tools.web_tools import ALL_WEB_TOOLS
 from src.aradhya.tools.subagent_tools import ALL_SUBAGENT_TOOLS
+from src.aradhya.tools.maintenance_tools import ALL_MAINTENANCE_TOOLS
+from src.aradhya.tools.hardware_tools import ALL_HARDWARE_TOOLS
+from src.aradhya.tools.profile_tools import ALL_PROFILE_TOOLS, set_active_user_profile
+from src.aradhya.tools.desktop_tools import ALL_DESKTOP_TOOLS
+from src.aradhya.user_profile import StructuredProfile, field_label, profile_path
 from src.aradhya.turn_context import build_turn_context
 from src.aradhya.context_compressor import (
     TruncationPolicy,
@@ -51,6 +53,7 @@ from src.aradhya.skills.skill_installer import ALL_SKILL_INSTALLER_TOOLS
 from src.aradhya.learnings.learnings_engine import ALL_LEARNINGS_TOOLS, LearningsEngine
 from src.aradhya.tools.scheduler_tool import ALL_SCHEDULER_TOOLS
 from src.aradhya.tools.web_tools import set_active_network_policy
+from src.aradhya.tools.vision_tools import set_active_vision_provider
 from src.aradhya.hooks.hook_config import load_hooks
 from src.aradhya.hooks.hook_engine import HookEngine, HookEvent
 from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
@@ -88,6 +91,7 @@ class AradhyaAssistant:
         self.now_provider = now_provider or datetime.now
         self.state = AssistantState()
         self.skill_registry = skill_registry
+        self.user_profile = StructuredProfile.load(profile_path(self.project_root))
         self.index_manager = DirectoryIndexManager(
             preferences,
             now_provider=self.now_provider,
@@ -552,7 +556,7 @@ class AradhyaAssistant:
             context=turn_ctx.to_dict(),
         )
 
-        system_prompt = self._build_agent_system_prompt(session, turn_ctx, request)
+        system_prompt = self._build_agent_system_prompt(session, turn_ctx, user_prompt=request)
         registry = self._build_tool_registry_from_policy(policy)
 
         # ── Gap A: CLI confirmation gate (now a reusable typed class) ──
@@ -571,10 +575,16 @@ class AradhyaAssistant:
 
         # Gap E: set active network policy so web_fetch/web_search can check it
         set_active_network_policy(policy)
+        # P1-3: expose the model provider to describe_screen for this turn
+        set_active_vision_provider(self.model_provider)
+        # P1-4: expose the structured profile to get_user_profile for this turn
+        set_active_user_profile(self.user_profile)
         try:
             turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
         finally:
             set_active_network_policy(None)  # always clear after turn
+            set_active_vision_provider(None)
+            set_active_user_profile(None)
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         # Log turn end
@@ -637,6 +647,11 @@ class AradhyaAssistant:
                 False,
                 "The planned task path needs a configured backend model.",
             )
+
+        session = (
+            self.session_manager.active_session
+            or self.session_manager.load_or_create(session_name or "main")
+        )
 
         step_results: list[str] = []
 
@@ -764,6 +779,10 @@ class AradhyaAssistant:
             *ALL_LEARNINGS_TOOLS,
             *ALL_SCHEDULER_TOOLS,   # Gap F: expose scheduler to model
             *ALL_SUBAGENT_TOOLS,    # Subagent orchestration tools
+            *ALL_MAINTENANCE_TOOLS,  # P1-2: read-only disk-usage analysis
+            *ALL_HARDWARE_TOOLS,     # P1-6: hardware profile + model recommendations
+            *ALL_PROFILE_TOOLS,      # P1-4: structured user profile for form-fill
+            *ALL_DESKTOP_TOOLS,      # P1-8: UI Automation desktop control
         ):
             registry.register_function(tool)
 
@@ -781,7 +800,7 @@ class AradhyaAssistant:
         self,
         session: Session | None,
         turn_ctx: "object | None" = None,
-        request: str | None = None,
+        user_prompt: str = "",
     ) -> str:
         parts = [
             (
@@ -796,6 +815,8 @@ class AradhyaAssistant:
                 "and file writes are controlled by runtime policy."
             ),
         ]
+
+        parts.append(self._mentor_mode_block())
 
         # Inject per-turn context (Codex-style permission matrix)
         if turn_ctx is not None and hasattr(turn_ctx, "to_prompt_block"):
@@ -816,19 +837,84 @@ class AradhyaAssistant:
         if user_context:
             parts.append(user_context)
 
-        if self.skill_registry is not None:
-            if request:
-                from src.aradhya.skills.skill_loader import load_skills_for_intent
-                from src.aradhya.paths import get_project_root
-                active_registry = load_skills_for_intent(get_project_root(), request)
-                skill_instructions = active_registry.active_instructions()
-            else:
-                skill_instructions = self.skill_registry.active_instructions()
+        profile_block = self._build_user_profile_block()
+        if profile_block:
+            parts.append(profile_block)
 
+        if self.skill_registry is not None:
+            # Inject only the skills whose intents match this turn's request,
+            # so the prompt stays focused instead of carrying every skill.
+            skill_instructions = self.skill_registry.instructions_for_prompt(user_prompt)
             if skill_instructions:
                 parts.append("[Active skills]\n" + skill_instructions[:MAX_AGENT_CONTEXT_CHARS])
 
         return "\n\n".join(part for part in parts if part.strip())
+
+    MENTOR_MODES = ("do", "teach")
+
+    def set_mentor_mode(self, mode: str, skill_level: str | None = None) -> str:
+        """Set mentor mode to 'do' or 'teach' (optionally a skill level).
+
+        Returns a short human-readable confirmation. Raises ValueError for an
+        unknown mode so callers can surface a usage hint.
+        """
+        normalized = (mode or "").strip().lower()
+        if normalized not in self.MENTOR_MODES:
+            raise ValueError(
+                f"Unknown mentor mode '{mode}'. Use one of: {', '.join(self.MENTOR_MODES)}."
+            )
+        self.state.mentor_mode = normalized
+        if skill_level is not None:
+            self.state.skill_level = skill_level.strip().lower()
+
+        if normalized == "teach":
+            detail = "I'll guide you step by step and let you do each action yourself."
+        else:
+            detail = "I'll carry out tasks for you directly (still policy-gated)."
+        level = f" (skill level: {self.state.skill_level})" if self.state.skill_level else ""
+        return f"Mentor mode is now '{normalized}'{level}. {detail}"
+
+    def _mentor_mode_block(self) -> str:
+        """Return the do/teach pedagogy instructions for the agent prompt."""
+        level = self.state.skill_level
+        level_line = (
+            f" The user's self-described skill level is '{level}'; pace accordingly."
+            if level
+            else ""
+        )
+        if self.state.mentor_mode == "teach":
+            return (
+                "Mentor mode: TEACH. Do NOT perform actions for the user. Instead, "
+                "guide them: explain what to do, one small step at a time, and wait "
+                "for them to do it. Use read-only tools to see current state and "
+                "verify their progress, but let the user click, type, and decide. "
+                "Explain the why, not just the how, and check understanding before "
+                "moving on." + level_line
+            )
+        return (
+            "Mentor mode: DO. Carry out the task for the user directly, using tools "
+            "as needed (machine-changing actions stay policy-gated). Be concise; "
+            "report what you did and the outcome." + level_line
+        )
+
+    def _build_user_profile_block(self) -> str:
+        """Tell the agent which profile fields exist — keys only, no values.
+
+        Kept separate from freeform rules/notes. Values (especially sensitive
+        ones) are fetched deliberately via the get_user_profile tool, not
+        injected into every prompt.
+        """
+        profile = getattr(self, "user_profile", None)
+        if profile is None or profile.is_empty():
+            return ""
+        labels = ", ".join(field_label(key) for key in profile.available_keys())
+        return (
+            "[User profile]\n"
+            f"A structured profile is saved with these fields: {labels}. "
+            "When filling a form, call get_user_profile to read the values. "
+            "For any field the form needs that isn't saved, ask the user — "
+            "never invent personal data."
+        )
 
     def _read_user_context(self) -> str:
         context_dir = self.project_root / "core" / "memory" / "user_context"

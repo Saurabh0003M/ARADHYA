@@ -22,6 +22,36 @@ from loguru import logger
 
 from src.aradhya.tools.tool_registry import tool_definition
 
+# ── Active vision provider registry ─────────────────────────────────────
+# The current turn's model provider is stored here so describe_screen can ask
+# it to describe a screenshot without being passed the provider as an argument.
+# Set by assistant_core before each agent turn; cleared to None after. Mirrors
+# the web tools' network-policy registry.
+_active_vision_provider = None
+
+
+def set_active_vision_provider(provider) -> None:
+    """Store the current turn's model provider for describe_screen."""
+    global _active_vision_provider
+    _active_vision_provider = provider
+
+
+def _capture_screen_to(temp_path: str, region: dict | None = None) -> bool:
+    """Capture the screen to ``temp_path`` via mss → Pillow → PowerShell."""
+    if _capture_with_mss(temp_path, region):
+        return True
+    pillow_region = None
+    if region:
+        pillow_region = (
+            region.get("x", 0),
+            region.get("y", 0),
+            region.get("x", 0) + region.get("width", 800),
+            region.get("y", 0) + region.get("height", 600),
+        )
+    if _capture_with_pillow(temp_path, pillow_region):
+        return True
+    return _capture_with_powershell(temp_path)
+
 
 def _capture_with_mss(output_path: str, region: dict | None = None) -> bool:
     """Try to capture using mss (fast, cross-platform)."""
@@ -285,4 +315,71 @@ def screen_read_text(region: dict | None = None) -> str:
     )
 
 
-ALL_VISION_TOOLS = [screen_capture, screen_read_text]
+@tool_definition(
+    name="describe_screen",
+    description=(
+        "Capture the screen and describe what is visible using a local vision "
+        "model — UI elements, layout, buttons, and state, not just OCR text. "
+        "Use this to understand a screen before guiding the user. Processed "
+        "locally; the screenshot never leaves the machine."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "prompt": {
+                "type": "string",
+                "description": (
+                    "What to look for or describe (e.g. 'What is on screen?', "
+                    "'Where is the submit button?', 'Read the error dialog')."
+                ),
+            },
+            "region": {
+                "type": "object",
+                "description": "Optional region {x, y, width, height}. Omit for full screen.",
+                "properties": {
+                    "x": {"type": "integer"},
+                    "y": {"type": "integer"},
+                    "width": {"type": "integer"},
+                    "height": {"type": "integer"},
+                },
+            },
+        },
+        "required": ["prompt"],
+    },
+)
+def describe_screen(prompt: str, region: dict | None = None) -> str:
+    """Capture the screen and describe it via the active local vision model."""
+    if _active_vision_provider is None:
+        return (
+            "No vision model is available this turn. describe_screen needs a "
+            "configured model provider with a local vision_model."
+        )
+    if not hasattr(_active_vision_provider, "describe_image"):
+        return "The configured model provider does not support image description."
+
+    stamp = time.strftime("%Y%m%d_%H%M%S")
+    temp_path = str(Path(tempfile.gettempdir()) / f"aradhya_vision_{stamp}.png")
+
+    if not _capture_screen_to(temp_path, region):
+        return (
+            "Failed to capture screen. Install one of: "
+            "pip install mss  OR  pip install Pillow"
+        )
+
+    try:
+        result = _active_vision_provider.describe_image(temp_path, prompt)
+        description = (result.text or "").strip()
+        if not description:
+            return "The vision model returned no description."
+        return f"Screen description:\n{description}"
+    except Exception as error:  # noqa: BLE001 - surfaced to the agent, not raised
+        logger.debug("describe_screen failed: {}", error)
+        return f"Vision description failed: {error}"
+    finally:
+        try:
+            Path(temp_path).unlink()
+        except OSError:
+            pass
+
+
+ALL_VISION_TOOLS = [screen_capture, screen_read_text, describe_screen]

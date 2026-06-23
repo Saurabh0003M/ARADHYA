@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from loguru import logger
 
 from src.aradhya.runtime_profile import RuntimeProfile
 
@@ -98,12 +99,15 @@ def detect_local_node(
     hostname = socket.gethostname() or "aradhya-node"
     node_id = _stable_node_id(hostname)
     disk = _disk_summary(project_root)
+    hardware = _detect_hardware()
     resources = {
         "cpu_count": os.cpu_count() or 1,
+        "cpu_model": hardware["cpu_model"],
         "ram_gb": _total_ram_gb(),
         "disk_total_gb": disk["total_gb"],
         "disk_free_gb": disk["free_gb"],
-        "gpu": "unknown",
+        "gpu": hardware["gpu"],
+        "gpus": hardware["gpus"],
     }
     capabilities = [
         {"name": "aradhya_core", "kind": "system", "enabled": True},
@@ -185,6 +189,28 @@ def _stable_node_id(hostname: str) -> str:
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:8]
     cleaned = re.sub(r"[^a-z0-9-]+", "-", hostname.lower()).strip("-")
     return f"{cleaned or 'aradhya'}-{digest}"
+
+
+def _detect_hardware() -> dict[str, Any]:
+    """Detect CPU/GPU details, degrading to safe defaults on any failure."""
+    try:
+        from src.aradhya.utils.hardware_profile import detect_hardware_profile
+
+        profile = detect_hardware_profile()
+        if profile.gpus:
+            primary = profile.gpus[0]
+            vram = f" {primary.vram_mb} MB" if primary.vram_mb else ""
+            gpu_label = f"{primary.name}{vram} [{primary.kind}]"
+        else:
+            gpu_label = "none detected"
+        return {
+            "cpu_model": profile.cpu_model,
+            "gpu": gpu_label,
+            "gpus": [g.to_dict() for g in profile.gpus],
+        }
+    except Exception as error:  # detection must never break topology
+        logger.debug("Hardware detection failed: {}", error)
+        return {"cpu_model": "unknown", "gpu": "unknown", "gpus": []}
 
 
 def _device_class(resources: dict[str, Any]) -> str:
