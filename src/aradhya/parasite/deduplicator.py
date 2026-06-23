@@ -100,17 +100,22 @@ class SkillDeduplicator:
         """Find likely duplicate skill pairs using deterministic keyword overlap."""
         pairs: list[tuple[SkillDefinition, SkillDefinition]] = []
 
-        for host_skill in host_skills:
-            host_words = self._skill_words(host_skill)
-            if not host_words:
-                continue
+        native_words_cache: list[tuple[SkillDefinition, set[str]]] = []
+        for skill in native_skills:
+            words = self._skill_words(skill)
+            if words:
+                native_words_cache.append((skill, words))
 
+        host_words_cache: list[tuple[SkillDefinition, set[str]]] = []
+        for skill in host_skills:
+            words = self._skill_words(skill)
+            if words:
+                host_words_cache.append((skill, words))
+
+        for host_skill, host_words in host_words_cache:
             best_match: SkillDefinition | None = None
             best_overlap = 0.0
-            for native_skill in native_skills:
-                native_words = self._skill_words(native_skill)
-                if not native_words:
-                    continue
+            for native_skill, native_words in native_words_cache:
                 overlap = len(host_words & native_words) / min(
                     len(host_words),
                     len(native_words),
@@ -122,14 +127,8 @@ class SkillDeduplicator:
             if best_match is not None and best_overlap > HOST_NATIVE_OVERLAP_THRESHOLD:
                 pairs.append((best_match, host_skill))
 
-        for index, left in enumerate(host_skills):
-            left_words = self._skill_words(left)
-            if not left_words:
-                continue
-            for right in host_skills[index + 1:]:
-                right_words = self._skill_words(right)
-                if not right_words:
-                    continue
+        for index, (left, left_words) in enumerate(host_words_cache):
+            for right, right_words in host_words_cache[index + 1:]:
                 overlap = len(left_words & right_words) / min(
                     len(left_words),
                     len(right_words),
