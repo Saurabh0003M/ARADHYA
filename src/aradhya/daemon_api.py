@@ -166,7 +166,9 @@ class _DaemonRequestHandler(BaseHTTPRequestHandler):
         """Return True only if the request carries the correct bearer token."""
         token = getattr(self.server, "auth_token", None)  # type: ignore[attr-defined]
         if not token:
-            return True  # no token configured — should not happen in practice
+            # Fail closed: a server with no configured token denies all requests
+            # rather than silently allowing them.
+            return False
         provided = self.headers.get("Authorization", "")
         return hmac.compare_digest(provided, f"Bearer {token}")
 
