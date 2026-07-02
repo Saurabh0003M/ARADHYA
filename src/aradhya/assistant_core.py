@@ -60,7 +60,7 @@ from src.aradhya.agents.agent_defs import AgentRegistry, load_agents
 from src.aradhya.agents.subagent_runner import SubagentRunner
 from src.aradhya.permission_rules import PermissionEngine, load_permissions
 from src.aradhya.history_processors import default_pipeline
-from src.aradhya.confirmation_gates import CliConfirmationGate
+from src.aradhya.confirmation_gates import CliConfirmationGate, ConfirmationGate
 from src.aradhya.planning_workflow import (
     ComplexityDetector,
     PlanGenerator,
@@ -357,6 +357,7 @@ class AradhyaAssistant:
     def handle_transcript(
         self, transcript: str, stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
+        confirmation_gate: ConfirmationGate | None = None,
     ) -> AssistantResponse:
         logger.info("Handling transcript: {}", transcript)
         if not self.state.is_awake:
@@ -387,7 +388,10 @@ class AradhyaAssistant:
             self.state.pending_plan = None
             # Execution happens only after an explicit confirmation phrase,
             # which is the main safety barrier in the current assistant.
-            result = self._execute_plan(plan, stream_handler=stream_handler, session_name=session_name)
+            result = self._execute_plan(
+                plan, stream_handler=stream_handler, session_name=session_name,
+                confirmation_gate=confirmation_gate,
+            )
             logger.info("Executed confirmed plan {} with success={}", plan.kind, result.success)
             return AssistantResponse(
                 spoken_response=result.message,
@@ -444,7 +448,10 @@ class AradhyaAssistant:
                 index_snapshot=snapshot,
             )
 
-        result = self._execute_plan(plan, stream_handler=stream_handler, session_name=session_name)
+        result = self._execute_plan(
+            plan, stream_handler=stream_handler, session_name=session_name,
+            confirmation_gate=confirmation_gate,
+        )
         logger.info("Executed immediate plan {} with success={}", plan.kind, result.success)
         return AssistantResponse(
             spoken_response=result.message,
@@ -466,11 +473,18 @@ class AradhyaAssistant:
     def _execute_plan(
         self, plan, stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
+        confirmation_gate: ConfirmationGate | None = None,
     ) -> ExecutionResult:
         if plan.kind == PlanKind.AGENT_TASK:
-            return self._execute_agent_task(plan, stream_handler=stream_handler, session_name=session_name)
+            return self._execute_agent_task(
+                plan, stream_handler=stream_handler, session_name=session_name,
+                confirmation_gate=confirmation_gate,
+            )
         if plan.kind == PlanKind.PLANNED_TASK:
-            return self._execute_planned_task(plan, stream_handler=stream_handler, session_name=session_name)
+            return self._execute_planned_task(
+                plan, stream_handler=stream_handler, session_name=session_name,
+                confirmation_gate=confirmation_gate,
+            )
         if plan.kind == PlanKind.GENERAL_CHAT:
             return self._execute_general_chat(plan, stream_handler=stream_handler, session_name=session_name)
         return self.toolbox.execute(plan, self.state)
@@ -525,6 +539,7 @@ class AradhyaAssistant:
     def _execute_agent_task(
         self, plan, stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
+        confirmation_gate: ConfirmationGate | None = None,
     ) -> ExecutionResult:
         if self.model_provider is None:
             return ExecutionResult(
@@ -559,8 +574,11 @@ class AradhyaAssistant:
         system_prompt = self._build_agent_system_prompt(session, turn_ctx, user_prompt=request)
         registry = self._build_tool_registry_from_policy(policy)
 
-        # ── Gap A: CLI confirmation gate (now a reusable typed class) ──
-        gate = CliConfirmationGate()
+        # Use the channel-appropriate gate supplied by the caller; fall back to
+        # the interactive CLI gate for terminal sessions. Headless callers
+        # (daemon, Telegram) pass a HeadlessConfirmationGate so dangerous tools
+        # are denied rather than silently prompting the host's terminal.
+        gate = confirmation_gate or CliConfirmationGate()
 
         loop = AgentLoop(
             self.model_provider,
@@ -628,6 +646,7 @@ class AradhyaAssistant:
     def _execute_planned_task(
         self, plan, stream_handler: Callable[..., str] | None = None,
         session_name: str | None = None,
+        confirmation_gate: ConfirmationGate | None = None,
     ) -> ExecutionResult:
         """Execute a structured multi-step plan.
 
@@ -688,6 +707,7 @@ class AradhyaAssistant:
                     step_plan,
                     stream_handler=stream_handler,
                     session_name=session_name,
+                    confirmation_gate=confirmation_gate,
                 )
                 task_plan.advance(
                     result=step_result.message[:500],

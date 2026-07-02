@@ -30,6 +30,7 @@ pytest_tmp*/
 pytest_basetemp*/
 .pytest_*/
 data/processed/pytest_*/
+data/processed/test-fixtures/
 
 # Generated runtime artifacts
 .tmp/
@@ -47,7 +48,7 @@ core/logs/*.log
 .env.local
 .python313/
 python-*-amd64.exe
-core/config/*.local.json
+core/**/*.local.json
 core/config/topology.yaml
 core/config/topology.local.yaml
 core/memory/federation/
@@ -82,3 +83,6 @@ freellmapi/
 # Agent execution plans & scratchpads
 scratch/
 *.plan.md
+
+# Claude Code local (per-machine) settings
+.claude/settings.local.json

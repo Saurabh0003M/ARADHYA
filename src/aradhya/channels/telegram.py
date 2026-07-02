@@ -26,6 +26,7 @@ from typing import Any
 from loguru import logger
 
 from src.aradhya.paths import get_project_root
+from src.aradhya.confirmation_gates import HeadlessConfirmationGate
 
 PROJECT_ROOT = get_project_root()
 
@@ -171,8 +172,8 @@ class AradhyaTelegramBot:
 
     Security:
     - Only messages from ``allowed_user_ids`` are processed.
-    - If the allow list is empty, the first user to message gets
-      auto-registered and a warning is logged.
+    - There is NO trust-on-first-use: an empty allow-list denies everyone and
+      replies with the sender's user ID so the owner can opt them in.
     """
 
     def __init__(
@@ -186,7 +187,6 @@ class AradhyaTelegramBot:
         self.assistant = assistant
         self._running = False
         self._thread: threading.Thread | None = None
-        self._auto_registered = False
 
     def start(self) -> None:
         """Start the bot in a background thread."""
@@ -285,27 +285,33 @@ class AradhyaTelegramBot:
         self._process_message(chat_id, text)
 
     def _is_allowed(self, user_id: int, user_name: str, chat_id: int) -> bool:
-        """Check if user is in the allow list. Auto-register first user if empty."""
+        """Return True only for explicitly allow-listed users.
+
+        Security: there is deliberately NO trust-on-first-use auto-registration.
+        A Telegram bot token is not a strong secret, so auto-granting the first
+        messager would hand assistant control to anyone who discovers the bot.
+        The owner must add their numeric user ID to ``telegram.allowed_user_ids``
+        in profile.json (or the ``ARADHYA_TELEGRAM_USERS`` env var). When the
+        allow-list is empty, the bot replies with the sender's ID to opt in.
+        """
         if user_id in self.allowed_user_ids:
             return True
 
-        if not self.allowed_user_ids and not self._auto_registered:
-            self.allowed_user_ids.add(user_id)
-            self._auto_registered = True
+        if not self.allowed_user_ids:
             logger.warning(
-                "Auto-registered first Telegram user: {} (ID: {}). "
-                "Add this ID to profile.json telegram.allowed_user_ids "
-                "for persistent access.",
+                "Telegram allow-list is empty; denying user {} (ID: {}). Add this "
+                "ID to telegram.allowed_user_ids in profile.json (or the "
+                "ARADHYA_TELEGRAM_USERS env var) to grant access.",
                 user_name, user_id,
             )
             self.api.send_message(
                 chat_id,
-                f"Welcome {user_name}! You've been auto-registered.\n\n"
-                f"Your user ID is `{user_id}`. Add it to "
-                f"`profile.json` under `telegram.allowed_user_ids` "
-                f"for persistent access.",
+                f"This bot has no authorized users configured yet.\n\n"
+                f"Your user ID is `{user_id}`. The bot owner must add it to "
+                f"`telegram.allowed_user_ids` in profile.json (or the "
+                f"`ARADHYA_TELEGRAM_USERS` env var) to grant access.",
             )
-            return True
+            return False
 
         logger.warning("Unauthorized Telegram user: {} (ID: {})", user_name, user_id)
         self.api.send_message(
@@ -390,7 +396,14 @@ class AradhyaTelegramBot:
                     except Exception as e:
                         logger.debug("Telegram stream edit failed: {}", e)
 
-            response = self.assistant.handle_transcript(text, stream_handler=stream_handler)
+            # Remote channel: deny dangerous tools. Interactive Telegram approval
+            # is a follow-up — it needs the bot to process messages on worker
+            # threads so a blocking gate cannot deadlock the single poll loop.
+            response = self.assistant.handle_transcript(
+                text,
+                stream_handler=stream_handler,
+                confirmation_gate=HeadlessConfirmationGate(),
+            )
 
             final_text = self._build_final_text(response, accumulated_text)
             self._deliver_final_text(chat_id, msg_id, final_text)

@@ -13,11 +13,14 @@ cd ARADHYA
 python -m src.aradhya.setup_wizard
 
 # Or manual setup
-pip install -r requirements.txt
+pip install -r requirements.txt -r requirements-dev.txt
 # Edit core/config/profile.local.json with your model settings
 
 # Run tests
-python -m pytest tests/ --override-ini="addopts=" -q
+pytest -q
+
+# Run tests with coverage (opt-in; writes an HTML report to htmlcov/)
+pytest --cov=src --cov=core --cov-report=html
 
 # Start Aradhya
 python -m src.aradhya.main
