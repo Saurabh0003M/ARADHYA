@@ -209,12 +209,12 @@ graph TD
 
 Run unit tests:
 ```powershell
-venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts="
+venv\Scripts\python.exe -m pytest tests\unit
 ```
 
 Use a dedicated base temp directory outside the Git worktree when validating cleanup-sensitive changes:
 ```powershell
-venv\Scripts\python.exe -m pytest tests\unit --override-ini="addopts=" --basetemp C:\tmp\aradhya_readme_cleanup
+venv\Scripts\python.exe -m pytest tests\unit --basetemp C:\tmp\aradhya_readme_cleanup
 ```
 
 Run the environment doctor to diagnose issues:

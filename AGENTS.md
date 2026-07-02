@@ -74,7 +74,7 @@ User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
 - **Slash commands**: All new commands use `/command` format
 - **Skills**: New capabilities go in `core/skills/<name>/SKILL.md`
 - **Tools**: New tools register in `assistant_core._build_tool_registry()`
-- **Tests**: Unit tests in `tests/unit/`, run with `pytest --override-ini="addopts="`
+- **Tests**: Unit tests in `tests/unit/`, run with `pytest -q` (requires `pip install -r requirements-dev.txt`; coverage is opt-in, see CONTRIBUTING.md)
 
 ## How to Add a New Skill
 

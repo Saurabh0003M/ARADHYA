@@ -30,6 +30,7 @@ pytest_tmp*/
 pytest_basetemp*/
 .pytest_*/
 data/processed/pytest_*/
+data/processed/test-fixtures/
 
 # Generated runtime artifacts
 .tmp/
