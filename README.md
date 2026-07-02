@@ -3,6 +3,7 @@
   <p><strong>A Local-First Operating Intelligence (OI) Assistant for Windows</strong></p>
 
   [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+  [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
   [![Windows](https://img.shields.io/badge/OS-Windows_10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/en-us/windows/)
   [![Ollama](https://img.shields.io/badge/Local_AI-Ollama-white?logo=ollama&logoColor=black)](https://ollama.com/)
 </div>
@@ -23,7 +24,7 @@
   * **Telegram Bot**: Secure remote access simulating a live-streaming experience.
 * **🛠️ Extensive Tool Registry**: Built-in tools for file management, shell execution, web browsing, **browser automation**, **vision (screen capture and reading)**, power management, scheduling, and persistent sessions.
 * **📜 Robust Audit & State**: Every action is logged in JSONL format, and session/context memory is managed robustly via a thread-safe **SQLite State Store** with automatic compaction.
-* **🎙️ Voice Integration**: Supports voice inbox processing, optional local transcription, push-to-talk hotkeys, and continuous background wake-word activation.
+* **🎙️ Voice Integration**: Supports voice inbox processing, optional local transcription (Faster-Whisper), and push-to-talk hotkeys. A background "wake-word" mode also exists, but note it is currently a continuous *record → transcribe → substring-match* loop (not low-power acoustic keyword spotting), so it depends on the transcription backend and is not free at idle.
 * **🔌 Parasite OS Subsystems**: Dynamically load skills (`SKILL.md`), customized agents, hooks (`HookEngine`), and permissions (`PermissionEngine`).
 * **🌐 Local API Catalog & Topology**: Browse a local public API catalog and discover network topology for LAN federation.
 
@@ -197,8 +198,12 @@ graph TD
  ┃ ┣ 📜 daemon.py             # Persistent background API & tray icon
  ┃ ┣ 📜 assistant_core.py     # State, Planner, Session aggregation
  ┃ ┣ 📜 agent_loop.py         # ReAct execution & safety gates
- ┃ ┣ 📂 tools/                # Capabilities: Browser, File, Shell, Vision
+ ┃ ┣ 📜 desktop_control.py    # Desktop control via UI Automation
+ ┃ ┣ 📜 user_profile.py       # Structured user-context store
+ ┃ ┣ 📂 tools/                # Browser, Desktop, File, Hardware, Maintenance, Power, Vision…
+ ┃ ┣ 📂 workflows/            # Trust-boundary engine, guided workflows
  ┃ ┣ 📂 channels/             # Telegram bot integration
+ ┃ ┣ 📂 utils/                # Hardware profiling, JSON extraction, helpers
  ┃ ┗ 📂 ui/                   # Rich terminal & Tkinter Floating Icon
  ┗ 📂 tests/unit/    # Pytest unit tests
 ```
@@ -221,3 +226,13 @@ Run the environment doctor to diagnose issues:
 ```powershell
 scripts\doctor.bat
 ```
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.

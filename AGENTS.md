@@ -27,8 +27,10 @@ User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
    agent_loop.py       ──> Hook Engine -> Permission Rules -> Confirmation Gate
        |                           |
        v                           v
-   model_provider.py       tools/ (browser, file, power, scheduler, session, shell, system, vision, web)
-   (Ollama/OpenRouter)     skills/ (dynamic behavioral extensions via SKILL.md)
+   model_provider.py       tools/ (browser, desktop, file, hardware, maintenance, power,
+   (Ollama/OpenRouter)            profile, scheduler, session, shell, system, vision, web)
+                           skills/ (dynamic behavioral extensions via SKILL.md)
+                           workflows/ (trust-boundary engine, guided workflows)
 ```
 
 ## Key Files
@@ -44,8 +46,12 @@ User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
 | `src/aradhya/permission_rules.py` | Pattern-based allow/deny execution policies |
 | `src/aradhya/ui/floating_icon.py` | Tkinter desktop overlay for quick Mic/Vision activation |
 | `src/aradhya/channels/telegram.py` | Remote access proxy mimicking live streaming |
-| `src/aradhya/tools/` | Tool implementations (Browser, Vision, Scheduler, etc.) |
+| `src/aradhya/tools/` | Tool implementations (Browser, Desktop, File, Hardware, Maintenance, Power, Profile, Scheduler, Session, Shell, System, Vision, Web) |
 | `src/aradhya/skills/` | Skill framework (`SKILL.md` parser, registry, active context) |
+| `src/aradhya/workflows/trust_boundary.py` | Trust-boundary workflow engine for safe multi-step operations |
+| `src/aradhya/desktop_control.py` | Desktop control via UI Automation |
+| `src/aradhya/user_profile.py` | Structured user-context store for form assistance |
+| `src/aradhya/utils/hardware_profile.py` | Hardware detection and model recommendations |
 
 ## Safety Rules — NEVER VIOLATE
 
@@ -70,7 +76,7 @@ User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
 
 - **Python 3.10+** with `from __future__ import annotations`
 - **loguru** for logging (not stdlib `logging`)
-- **rich** for terminal output (import from `cli_ui.py`, never print raw)
+- **rich** for terminal output (import from `src/aradhya/ui/cli.py`, never print raw)
 - **Slash commands**: All new commands use `/command` format
 - **Skills**: New capabilities go in `core/skills/<name>/SKILL.md`
 - **Tools**: New tools register in `assistant_core._build_tool_registry()`

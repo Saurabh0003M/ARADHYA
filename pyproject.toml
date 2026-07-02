@@ -5,9 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aradhya"
 version = "0.1.0"
-description = "AI Assistant Project"
+description = "Local-first Operating Intelligence (OI) assistant for Windows"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "GPL-3.0-or-later"}
+authors = [{name = "Saurabh0003M"}]
+keywords = ["ai", "assistant", "operating-intelligence", "local-first", "windows"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 [project.scripts]
 aradhya = "src.aradhya.main:main"

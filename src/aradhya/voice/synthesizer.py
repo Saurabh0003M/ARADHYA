@@ -83,6 +83,15 @@ def build_speech_synthesizer(
             engine_factory=engine_factory,
         )
 
+    if provider == "nvda":
+        # Speak through the user's screen reader, falling back to SAPI/pyttsx3
+        # when NVDA is not installed or running. Lazy import keeps ctypes off
+        # the import path for non-NVDA users.
+        from src.aradhya.voice.nvda_output import NvdaSpeechSynthesizer
+
+        fallback = Pyttsx3SpeechSynthesizer(profile, engine_factory=engine_factory)
+        return NvdaSpeechSynthesizer(profile, fallback=fallback)
+
     raise ValueError(
         f"Unsupported voice output provider '{profile.provider}'. "
         "Add a provider implementation instead of hard-coding a new backend."

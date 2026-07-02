@@ -5,7 +5,7 @@
 If you discover a security vulnerability in Aradhya, please report it responsibly:
 
 1. **Do NOT** open a public GitHub issue
-2. Email the maintainer directly with details
+2. Email the maintainer at **saurabh0003m@users.noreply.github.com** with details
 3. Include steps to reproduce if possible
 4. Allow 48 hours for an initial response
 
@@ -16,7 +16,7 @@ Aradhya implements multiple security layers:
 ### Confirmation Gate
 All dangerous tools (`run_command`, `write_file`, `delete_file`, `move_file`,
 `open_path`, `open_url`, `browser_click`, `browser_type`, `browser_submit`,
-`clipboard_write`) require explicit user confirmation before execution.
+`clipboard_write`, `schedule_task`) require explicit user confirmation before execution.
 
 ### Dry-Run Default
 `allow_live_execution` is `false` by default. Plans are generated but
@@ -36,6 +36,7 @@ All tool executions are logged to `~/.aradhya/audit/audit.jsonl` with:
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 1.x     | Yes       |
+| Version | Supported          |
+|---------|-----------         |
+| 0.1.x   | :white_check_mark: |
+| < 0.1   | :x:                |
