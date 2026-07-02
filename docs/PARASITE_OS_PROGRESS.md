@@ -79,7 +79,7 @@ Better sequence:
 | Path portability layer | Done | `ARADHYA_HOME`, `parasite.toml`, and `~/.aradhya` resolution |
 | Session/state hardening | Done | Session management via SQLite WAL state store |
 | Timeout kill switch | Done | Agent loop guardrails for iteration limits |
-| LAN federation foundation | Done | SHA-256 fingerprint identity, peer registry, doctor |
+| LAN federation foundation | Experimental | SHA-256 fingerprint identity, peer registry, doctor — **no working transport yet** (see "Not Done Yet"); wired only to `/topology` / `/federation` CLI status |
 | Opus coordination notes | Done | `docs/OPUS_HANDOFF.md` |
 | Generated artifact cleanup | Done | `data/processed/pytest_*` artifacts removed and ignored |
 | Full user acceptance loop | Partial | Unit/doctor checks pass; UI smoke testing ongoing |

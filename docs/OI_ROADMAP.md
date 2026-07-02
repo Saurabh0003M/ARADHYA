@@ -28,12 +28,12 @@ intelligence that can:
 ### Current Foundation (Completed)
 
 - **Model Engine Layer**: Swappable local model configuration through Ollama, with robust OpenRouter fallback (including 429 rate-limit failover chains and strict `CloudPrivacyGate` evaluation).
-- **Context Engine**: Local directory index refresh (`project_tree.txt`), active window telemetry, clipboard context, and active browser context tracking.
+- **Context Engine**: Local directory index refresh (`project_tree.txt`), plus active-window and clipboard context. Note: these are gathered as a **synchronous per-turn snapshot** (`GetForegroundWindow`, `powershell Get-Clipboard`) at wake/query time — there is **no** event-driven passive-perception layer (no `SetWinEventHook`, clipboard listener, or filesystem watcher), and the directory index is a periodic full scan, not incremental.
 - **Action Engine (Browser & UI)**: Complete browser automation tools (draft/submit/click), UI awareness via screenshot capabilities (`vision_tools.py`), and bounded shell actions.
 - **Safety and Policy Engine**: Pattern-based Permission Engine (Regex gating and conditional blocks), lifecycle `HookEngine` (pre/post tool interception), and mandatory confirmation gates.
 - **Parasite OS Digestion**: 7-stage state-machine ingestion pipeline (`ENGULF` to `ABSORB`), with automatic skill deduplication and host capability ranking via ledgers.
 - **Agent Definitions**: YAML frontmatter + Markdown system prompt parsing for discrete personas.
-- **Voice Subsystem**: Continuous 2.5s wake-word detection loops, `faster_whisper` offline pipelines, and `pyttsx3` text-to-speech integration.
+- **Voice Subsystem**: `faster_whisper` offline transcription and `pyttsx3` text-to-speech (both optional deps). The "wake-word" mode is a continuous 2.5s *record → transcribe → substring-match* loop, **not** low-power acoustic keyword spotting — treat it as a placeholder until `openWakeWord`/Porcupine-style detection lands.
 - **Multi-Modal UI**: Rich CLI streaming, Tkinter Desktop Floating Icon with IPC file queues, and Telegram long-polling bot with simulated live-streaming (`editMessageText`).
 - **Dynamic Skills & Learnings**: Intent-based token-conserving skill loading, runtime Git/Web skill absorption, and a `LearningsEngine` that auto-promotes recurring insights (e.g., 3+ hits) to standing rules.
 - **LAN Federation Foundation**: Local SHA-256 identity fingerprinting, capability topology manifests, and peer registries.
@@ -65,7 +65,8 @@ Goal: make Aradhya reliable as a local operating layer before deeper automation.
 ### Milestone 2: Context Engine (🔄 IN PROGRESS)
 Goal: improve machine awareness without paying continuous full-scan cost.
 - File watchers and incremental builds are pending.
-- Active-window and clipboard contexts are fully shipped.
+- Active-window and clipboard contexts ship only as a synchronous per-turn
+  snapshot; the event-driven passive-perception layer is **not** implemented.
 
 ### Milestone 3: Browser Operator (✅ DONE)
 Goal: support real-world tasks such as forms, logins, and guided website flows.
@@ -73,7 +74,10 @@ Goal: support real-world tasks such as forms, logins, and guided website flows.
 
 ### Milestone 4: Screen Guidance (✅ DONE)
 Goal: help users complete tasks on pages and apps that Aradhya cannot yet fully automate.
-- Vision tools with OCR and screenshot capabilities are fully shipped.
+- Vision tools with OCR and screenshot capabilities are implemented, but rely on
+  **optional** deps (`mss`/`Pillow`/`pytesseract`); without them they degrade to
+  PowerShell screenshots / Windows OCR. Desktop UI Automation (`uiautomation`) is
+  likewise optional and no-ops when absent.
 
 ### Milestone 5: External Handoff (🔄 IN PROGRESS)
 Goal: treat Aradhya as an orchestrator for specialist jobs.
