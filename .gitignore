@@ -83,3 +83,6 @@ freellmapi/
 # Agent execution plans & scratchpads
 scratch/
 *.plan.md
+
+# Claude Code local (per-machine) settings
+.claude/settings.local.json
