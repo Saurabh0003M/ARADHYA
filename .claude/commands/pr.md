@@ -9,14 +9,14 @@ stop at the first failure:
 1. **Refuse on main.** Run `git rev-parse --abbrev-ref HEAD`. If the branch is
    `main` (or `master`), STOP immediately and tell the user to create a feature
    branch first. Never push to or open a PR from main.
-2. **Verify gh auth with the stale token shadowed.** Run:
-   `$env:GITHUB_TOKEN=$null; gh auth status`
-   If this fails, STOP and tell the user to run `gh auth login` once in a
-   terminal — do not fall back to the `GITHUB_TOKEN` env var.
+2. **Verify gh auth.** Run `gh auth status`. Auth comes from the
+   `GITHUB_TOKEN` env var (there is no keyring auth — never unset or null the
+   var, and never print it). If auth fails, STOP and ask the user to refresh
+   the token.
 3. **Push the branch:**
-   `$env:GITHUB_TOKEN=$null; git push -u origin HEAD`
+   `git push -u origin HEAD`
 4. **Create the PR** against `main`:
-   `$env:GITHUB_TOKEN=$null; gh pr create --base main --title "..." --body "..."`
+   `gh pr create --base main --title "..." --body "..."`
    Use `$ARGUMENTS` as the title if given, otherwise derive the title from the
    branch's commits. In the body, summarize what changed and why (bullets),
    mention how it was tested, and end with:
