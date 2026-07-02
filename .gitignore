@@ -47,7 +47,7 @@ core/logs/*.log
 .env.local
 .python313/
 python-*-amd64.exe
-core/config/*.local.json
+core/**/*.local.json
 core/config/topology.yaml
 core/config/topology.local.yaml
 core/memory/federation/

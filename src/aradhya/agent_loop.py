@@ -521,20 +521,18 @@ class AgentLoop:
         """Extract the final text content from a model response."""
         return str(response.get("text", "") or "").strip()
 
-    # ── Dangerous tool set ─────────────────────────────────────────────
-    # Any tool in this set requires either explicit user confirmation
-    # OR live_execution_enabled to be True at the policy level.
-    # When neither is available the call is blocked with a policy-denial
-    # result — this closes the silent bypass that existed when
-    # confirmation_gate was None (e.g. streaming mode).
+    # ── Dangerous tool fallback set ────────────────────────────────────
+    # The AUTHORITATIVE source of "does this tool need confirmation?" is the
+    # tool definition's ``requires_confirmation`` flag, surfaced via
+    # ``ToolRegistry.requires_confirmation`` (see ``_tool_requires_confirmation``).
+    # This frozenset is only the fallback used when the executor cannot report
+    # per-tool confirmation (e.g. lightweight test doubles). Keep it in sync with
+    # the flagged tools; it must never under-report a dangerous tool.
     DANGEROUS_TOOLS: frozenset[str] = frozenset({
         "run_command",
         "write_file",
-        "delete_file",
-        "move_file",
         "browser_click",
         "browser_type",
-        "browser_submit",
         "browser_execute_js",
         "open_path",
         "open_url",
@@ -677,8 +675,27 @@ class AgentLoop:
             )
         return None
 
+    def _tool_requires_confirmation(self, name: str) -> bool:
+        """Return True if a tool call must pass the confirmation gate.
+
+        The authoritative source is the executor's per-tool flag
+        (``ToolRegistry.requires_confirmation``); this falls back to the
+        ``DANGEROUS_TOOLS`` set only for executors that cannot report it.
+        """
+        accessor = getattr(self.tool_executor, "requires_confirmation", None)
+        if callable(accessor):
+            try:
+                result = accessor(name)
+            except Exception:  # noqa: BLE001 — the safety gate must never crash
+                result = None
+            # Only trust a real bool. Mock executors (MagicMock) auto-create a
+            # truthy callable here, so fall back to the explicit set for those.
+            if isinstance(result, bool):
+                return result
+        return name in self.DANGEROUS_TOOLS
+
     def _apply_dangerous_tools_gate(self, tool_call: ToolCall, audit: Any) -> ToolResult | None:
-        if tool_call.name not in self.DANGEROUS_TOOLS:
+        if not self._tool_requires_confirmation(tool_call.name):
             return None
 
         # Lazy import avoids the circular dependency chain

@@ -182,6 +182,8 @@ class TestDangerousToolsExpanded:
 
     def test_original_tools_still_present(self) -> None:
         from src.aradhya.agent_loop import AgentLoop
-        for tool in ["run_command", "write_file", "delete_file", "move_file",
-                      "browser_click", "open_path", "open_url", "clipboard_write"]:
+        # delete_file / move_file / browser_submit were never real tools; the
+        # authoritative source is now each tool's requires_confirmation flag.
+        for tool in ["run_command", "write_file", "browser_click",
+                      "open_path", "open_url", "clipboard_write"]:
             assert tool in AgentLoop.DANGEROUS_TOOLS
