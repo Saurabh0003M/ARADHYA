@@ -10,7 +10,11 @@ from typing import Callable
 from loguru import logger
 
 from src.aradhya.runtime_profile import VoiceProfile
-from src.aradhya.voice.transcriber import FileTranscriber, build_file_transcriber
+from src.aradhya.voice.transcriber import (
+    FileTranscriber,
+    FileTranscription,
+    build_file_transcriber,
+)
 
 
 @dataclass(frozen=True)
