@@ -1,0 +1,51 @@
+# graphify ignore rules for the ARADHYA code graph.
+# NOTE: when this file exists graphify uses it INSTEAD of .gitignore,
+# so every secret/junk pattern from .gitignore must be repeated here.
+
+# --- mirrored from .gitignore (secrets and runtime data) ---
+.env
+.env.local
+core/**/*.local.json
+core/config/topology.yaml
+core/config/topology.local.yaml
+core/memory/federation/
+core/audit/
+core/sessions/
+*.log
+*.key
+*.pem
+
+# --- mirrored from .gitignore (build junk and third-party trees) ---
+__pycache__/
+*.py[cod]
+build/
+dist/
+*.egg-info/
+venv/
+env/
+ENV/
+.python313/
+.vscode/
+.idea/
+.pytest_cache/
+htmlcov/
+pytest-cache-files-*/
+pytest_tmp*/
+pytest_basetemp*/
+.pytest_*/
+.tmp/
+python_temp*/
+Hosts/
+freellmapi/
+scratch/
+*.plan.md
+
+# --- graphify-specific additions ---
+# .claude/worktrees holds full working copies of this repo; scanning it
+# would index every source file once per worktree.
+.git/
+.claude/
+graphify-out/
+# runtime user data (voice recordings, processed corpora) — no code, privacy-sensitive
+data/
+audio/
