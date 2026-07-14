@@ -86,3 +86,8 @@ scratch/
 
 # Claude Code tooling / local settings (not part of the project)
 .claude/
+
+# Runtime IPC / heartbeat artifacts
+.aradhya_heartbeat
+.aradhya_ipc
+.aradhya_ipc_queue
