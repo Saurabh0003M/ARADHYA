@@ -28,6 +28,17 @@ def test_cloud_privacy_gate_blocks_api_keys_and_local_paths():
     }
 
 
+def test_cloud_privacy_gate_blocks_cloudflare_runtime_terms():
+    assessment = CloudPrivacyGate().assess_text(
+        "Use CLOUDFLARE_API_TOKEN=abcdefghijklmnopqrstuvwxyz1234567890",
+        source="unit",
+    )
+
+    assert assessment.allowed is False
+    assert assessment.risk_level == "blocked"
+    assert any(finding.code == "private_term" for finding in assessment.findings)
+
+
 def test_cloud_privacy_gate_assesses_chat_messages():
     assessment = CloudPrivacyGate().assess_messages(
         [

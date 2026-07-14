@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 
 from src.aradhya.model_provider import ModelHealth
 from src.aradhya.model_setup import RECOMMENDED_OLLAMA_MODELS, bootstrap_runtime_profile
@@ -155,6 +156,33 @@ def test_bootstrap_keeps_profile_when_ollama_is_unreachable(monkeypatch, tmp_pat
 
     assert updated == profile
     assert any("https://ollama.com/download" in line for line in outputs)
+
+
+def test_bootstrap_skips_ollama_selection_for_cloud_provider(tmp_path):
+    profile = build_default_runtime_profile(tmp_path)
+    profile = replace(
+        profile,
+        model=replace(
+            profile.model,
+            provider="cloudflare",
+            model_name="@cf/zai-org/glm-5.2",
+            base_url="https://api.cloudflare.com/client/v4",
+            api_key_env="CLOUDFLARE_API_TOKEN",
+            api_key_fallback_envs=("CLOUDFLARE_AUTH_TOKEN",),
+            account_id_env="CLOUDFLARE_ACCOUNT_ID",
+        ),
+    )
+    outputs: list[str] = []
+
+    updated = bootstrap_runtime_profile(
+        profile,
+        tmp_path,
+        input_func=lambda _prompt: "1",
+        output_handler=outputs.append,
+    )
+
+    assert updated == profile
+    assert outputs == []
 
 
 def test_persist_model_name_updates_local_override_file(tmp_path):

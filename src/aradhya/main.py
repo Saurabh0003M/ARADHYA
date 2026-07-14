@@ -145,18 +145,19 @@ def _run_health_checks(runtime_profile, model_provider) -> list[tuple[str, bool,
         f"{v.major}.{v.minor}.{v.micro}" + ("" if ok else " - need 3.10+"),
     ))
 
-    # 2. Ollama reachability + model
+    # 2. Model provider reachability + configured model
+    provider_label = str(runtime_profile.model.provider)
     try:
         health = model_provider.health_check()
         model_ok = getattr(health, "ready", False)
         model_name = runtime_profile.model.model_name
         if model_ok:
-            checks.append(("Ollama", True, f"Ready - {model_name}"))
+            checks.append((provider_label, True, f"Ready - {model_name}"))
         else:
-            msg = getattr(health, "error", "unreachable")
-            checks.append(("Ollama", False, f"Offline - {msg}"))
+            msg = getattr(health, "message", "unreachable")
+            checks.append((provider_label, False, f"Offline - {msg}"))
     except Exception as exc:
-        checks.append(("Ollama", False, f"Error - {exc}"))
+        checks.append((provider_label, False, f"Error - {exc}"))
 
     # 3. Config files
     prefs_path = PROJECT_ROOT / "core" / "config" / "preferences.json"
@@ -452,7 +453,7 @@ def _handle_model_ask(*, command, model_provider, runtime_profile) -> None:
     if len(normalized) > MAX_DIRECT_MODEL_PROMPT_CHARS:
         render_error(f"Direct model prompts must stay under {MAX_DIRECT_MODEL_PROMPT_CHARS} characters.")
         return
-    if runtime_profile.model.provider.lower() == "openrouter":
+    if runtime_profile.model.provider.lower() != "ollama":
         assessment = CloudPrivacyGate().assess_text(normalized, source="/model ask")
         if not assessment.allowed:
             render_cloud_safety_assessment(assessment)

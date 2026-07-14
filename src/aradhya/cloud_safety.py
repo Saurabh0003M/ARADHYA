@@ -2,7 +2,7 @@
 
 Aradhya is local-first.  This module is the small gate that prevents obvious
 secrets, private files, and local machine details from being sent to optional
-cloud model providers such as OpenRouter.
+cloud model providers such as OpenRouter or Cloudflare Workers AI.
 """
 
 from __future__ import annotations
@@ -85,6 +85,9 @@ class CloudPrivacyGate:
         "profile.local.json",
         "ARADHYA_OPENROUTER_API_KEY",
         "OPUS_OPENROUTER_API_KEY",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_AUTH_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
     )
 
     _REVIEW_TERMS: tuple[str, ...] = (

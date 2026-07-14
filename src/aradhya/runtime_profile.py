@@ -37,6 +37,9 @@ class ModelProfile:
     ollama_models_path: Path
     api_key: str = ""
     api_key_env: str = ""
+    api_key_fallback_envs: tuple[str, ...] = ()
+    account_id: str = ""
+    account_id_env: str = ""
     # Optional multimodal model used for screenshot/image description. When
     # empty, vision falls back to model_name (fine if that model is multimodal,
     # otherwise describe_image reports that no vision model is configured).
@@ -170,7 +173,56 @@ def _deep_merge_payloads(
 def _default_api_key_env(provider: str) -> str:
     if provider.lower() == "openrouter":
         return "ARADHYA_OPENROUTER_API_KEY"
+    if provider.lower() == "cloudflare":
+        return "CLOUDFLARE_API_TOKEN"
     return ""
+
+
+def _default_api_key_fallback_envs(provider: str) -> tuple[str, ...]:
+    if provider.lower() == "cloudflare":
+        return ("CLOUDFLARE_AUTH_TOKEN",)
+    return ()
+
+
+def _default_account_id_env(provider: str) -> str:
+    if provider.lower() == "cloudflare":
+        return "CLOUDFLARE_ACCOUNT_ID"
+    return ""
+
+
+def _default_model_name(provider: str, fallback: str) -> str:
+    normalized = provider.lower()
+    if normalized == "openrouter":
+        return "google/gemma-4-31b-it:free"
+    if normalized == "cloudflare":
+        return "@cf/zai-org/glm-5.2"
+    return fallback
+
+
+def _default_base_url(provider: str, fallback: str) -> str:
+    normalized = provider.lower()
+    if normalized == "openrouter":
+        return "https://openrouter.ai/api/v1"
+    if normalized == "cloudflare":
+        return "https://api.cloudflare.com/client/v4"
+    return fallback
+
+
+def _env_value(primary: str, fallback_envs: tuple[str, ...]) -> str:
+    candidates = (primary,) + fallback_envs if primary else fallback_envs
+    for env_name in candidates:
+        value = os.environ.get(env_name, "")
+        if value:
+            return value
+    return ""
+
+
+def _string_tuple(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,) if value else ()
+    if isinstance(value, (list, tuple)):
+        return tuple(str(item) for item in value if str(item))
+    return ()
 
 
 def build_default_runtime_profile(project_root: Path | None = None) -> RuntimeProfile:
@@ -240,14 +292,32 @@ def _load_model_profile(
 ) -> ModelProfile:
     model_provider = str(raw_model.get("provider", defaults.model.provider))
     api_key_env = str(raw_model.get("api_key_env", "") or _default_api_key_env(model_provider))
-    env_api_key = os.environ.get(api_key_env, "") if api_key_env else ""
+    raw_fallback_envs = raw_model.get(
+        "api_key_fallback_envs",
+        _default_api_key_fallback_envs(model_provider),
+    )
+    api_key_fallback_envs = _string_tuple(raw_fallback_envs)
+    env_api_key = _env_value(api_key_env, api_key_fallback_envs)
     file_api_key = str(raw_model.get("api_key", defaults.model.api_key) or "")
     api_key = env_api_key or file_api_key
+    account_id_env = str(
+        raw_model.get("account_id_env", "")
+        or _default_account_id_env(model_provider)
+    )
+    env_account_id = os.environ.get(account_id_env, "") if account_id_env else ""
+    file_account_id = str(raw_model.get("account_id", defaults.model.account_id) or "")
+    account_id = env_account_id or file_account_id
 
     return ModelProfile(
         provider=model_provider,
-        model_name=raw_model.get("model_name", defaults.model.model_name),
-        base_url=raw_model.get("base_url", defaults.model.base_url),
+        model_name=str(
+            raw_model.get("model_name")
+            or _default_model_name(model_provider, defaults.model.model_name)
+        ),
+        base_url=str(
+            raw_model.get("base_url")
+            or _default_base_url(model_provider, defaults.model.base_url)
+        ),
         request_timeout_seconds=raw_model.get(
             "request_timeout_seconds",
             defaults.model.request_timeout_seconds,
@@ -268,6 +338,9 @@ def _load_model_profile(
         ),
         api_key=api_key,
         api_key_env=api_key_env,
+        api_key_fallback_envs=api_key_fallback_envs,
+        account_id=account_id,
+        account_id_env=account_id_env,
         vision_model=str(raw_model.get("vision_model", defaults.model.vision_model) or ""),
     )
 

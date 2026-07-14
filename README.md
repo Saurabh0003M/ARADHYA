@@ -25,7 +25,7 @@
 * **🛠️ Extensive Tool Registry**: Built-in tools for file management, shell execution, web browsing, **browser automation**, **vision (screen capture and reading)**, power management, scheduling, and persistent sessions.
 * **📜 Robust Audit & State**: Every action is logged in JSONL format, and session/context memory is managed robustly via a thread-safe **SQLite State Store** with automatic compaction.
 * **🎙️ Voice Integration**: Supports voice inbox processing, optional local transcription (Faster-Whisper), and push-to-talk hotkeys. A background "wake-word" mode also exists, but note it is currently a continuous *record → transcribe → substring-match* loop (not low-power acoustic keyword spotting), so it depends on the transcription backend and is not free at idle.
-* **🔌 Parasite OS Subsystems**: Dynamically load skills (`SKILL.md`), customized agents, hooks (`HookEngine`), and permissions (`PermissionEngine`).
+* **🔌 Symbiont Subsystems**: Dynamically load skills (`SKILL.md`), customized agents, hooks (`HookEngine`), and permissions (`PermissionEngine`).
 * **🌐 Local API Catalog & Topology**: Browse a local public API catalog and discover network topology for LAN federation.
 
 ---
@@ -92,7 +92,7 @@ venv\Scripts\python.exe -m src.aradhya.daemon
 | `/daemon start/stop` | Manage the background Daemon and local API |
 | `/cache` | Validate and benchmark the local context cache |
 | `/apis search <query>` | Use the local public API catalog |
-| `/parasite status` | Operate Parasite OS host-repo digestion |
+| `/symbiont status` | Operate Symbiont host-repo ingestion |
 | `/audit` | Show recent audit log entries |
 
 ### Voice Commands
@@ -124,7 +124,7 @@ flowchart TD
 - **Confirmation Gates**: Risky tools (shell execution, writes, browser clicks) require your explicit approval (`yes proceed`).
 - **Hook & Permission Engines**: System actions are evaluated through dynamic rules and project-level hooks before they ever prompt the user.
 - **Dry-Run Default**: `allow_live_execution` is disabled by default.
-- **Cloud Privacy Gate**: Optional cloud model workers (via OpenRouter) are gated behind an automatic privacy assessment to prevent sensitive data leaks.
+- **Cloud Privacy Gate**: Optional cloud model workers (via OpenRouter or Cloudflare Workers AI) are gated behind an automatic privacy assessment to prevent sensitive data leaks.
 
 ---
 
@@ -135,8 +135,8 @@ Aradhya uses a flexible configuration hierarchy. The active model config is load
 2. `core/config/profile.json`
 
 **Key Configuration Fields:**
-- `model.provider`: `ollama` (default) or `openrouter`.
-- `model.model_name`: Your selected model (e.g., `gemma4:e4b` or `deepseek/deepseek-v4-flash:free`).
+- `model.provider`: `ollama` (default), `openrouter`, or `cloudflare`.
+- `model.model_name`: Your selected model (e.g., `gemma4:e4b`, `deepseek/deepseek-v4-flash:free`, or `@cf/zai-org/glm-5.2`).
 - `allow_live_execution`: Toggle live execution vs dry-runs.
 - `user_roots`: Define specific search roots instead of scanning the entire home folder.
 
@@ -160,7 +160,7 @@ venv\Scripts\python.exe -m pip install -r requirements-voice-activation.txt
 
 ---
 
-## 🧩 Advanced Subsystems (Parasite OS)
+## 🧩 Advanced Subsystems (Symbiont)
 
 - **Skills Framework**: Bundled in `core/skills/` (e.g., Dev Assistant, Sprint Factory, Screen Reader). Managed via `/skills`.
 - **Hooks & Permissions**: Defined in `hooks.json` and `permissions.json`. Enables deep lifecycle interventions (`PreToolUse`, `SessionStart`).
