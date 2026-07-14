@@ -266,3 +266,41 @@ class TestHistoryProcessorPipeline:
     def test_default_pipeline_creates_5_processors(self) -> None:
         pipeline = default_pipeline()
         assert len(pipeline.processors) == 5
+
+
+class TestNoneContentDoesNotCrash:
+    """Regression: tool-call assistant messages carry content=None. Processors
+    must not do len(None). This was crashing every tool-using agent turn with
+    'object of type NoneType has no len()' (history_processors.py:78/112/297)."""
+
+    @staticmethod
+    def _tool_call_msg() -> dict:
+        # A realistic assistant tool-call message: content is None, tool_calls set.
+        return {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "1", "function": {"name": "list_directory"}}],
+        }
+
+    def test_default_pipeline_survives_none_content(self) -> None:
+        messages = [
+            _user_msg("list the files in docs"),
+            self._tool_call_msg(),
+            _tool_msg("a.md\nb.md\nc.md"),
+            self._tool_call_msg(),
+        ]
+        # Must not raise; must return a list.
+        result = default_pipeline()(messages)
+        assert isinstance(result, list)
+
+    def test_output_truncator_handles_none_content(self) -> None:
+        result = OutputTruncator(max_chars=10)([self._tool_call_msg()])
+        assert result[0]["content"] is None or isinstance(result[0]["content"], str)
+
+    def test_last_n_tool_outputs_elides_none_content_tool_msg(self) -> None:
+        # Old tool outputs get elided; if such a message had content=None it must
+        # not crash on len(content).
+        msgs = [_tool_msg("x") for _ in range(6)]
+        msgs[0]["content"] = None
+        result = LastNToolOutputs(n=1)(msgs)
+        assert isinstance(result, list)
