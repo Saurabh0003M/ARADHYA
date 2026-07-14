@@ -1,9 +1,9 @@
 {
   "model": {
     "provider": "ollama",
-    "model_name": "gemma4:31b-cloud",
+    "model_name": "llama3.2:3b",
     "base_url": "http://127.0.0.1:11434",
-    "request_timeout_seconds": 300,
+    "request_timeout_seconds": 600,
     "system_prompt": "You are Aradhya, a local system assistant focused on safe planning, clear reasoning, and practical Windows workflow help."
   },
   "voice": {
