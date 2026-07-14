@@ -931,17 +931,34 @@ def prompt_input() -> str:
     """Read user input with a styled prompt."""
     return console.input(get_prompt())
 
+def _needs_rich_formatting(text: str) -> bool:
+    """Return True when *text* contains routing, thinking, or markdown markup
+    that benefits from post-processing by ``_render_formatted_response``."""
+    import re  # noqa: PLC0415
+
+    if re.search(r"\[Routed to .+ - .+\]", text):
+        return True
+    if re.search(r"<(?:thought|think)>", text):
+        return True
+    markdown_markers = ("## ", "```", "| ", "- **", "1. ", "* ", "---")
+    return any(m in text for m in markdown_markers)
+
+
 def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] ", style: str = "") -> str:
     """Render a live stream of text chunks with post-processing.
 
     During streaming: raw text shown live for instant feedback.
-    After streaming: re-rendered with thought/routing/markdown formatting.
+    After streaming: if the text contains markdown / routing / thinking
+    markup it is re-rendered with proper formatting; otherwise the
+    already-visible streamed text is kept as-is.
     Returns the complete text after the stream finishes.
     """
     full_text = ""
     text_renderable = Text.from_markup(prefix)
 
-    with Live(text_renderable, console=console, refresh_per_second=15, transient=True) as live:
+    # transient=False keeps the streamed text visible after the Live
+    # context exits, preventing the "vanishing reply" demo-killer bug.
+    with Live(text_renderable, console=console, refresh_per_second=15, transient=False) as live:
         for chunk in stream:
             full_text += chunk
             if style:
@@ -950,8 +967,13 @@ def render_stream(stream: Iterator[str], prefix: str = "  [aradhya]Aradhya >[/] 
                 text_renderable.append(chunk)
             live.update(text_renderable)
 
-    # Post-process: render with proper formatting
-    _render_formatted_response(full_text, prefix)
+    # Only re-render when the response actually needs rich formatting;
+    # plain text is already visible from the Live output above.
+    if full_text.strip() and _needs_rich_formatting(full_text):
+        _render_formatted_response(full_text, prefix)
+    else:
+        console.print()  # trailing blank line for visual spacing
+
     return full_text
 
 
