@@ -84,5 +84,5 @@ freellmapi/
 scratch/
 *.plan.md
 
-# Claude Code local (per-machine) settings
-.claude/settings.local.json
+# Claude Code tooling / local settings (not part of the project)
+.claude/

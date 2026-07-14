@@ -327,7 +327,11 @@ class AgentLoop:
                     "type": "function",
                     "function": {
                         "name": tool_call.name,
-                        "arguments": json.dumps(tool_call.arguments),
+                        # Ollama /api/chat expects arguments as a JSON object,
+                        # not a JSON-encoded string. Stringifying it makes Ollama
+                        # 400 with "Value looks like object, but can't find
+                        # closing '}' symbol" on the follow-up call.
+                        "arguments": tool_call.arguments if isinstance(tool_call.arguments, dict) else {},
                     },
                 }
             ],

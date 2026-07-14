@@ -75,7 +75,7 @@ class LastNToolOutputs:
             if i in tool_indices and i not in keep_set:
                 content = msg.get("content", "")
                 n_lines = content.count("\n") + 1 if content else 0
-                n_chars = len(content)
+                n_chars = len(content) if content else 0
                 result.append({
                     **msg,
                     "content": (
@@ -108,7 +108,7 @@ class OutputTruncator:
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result = []
         for msg in messages:
-            content = msg.get("content", "")
+            content = msg.get("content") or ""
             if len(content) > self.max_chars:
                 truncated = self.template.format(
                     truncated_content=content[:self.max_chars],
@@ -152,7 +152,7 @@ class ClosedWindowProcessor:
 
     def _extract_file_path(self, msg: dict[str, Any]) -> str | None:
         """Try to extract a file path from a message."""
-        content = msg.get("content", "")
+        content = msg.get("content") or ""
         # Check content for file view patterns
         match = self._file_pattern.search(content)
         if match:
@@ -217,7 +217,7 @@ class RegexScrubber:
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         result = []
         for msg in messages:
-            content = msg.get("content", "")
+            content = msg.get("content") or ""
             modified = content
             for pattern in self._compiled:
                 modified = pattern.sub(self.replacement, modified)
@@ -242,7 +242,7 @@ class ConsecutiveTimeoutTracker:
     def __call__(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         self._consecutive_count = 0
         for msg in messages:
-            content = msg.get("content", "")
+            content = msg.get("content") or ""
             if ("timeout" in content.lower() or "timed out" in content.lower()) and (
                 msg.get("role") == "tool"
                 or msg.get("message_type") == "tool_result"
@@ -294,9 +294,9 @@ class HistoryProcessorPipeline:
         result = messages
         for processor in self.processors:
             before = len(result)
-            before_chars = sum(len(m.get("content", "")) for m in result)
+            before_chars = sum(len(m.get("content") or "") for m in result)
             result = processor(result)
-            after_chars = sum(len(m.get("content", "")) for m in result)
+            after_chars = sum(len(m.get("content") or "") for m in result)
             if before != len(result):
                 logger.debug(
                     "History processor {}: {} -> {} messages ({} -> {} chars)",
