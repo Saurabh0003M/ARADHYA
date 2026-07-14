@@ -1,7 +1,7 @@
 # Core Engine (`src/aradhya/`)
 
 ## Module Overview
-This is the root of the Aradhya Operating Intelligence application. It contains the central orchestration logic, state management, ReAct (Reason+Act) execution loops, and the main entry points. It acts as the central nervous system, tying together all the peripheral modules (Parasite, Skills, Hooks, Tools).
+This is the root of the Aradhya Operating Intelligence application. It contains the central orchestration logic, state management, ReAct (Reason+Act) execution loops, and the main entry points. It acts as the central nervous system, tying together all the peripheral modules (Symbiont, Skills, Hooks, Tools).
 
 ## System Architecture
 
@@ -36,7 +36,7 @@ graph TD
 ### 1. The Entry Points (`main.py` & `daemon.py`)
 **Role:** The physical interfaces for the user.
 **Mechanisms:**
-- **`main.py`:** The CLI shell. It handles direct TTY interaction and parses slash commands (e.g., `/chat`, `/parasite`, `/setup`, `/voice`). It initializes a single `AssistantCore` instance for the lifetime of the command.
+- **`main.py`:** The CLI shell. It handles direct TTY interaction and parses slash commands (e.g., `/chat`, `/symbiont`, `/setup`, `/voice`). It initializes a single `AssistantCore` instance for the lifetime of the command.
 - **`daemon.py`:** A persistent background process. It detaches from the terminal and runs a lightweight HTTP server (`daemon_api.py`). This enables the system tray icon, floating desktop widget, scheduled cron tasks, and Telegram bot triggers to wake up the agent without opening a terminal window.
 
 ### 2. `assistant_core.py` (The Bootstrapper)
@@ -73,5 +73,5 @@ graph TD
 **Role:** LLM Inference abstraction.
 **Mechanisms:**
 - Automatically attempts to use `Ollama` for local, private inference on `localhost:11434`.
-- If the local model crashes or is too slow, it falls back to `OpenRouter` for cloud inference.
+- Optional cloud providers include `OpenRouter` and `Cloudflare Workers AI`, both guarded by the cloud privacy gate.
 - **Privacy Gate:** Before falling back to the cloud, `cloud_safety.py` evaluates the active context. If the prompt contains file contents from a `.env` file, private ssh keys, or matches a "high-sensitivity" regex, the gate hard-blocks the network request, forcing the system to fail gracefully rather than leaking data to the cloud.

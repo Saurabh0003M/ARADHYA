@@ -124,13 +124,14 @@ def detect_local_node(
                 "model": runtime_profile.model.model_name,
             }
         )
-    elif runtime_profile.model.provider.lower() == "openrouter":
+    elif runtime_profile.model.provider.lower() != "ollama":
         capabilities.append(
             {
                 "name": "cloud_model_optional",
                 "kind": "model",
                 "enabled": bool(runtime_profile.model.api_key),
                 "model": runtime_profile.model.model_name,
+                "provider": runtime_profile.model.provider,
             }
         )
 

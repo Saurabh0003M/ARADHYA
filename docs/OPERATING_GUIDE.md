@@ -102,9 +102,9 @@ Current primary config path:
 
 Machine-local model selections should go in `profile.local.json`.
 
-## 6. Model Setup & OpenRouter Fallback
+## 6. Model Setup & Cloud Fallbacks
 
-Aradhya uses **Ollama** by default, but has robust **OpenRouter** integration for fallback or cloud reasoning.
+Aradhya uses **Ollama** by default, with optional **OpenRouter** and **Cloudflare Workers AI** providers for cloud-safe reasoning.
 
 ### Local Ollama Config:
 ```json
@@ -126,6 +126,12 @@ To use cloud workers (like DeepSeek, Llama 3, etc.):
 1. Export `ARADHYA_OPENROUTER_API_KEY`.
 2. Set provider to `openrouter` in `profile.local.json`.
 3. Aradhya will automatically route requests through the `CloudPrivacyGate` to ensure no sensitive local secrets are leaked, and it provides an HTTP 429 failover chain if a model is rate-limited.
+
+### Cloudflare Workers AI Config:
+To use Cloudflare Workers AI:
+1. Export `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. `CLOUDFLARE_AUTH_TOKEN` is also accepted as a fallback for older snippets.
+2. Set provider to `cloudflare` in `profile.local.json`.
+3. Optionally set `model.model_name`; otherwise Aradhya defaults to `@cf/zai-org/glm-5.2`.
 
 ## 7. Voice & Audio Workflow
 
@@ -169,6 +175,6 @@ Default roots are intentionally bounded for first-run responsiveness:
 - `src/aradhya/agent_loop.py`: ReAct execution, context boundaries, and kill switches.
 - `src/aradhya/state_store.py`: SQLite session and history compaction logic.
 - `src/aradhya/tools/`: Capabilities (Browser, File, Shell, Vision, Scheduler).
-- `src/aradhya/hooks/` & `src/aradhya/permission_rules.py`: The Parasite OS safety gates and interception engines.
-- `src/aradhya/parasite/`: The 7-stage host-repo ingestion state-machine.
+- `src/aradhya/hooks/` & `src/aradhya/permission_rules.py`: The Symbiont safety gates and interception engines.
+- `src/aradhya/symbiont/`: The 7-stage host-repo ingestion state-machine.
 - `src/aradhya/voice/`: Transcriber, synthesizer, hotkey activation, and wake-word listeners.

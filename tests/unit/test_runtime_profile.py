@@ -171,6 +171,41 @@ def test_load_runtime_profile_reads_openrouter_key_from_environment(tmp_path, mo
     assert profile.model.api_key_env == "ARADHYA_OPENROUTER_API_KEY"
 
 
+def test_load_runtime_profile_reads_cloudflare_credentials_from_environment(tmp_path, monkeypatch):
+    (tmp_path / "core" / "memory").mkdir(parents=True)
+    (tmp_path / "core" / "memory" / "profile.json").write_text(
+        json.dumps({"model": {"provider": "cloudflare"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test-token")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test-account")
+
+    profile = load_runtime_profile(tmp_path)
+
+    assert profile.model.provider == "cloudflare"
+    assert profile.model.model_name == "@cf/zai-org/glm-5.2"
+    assert profile.model.base_url == "https://api.cloudflare.com/client/v4"
+    assert profile.model.api_key == "test-token"
+    assert profile.model.api_key_env == "CLOUDFLARE_API_TOKEN"
+    assert profile.model.api_key_fallback_envs == ("CLOUDFLARE_AUTH_TOKEN",)
+    assert profile.model.account_id == "test-account"
+    assert profile.model.account_id_env == "CLOUDFLARE_ACCOUNT_ID"
+
+
+def test_load_runtime_profile_supports_legacy_cloudflare_auth_token(tmp_path, monkeypatch):
+    (tmp_path / "core" / "memory").mkdir(parents=True)
+    (tmp_path / "core" / "memory" / "profile.json").write_text(
+        json.dumps({"model": {"provider": "cloudflare"}}),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN", raising=False)
+    monkeypatch.setenv("CLOUDFLARE_AUTH_TOKEN", "legacy-token")
+
+    profile = load_runtime_profile(tmp_path)
+
+    assert profile.model.api_key == "legacy-token"
+
+
 def test_ollama_provider_uses_configured_model_name():
     profile = ModelProfile(
         provider="ollama",

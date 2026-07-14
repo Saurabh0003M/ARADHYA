@@ -487,7 +487,11 @@ def build_text_model_provider(profile: ModelProfile) -> TextModelProvider:
         from src.aradhya.providers.openrouter import OpenRouterTextModelProvider
         return OpenRouterTextModelProvider(profile)
 
+    if provider == "cloudflare":
+        from src.aradhya.providers.cloudflare import CloudflareWorkersAITextModelProvider
+        return CloudflareWorkersAITextModelProvider(profile)
+
     raise ValueError(
         f"Unsupported model provider '{profile.provider}'. "
-        "Supported: ollama, openrouter."
+        "Supported: ollama, openrouter, cloudflare."
     )

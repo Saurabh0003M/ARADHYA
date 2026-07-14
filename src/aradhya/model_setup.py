@@ -168,20 +168,23 @@ def render_model_health(health: ModelHealth, output_handler: Callable[[str], Non
     output_handler(f"Model > Reachable: {'yes' if health.reachable else 'no'}")
     output_handler(f"Model > Ready: {'yes' if health.ready else 'no'}")
 
+    model_list_label = (
+        "Local models" if health.provider.lower() == "ollama" else "Available models"
+    )
     if health.available_models:
-        output_handler("Model > Local models:")
+        output_handler(f"Model > {model_list_label}:")
         for index, model_name in enumerate(health.available_models, start=1):
             output_handler(f"Model >   {index}. {model_name}")
     else:
-        output_handler("Model > Local models: none")
+        output_handler(f"Model > {model_list_label}: none")
 
     output_handler(f"Model > {health.message}")
 
-    if not health.reachable:
+    if not health.reachable and health.provider.lower() == "ollama":
         output_handler(
             f"Model > Install Ollama from {OLLAMA_DOWNLOAD_URL} or start the Ollama service."
         )
-    elif not health.available_models:
+    elif not health.available_models and health.provider.lower() == "ollama":
         output_handler("Model > Suggested download catalog:")
         for index, model in enumerate(RECOMMENDED_OLLAMA_MODELS, start=1):
             output_handler(f"Model >   {index}. {model.name} - {model.description}")
@@ -198,6 +201,9 @@ def bootstrap_runtime_profile(
     output_handler: Callable[[str], None] = print,
 ) -> RuntimeProfile:
     """Ensure Aradhya starts with a usable model selection when Ollama is available."""
+
+    if runtime_profile.model.provider.lower() != "ollama":
+        return runtime_profile
 
     health = build_text_model_provider(runtime_profile.model).health_check()
     if health.ready:
