@@ -28,6 +28,9 @@ PROJECT_ROOT = get_project_root()
 _CONFIG_DIR = PROJECT_ROOT / "core" / "config"
 _LEGACY_DIR = PROJECT_ROOT / "core" / "memory"
 PROFILE_PATH = _CONFIG_DIR / "profile.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "profile.json"
+# Secrets (cloud API keys) go here — profile.local.json is gitignored, so keys
+# never land in the committed profile.json. Deep-merged over profile.json at load.
+PROFILE_LOCAL_PATH = _CONFIG_DIR / "profile.local.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "profile.local.json"
 PREFERENCES_PATH = _CONFIG_DIR / "preferences.json" if _CONFIG_DIR.exists() else _LEGACY_DIR / "preferences.json"
 USER_RULES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "rules.md"
 USER_NOTES_PATH = PROJECT_ROOT / "core" / "memory" / "user_context" / "notes.md"
@@ -157,14 +160,22 @@ def step_model(profile: dict) -> dict:
         "clear reasoning, and practical Windows workflow help.",
     )
 
-    # Optional: API keys for cloud models
+    # Optional: API keys for cloud models.
+    # SECURITY: keys are written ONLY to the gitignored profile.local.json, never
+    # to the committed profile.json — so a cloud key can't leak via version control.
     console.print()
     if _confirm("Do you have API keys for cloud models (OpenAI, Anthropic, etc.)?", default=False):
-        api_key = _prompt("API key (will be stored in profile.json)")
+        api_key = _prompt("API key (stored in profile.local.json — gitignored, never committed)")
         api_provider = _prompt("Provider name (openai / anthropic / custom)", default="openai")
-        profile["model"]["cloud_api_key"] = api_key
-        profile["model"]["cloud_provider"] = api_provider
-        console.print("  [success]✓[/] Cloud model key saved. Aradhya defaults to Ollama and falls back to cloud.")
+        local_profile = _load_json(PROFILE_LOCAL_PATH)
+        local_profile.setdefault("model", {})
+        local_profile["model"]["cloud_api_key"] = api_key
+        local_profile["model"]["cloud_provider"] = api_provider
+        _save_json(PROFILE_LOCAL_PATH, local_profile)
+        console.print(
+            "  [success]✓[/] Cloud key saved to profile.local.json (gitignored). "
+            "Aradhya defaults to Ollama and falls back to cloud."
+        )
 
     console.print()
     return profile
