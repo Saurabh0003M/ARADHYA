@@ -91,6 +91,12 @@ That's it. Five steps, no API keys, no Docker, no cloud signup.
 
 We are not claiming these work out of the box. They are real code, tested individually, but they require additional setup and are not part of the default Quick Start path. The solid, demonstrated core is: **local chat + tool use + the safety gate** — and that core runs reliably from a clean install in under five minutes.
 
+### Roadmap
+
+**Hybrid local-manager / cloud-worker orchestration (planned).** The local model (`llama3.2:3b`) will act as the reasoning manager and delegate specialized subtasks to optional cloud "worker" models through ARADHYA's existing subagent system (`spawn_subagent` already accepts a per-worker model parameter). Every cloud call will be gated by the existing `CloudPrivacyGate`, so orchestration logic and private context stay on-device — the local model does the thinking; cloud workers are opt-in accelerators, never a replacement. This keeps the On-Device AI thesis fully intact.
+
+**Credential hardening (planned).** Cloud API-key storage will move out of any committed file and into environment variables or the gitignored `profile.local.json`, with all key access routed through `os.environ` so that secrets never appear in version control.
+
 ---
 
 *ARADHYA — your private, on-device AI operating assistant. Open source. Runs on your hardware. Your data stays yours.*
