@@ -1,6 +1,6 @@
 <div align="center">
   <h1>✨ Aradhya</h1>
-  <p><strong>A Local-First Operating Intelligence (OI) Assistant for Windows</strong></p>
+  <p><strong>A 100 % On-Device Operating Intelligence for Windows — powered by Ollama, privacy-first, offline-capable</strong></p>
 
   [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -10,23 +10,29 @@
 
 <br />
 
-> **Aradhya** is a comprehensive **Windows Operating Intelligence (OI) layer**—featuring intent routing, local context, model orchestration, dynamic skills, browser automation, visual awareness, and safe tool execution. It represents a paradigm shift from a generic chatbot wrapper to an integrated system orchestrator.
+> **Aradhya** runs **entirely on your machine** via [Ollama](https://ollama.com/) — your data never leaves the device, and it works fully offline.
+> Every device-affecting action passes through a strict **Confirmation Gate** (Hooks → Permissions → User Approval) before anything changes.
+> It is a comprehensive Windows Operating Intelligence (OI) layer: intent routing, local context, model orchestration, dynamic skills, and safe tool execution — a paradigm shift from a generic chatbot wrapper to an integrated system orchestrator.
 
 ---
 
 ## 🚀 Key Features
 
-* **🧠 Local-First Inference**: Prefers Ollama for local model execution, keeping your data private, with optional fallback to cloud models via OpenRouter.
+* **🧠 Local-First Inference**: All inference runs locally via Ollama (default model: `llama3.2:3b`). Your data never leaves the machine. Optional cloud fallback via OpenRouter is available but gated behind a privacy assessment.
 * **🛡️ Sovereign Safety**: Routes all device-affecting actions through a strict, multi-layered Confirmation Gate (Hooks → Permissions → User Approval). "Dry-run" is the default behavior.
-* **💻 Multi-Modal Interfaces**: 
-  * **Rich Terminal UI**: Interactive CLI with slash commands and dynamic `<thought>` block rendering.
-  * **Desktop Floating Icon**: System overlay for quick toggles (Mic, Screen Watch, Debate AI) via rapid IPC.
-  * **Telegram Bot**: Secure remote access simulating a live-streaming experience.
-* **🛠️ Extensive Tool Registry**: Built-in tools for file management, shell execution, web browsing, **browser automation**, **vision (screen capture and reading)**, power management, scheduling, and persistent sessions.
+* **💻 Rich Terminal UI**: Interactive CLI with slash commands and dynamic `<thought>` block rendering.
+* **🛠️ Extensive Tool Registry**: Built-in tools for file management, shell execution, web browsing, power management, scheduling, and persistent sessions.
 * **📜 Robust Audit & State**: Every action is logged in JSONL format, and session/context memory is managed robustly via a thread-safe **SQLite State Store** with automatic compaction.
-* **🎙️ Voice Integration**: Supports voice inbox processing, optional local transcription (Faster-Whisper), and push-to-talk hotkeys. A background "wake-word" mode also exists, but note it is currently a continuous *record → transcribe → substring-match* loop (not low-power acoustic keyword spotting), so it depends on the transcription backend and is not free at idle.
 * **🔌 Parasite OS Subsystems**: Dynamically load skills (`SKILL.md`), customized agents, hooks (`HookEngine`), and permissions (`PermissionEngine`).
 * **🌐 Local API Catalog & Topology**: Browse a local public API catalog and discover network topology for LAN federation.
+
+### Optional / Experimental *(extra setup required)*
+
+* **🖥️ Desktop Floating Icon**: System overlay for quick toggles (Mic, Screen Watch, Debate AI) via rapid IPC.
+* **📡 Telegram Bot**: Secure remote access simulating a live-streaming experience.
+* **👁️ Screen Vision**: Screen capture, OCR, and visual-context tools — requires vision-capable model and optional dependencies.
+* **🖱️ Desktop Control**: UI-Automation-based control of native Windows apps — requires the `uiautomation` (and `comtypes`) extras.
+* **🎙️ Voice Integration**: Voice inbox processing, optional local transcription (Faster-Whisper), push-to-talk hotkeys, and a background wake-word mode. Requires `requirements-voice.txt` / `requirements-voice-activation.txt`.
 
 ---
 
@@ -42,27 +48,23 @@ Before you begin, ensure you have the following installed:
 
 ## 🛠️ Quick Start
 
-### 1. Installation
-
-Open PowerShell and clone the repository:
+Open PowerShell and run these steps in order:
 
 ```powershell
+# 1. Clone the repo
 git clone https://github.com/Saurabh0003M/ARADHYA.git ARADHYA
 cd ARADHYA
+
+# 2. Create venv, install dependencies
 scripts\first_run.bat
-```
 
-### 2. Verify Environment
+# 3. Pull the default local model (~2 GB download, runs on CPU)
+ollama pull llama3.2:3b
 
-Ensure everything is configured correctly:
-```powershell
+# 4. Verify everything is wired up
 scripts\doctor.bat
-```
 
-### 3. Launch Aradhya
-
-Start the assistant CLI:
-```powershell
+# 5. Launch the assistant CLI
 .\arise.bat
 ```
 
@@ -136,7 +138,7 @@ Aradhya uses a flexible configuration hierarchy. The active model config is load
 
 **Key Configuration Fields:**
 - `model.provider`: `ollama` (default) or `openrouter`.
-- `model.model_name`: Your selected model (e.g., `gemma4:e4b` or `deepseek/deepseek-v4-flash:free`).
+- `model.model_name`: Your selected model (default: `llama3.2:3b`; cloud example: `deepseek/deepseek-v4-flash:free`).
 - `allow_live_execution`: Toggle live execution vs dry-runs.
 - `user_roots`: Define specific search roots instead of scanning the entire home folder.
 
