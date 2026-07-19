@@ -50,7 +50,13 @@ except Exception:  # pragma: no cover
 HOTKEY = "ctrl+alt+a"          # press to start listening (change to taste)
 ENABLE_SPOKEN_WAKEWORD = True  # also allow "Hey Jarvis" / "Hey Aradhya"
 WHISPER_MODEL = "base.en"      # tiny.en = faster, small.en = more accurate
-WAKE_SENSITIVITY = 0.6         # raise toward 0.8 if it false-triggers
+WAKE_SENSITIVITY = 0.6         # wake-word match; raise toward 0.8 if it false-triggers
+# Voice-activity detection for your COMMAND (after the wake word / hotkey).
+# webrtc: 0 = most sensitive … 3 = least (the library default 3 was deaf to speech).
+# silero: 0 = least sensitive … 1 = most.
+WEBRTC_SENSITIVITY = 1
+SILERO_SENSITIVITY = 0.6
+WAKE_WORD_TIMEOUT = 8          # seconds after wake to start talking before it re-arms
 USE_EDGE_VOICE = True          # Indian-English neural voice (needs internet; falls back if it fails)
 EDGE_VOICE = "en-IN-NeerjaNeural"
 SHOW_OVERLAY = True            # floating status pill
@@ -176,7 +182,7 @@ def build_recorder(overlay: Overlay) -> AudioToTextRecorder:
     def on_wake():
         play_ack()
         overlay.set("listening")
-        print("[wake] listening…")
+        print("[wake] woke up — go ahead, I'm listening…")
 
     kwargs = dict(
         model=WHISPER_MODEL,
@@ -184,10 +190,20 @@ def build_recorder(overlay: Overlay) -> AudioToTextRecorder:
         use_microphone=True,           # let RealtimeSTT own the mic (reliable path)
         spinner=False,
         post_speech_silence_duration=0.8,
-        wake_word_buffer_duration=0.5,  # drop the wake-word tail so it doesn't corrupt the command
+        wake_word_buffer_duration=0.2,  # drop the wake-word tail so it doesn't corrupt the command
         silero_use_onnx=True,           # avoid the interactive torch.hub trust prompt
+        # Command capture: make VAD actually sensitive to speech (defaults were deaf).
+        webrtc_sensitivity=WEBRTC_SENSITIVITY,
+        silero_sensitivity=SILERO_SENSITIVITY,
+        min_length_of_recording=0.3,
         on_wakeword_detected=on_wake,
+        # Stage logging so any stall is visible in the console.
+        on_recording_start=lambda: print("[rec] recording your command…"),
+        on_recording_stop=lambda: print("[rec] got it, transcribing…"),
+        on_wakeword_timeout=lambda: print("[wake] (no speech heard — say it again)"),
     )
+    if ENABLE_SPOKEN_WAKEWORD:
+        kwargs["wake_word_timeout"] = WAKE_WORD_TIMEOUT
     if ENABLE_SPOKEN_WAKEWORD:
         kwargs["wakeword_backend"] = "openwakeword"
         kwargs["wake_words_sensitivity"] = WAKE_SENSITIVITY
@@ -233,7 +249,9 @@ async def ask(client: ClaudeSDKClient, text: str) -> str:
 async def main() -> None:
     print("ARADHYA Lite starting (Ctrl+C to stop)…")
     overlay = Overlay()
-    voice = Voice()
+    # Build Voice in a worker thread: EdgeEngine.set_voice() calls asyncio.run()
+    # internally, which is illegal from inside our running event loop.
+    voice = await asyncio.to_thread(Voice)
     recorder = build_recorder(overlay)
 
     text_q: queue.Queue[str] = queue.Queue()
@@ -270,6 +288,7 @@ async def main() -> None:
                 continue
             awaiting.clear()
             if not text or not text.strip():
+                print(f"[listen] (empty transcription: {text!r})")
                 continue
             done.clear()
             text_q.put(text.strip())
