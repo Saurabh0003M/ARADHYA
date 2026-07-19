@@ -1,7 +1,11 @@
 # ARADHYA Lite runtime — Python 3.11 required.
 # 3.10 is a dead end (RealtimeSTT 1.0.x and even its 1.0.0 scipy pin need >=3.11);
 # 3.13+ breaks openwakeword silently (RealtimeSTT issue #297). Use 3.11.
-RealtimeSTT>=1.0.2
+#
+# The [faster-whisper] extra is REQUIRED: RealtimeSTT 1.0.2 made the transcription
+# engine optional, so without it the worker process dies at startup and the app
+# hangs on main_transcription_ready_event.wait() (seen 2026-07-19).
+RealtimeSTT[faster-whisper]>=1.0.2
 RealtimeTTS[system,edge]>=0.7.3
 openwakeword>=0.6.0
 claude-agent-sdk>=0.1.0

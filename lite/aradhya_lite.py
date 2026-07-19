@@ -94,6 +94,11 @@ def build_recorder() -> AudioToTextRecorder:
         wake_words_sensitivity=WAKE_SENSITIVITY,
         wakeword_backend="openwakeword",
         on_wakeword_detected=play_ack,
+        # Use the ONNX Silero VAD instead of the torch.hub one. The torch.hub
+        # path shows an interactive "trust this repo? (y/N)" prompt on first
+        # run, which would block a hands-free launch. onnxruntime is already
+        # installed and the model is fetched automatically.
+        silero_use_onnx=True,
     )
     if HEY_ARADHYA_MODEL.exists():
         kwargs["openwakeword_model_paths"] = str(HEY_ARADHYA_MODEL)
