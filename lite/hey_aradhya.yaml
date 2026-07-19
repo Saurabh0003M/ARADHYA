@@ -1,0 +1,38 @@
+# livekit-wakeword training config for the custom "Hey Aradhya" wake word.
+# From the July 2026 wake-word deep-research report (verbatim recipe).
+#
+# Train in a SEPARATE Python 3.11 venv (not 3.12+ — onnx deps lack wheels):
+#   python -m venv wakeword_env
+#   .\wakeword_env\Scripts\activate
+#   pip install "livekit-wakeword[train,eval,export,voxcpm]"
+#   winget install eSpeak-NG.eSpeak-NG Gyan.FFmpeg ChrisBagwell.SoX
+#   livekit-wakeword setup          # downloads MUSAN noise + room impulse data (GBs!)
+#   livekit-wakeword run hey_aradhya.yaml   # ~1-2 h on this CPU
+# Then copy ./output/hey_aradhya/hey_aradhya.onnx  ->  lite/models/hey_aradhya.onnx
+
+model_name: hey_aradhya
+target_phrases:
+  - "hey aradhya"
+tts_backend: voxcpm
+
+n_samples: 8000
+n_samples_val: 1000
+n_background_samples: 4000
+n_background_samples_val: 500
+
+model:
+  model_type: conv_attention
+  steps: 40000
+
+voxcpm_tts:
+  voice_design_prompts:
+    - "A young adult Indian woman, clear mid-pitch voice, Indian English accent, moderate pace"
+    - "A middle-aged Indian man, warm baritone, Indian English accent, steady pace"
+    - "A young adult male, Indian English dialect, friendly tone"
+  cfg_values: [2.0]
+  inference_timesteps_list: [10]
+  custom_negative_phrases:
+    - "hey arabia"
+    - "hey radio"
+    - "aradhya"
+    - "hey aria"
