@@ -25,6 +25,39 @@ from typing import Any
 
 from src.aradhya.tools.tool_registry import tool_definition
 
+
+def xpath_literal(value: str) -> str:
+    """Return ``value`` as a safely quoted XPath 1.0 string literal.
+
+    XPath 1.0 has no escape character, so a string containing both quote
+    kinds cannot be expressed as a single literal.  The standard workaround
+    is ``concat()``.  Without this, model- or page-supplied text is
+    interpolated straight into an expression and can break out of the
+    predicate — e.g. ``text = "' or '1'='1"`` turns a targeted lookup into
+    a match-anything selector, so a click lands on an arbitrary element.
+
+    >>> xpath_literal("Sign in")
+    "'Sign in'"
+    >>> xpath_literal("it's")
+    '"it\\'s"'
+    >>> xpath_literal("' or '1'='1")
+    '"\\' or \\'1\\'=\\'1"'
+    """
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    # Both quote kinds present — split on single quotes and rejoin via concat().
+    parts = value.split("'")
+    pieces: list[str] = []
+    for index, part in enumerate(parts):
+        if part:
+            pieces.append(f"'{part}'")
+        if index < len(parts) - 1:
+            pieces.append('"\'"')
+    return "concat(" + ", ".join(pieces) + ")"
+
+
 # Global browser session — shared across tool calls within an agent turn
 _active_driver: Any = None
 
@@ -238,7 +271,7 @@ def browser_click(
     if text and element is None:
         try:
             element = _active_driver.find_element(
-                By.XPATH, f"//*[contains(text(), '{text}')]"
+                By.XPATH, f"//*[contains(text(), {xpath_literal(text)})]"
             )
         except Exception:
             # Try link text
