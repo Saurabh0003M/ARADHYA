@@ -772,10 +772,23 @@ class AradhyaAssistant:
         )
 
     def _build_runtime_policy(self, *, mutation_granted: bool) -> ToolRuntimePolicy:
-        """Build a ToolRuntimePolicy from current preferences."""
+        """Build a ToolRuntimePolicy from current preferences and session state.
+
+        Live execution is enabled by either the persisted `allow_live_execution`
+        preference or the session-only interaction unlock (the floating icon's
+        "I" control). The session flag is deliberately not written back to
+        preferences — it lapses when the process exits.
+
+        Neither path weakens approval: mutating tools still require a confirmed
+        task grant here, and the ConfirmationGate still runs above this layer.
+        """
+        live_execution = (
+            self.preferences.allow_live_execution
+            or self.state.interaction_unlocked
+        )
         return ToolRuntimePolicy(
             allowed_roots=self.preferences.user_roots,
-            live_execution_enabled=self.preferences.allow_live_execution,
+            live_execution_enabled=live_execution,
             mutation_granted=mutation_granted,
         )
 

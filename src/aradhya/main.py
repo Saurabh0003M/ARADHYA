@@ -1065,6 +1065,22 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
                 transcript_echo=resp.transcript_echo,
                 awaiting=resp.awaiting_confirmation,
             )
+        elif cmd == "interaction_toggle":
+            console.print()
+            assistant.state.interaction_unlocked = (
+                not assistant.state.interaction_unlocked
+            )
+            if assistant.state.interaction_unlocked:
+                render_info(
+                    "Interaction UNLOCKED for this session — Aradhya may now act "
+                    "on this machine. Dangerous actions will still ask you to "
+                    "confirm first. This resets when Aradhya exits."
+                )
+            else:
+                render_info(
+                    "Interaction LOCKED — Aradhya can read and answer, but will "
+                    "not change anything on this machine."
+                )
         elif cmd in {"screen_watch_toggle", "browser_toggle"}:
             console.print()
             render_warning(
