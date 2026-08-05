@@ -2,6 +2,7 @@
   <h1>✨ Aradhya</h1>
   <p><strong>A 100 % On-Device Operating Intelligence for Windows — powered by Ollama, privacy-first, offline-capable</strong></p>
 
+  [![CI](https://github.com/Saurabh0003M/ARADHYA/actions/workflows/ci.yml/badge.svg)](https://github.com/Saurabh0003M/ARADHYA/actions/workflows/ci.yml)
   [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
   [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
   [![Windows](https://img.shields.io/badge/OS-Windows_10%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/en-us/windows/)
