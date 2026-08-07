@@ -115,3 +115,37 @@ Two smaller fixes in the same path: control names are flattened to one line
 (Notepad's status bar is literally named `"Line 1,\nColumn 1"`, which forged an
 extra row in a one-control-per-line listing) and whitespace-only names are
 dropped.
+
+---
+
+## MCP server (memo §1)
+
+`src/aradhya/mcp_server.py`, run over real stdio with a real MCP client
+(`mcp` 1.27.1). **62 tools exposed**, including all five desktop tools and all
+twelve browser tools.
+
+Verified end to end against a server started **with no confirmation gate**:
+
+| Call | Result |
+|---|---|
+| `list_windows` | ran, returned 8 windows |
+| `list_window_controls("Calculator")` | ran, returned 83 controls |
+| `run_command {"command": "echo pwned"}` | **denied, `isError: true`**, did not execute |
+| `invoke_control(Calculator, Nine)` | **denied, `isError: true`**, did not execute |
+| `write_file` | **denied, `isError: true`**, did not execute |
+| `set_control_text` | **denied, `isError: true`**, did not execute |
+
+Two design points worth keeping:
+
+- **A denial is `isError: true`, not a successful result containing a refusal.**
+  A harness reading `isError: false` reports the task done. The MCP SDK sets the
+  flag from a raised exception, so the transport edge raises while the testable
+  core still returns `(succeeded, output)`.
+- **Constructing the server with `policy=None` raises.** `execute_tool` runs
+  everything unchecked without a policy, and quietly exposing an ungated machine
+  to whatever process is on the other end of the pipe is not a state worth
+  supporting.
+
+`tests/unit/test_mcp_server.py` also asserts the MCP tool set is **identical** to
+`AradhyaAssistant._build_tool_registry_from_policy`'s, so a capability cannot
+exist locally and silently vanish when the front end changes.
