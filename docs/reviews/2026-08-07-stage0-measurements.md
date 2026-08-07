@@ -149,3 +149,66 @@ Two design points worth keeping:
 `tests/unit/test_mcp_server.py` also asserts the MCP tool set is **identical** to
 `AradhyaAssistant._build_tool_registry_from_policy`'s, so a capability cannot
 exist locally and silently vanish when the front end changes.
+
+### Confirmation for a stdio server is a genuinely awkward problem
+
+A stdio MCP server's **stdin is the protocol stream**. A confirmation gate that
+reads stdin to ask "y/n" would consume the client's next request. So the obvious
+implementation — `CliConfirmationGate` — is wrong here, and there is no
+interactive option at all in this process.
+
+What is left: the persisted allowlist (keyed per tool *and args*, so it cannot
+pre-approve "press any button"), or an explicit session unlock.
+`ARADHYA_MCP_GATE=unlocked` selects `SessionUnlockGate`, which is the
+`interaction_unlocked` idea the floating icon's "I" control already implements
+— a human unlocked *this session*, nothing is persisted, it lapses when the
+process exits, and every approval it makes is logged and audited. Default and
+every unrecognised value fail closed.
+
+The unresolved piece, and it belongs to Stage 1 rather than here: **a spoken
+confirmation**. "Operable with the monitor off" and "the human confirms
+dangerous actions" only coexist if the confirmation is audible. Today the choice
+is deny-everything or unlock-the-session; neither is asking.
+
+---
+
+## Acceptance (memo Stage 0 item 4, addendum caveat 2)
+
+The bar is *"open X / click Y / read this window" by voice, 10/10 on 3 apps,
+monitor off*, and the addendum sequences it: pass on the known-good Claude SDK
+brain first, then swap to OpenCode and re-run the same ten.
+
+That bar is two claims bolted together — the tools work, and the microphone
+works — and debugging them together is how you end up unable to say which
+failed. So `lite/acceptance.py` drives the **identical** brain and the
+**identical** MCP server with the ten commands as text. If it passes and the
+voice run does not, the fault is the microphone.
+
+**The ten commands are the permanent regression list.** Rewording one is
+changing the test:
+
+| # | App | Command | Must call | Gated |
+|---|---|---|---|---|
+| 1 | desktop | "Which windows are open right now?" | `list_windows` | |
+| 2 | Notepad | "Bring Notepad to the front." | `focus_window` | ✅ |
+| 3 | Notepad | "Read the Notepad window and tell me what I can click." | `list_window_controls` | |
+| 4 | Notepad | "Type hello from Aradhya into Notepad." | `set_control_text` | ✅ |
+| 5 | Calculator | "Switch to Calculator." | `focus_window` | ✅ |
+| 6 | Calculator | "Read this window and tell me what buttons it has." | `list_window_controls` | |
+| 7 | Calculator | "Press the seven button in Calculator." | `invoke_control` | ✅ |
+| 8 | Browser | "Open the browser." | `browser_open` | ✅ |
+| 9 | Browser | "Go to example dot com." | `browser_navigate` | ✅ |
+| 10 | Browser | "Read this page and tell me what is on it." | `browser_read` | |
+
+A command passes only if the **named tool actually appears in the turn** and did
+not return a denial. "The model said it opened Notepad" is not a pass.
+
+Six of the ten are confirmation-gated, so a locked run scores 6/10 by design and
+says so. `ARADHYA_ACCEPT_UNLOCK=1` is the real run.
+
+**Status: not yet run.** The wiring is in place and verified as far as it can be
+verified without a person: `lite/build_options()` produces the `aradhya` MCP
+server config against the main venv, `mcp__aradhya` is in `allowed_tools`, and
+the server itself is proven end-to-end over a real pipe (above). What remains
+needs a human at the microphone and spends live brain quota, so Runs A and B are
+handed over rather than faked.

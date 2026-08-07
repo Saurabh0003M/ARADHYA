@@ -65,6 +65,22 @@ HERE = Path(__file__).resolve().parent
 ACK_WAV = HERE / "assets" / "ack.wav"
 HEY_ARADHYA_MODEL = HERE / "models" / "hey_aradhya.onnx"
 
+# ── ARADHYA's own effectors, over MCP ────────────────────────────────────────
+# Decision memo 2026-08-07 §1: the effectors ship as an MCP server behind the
+# ToolRegistry policy gate, and this voice loop is one client of it. The server
+# runs in the MAIN venv (F:\ARADHYA\venv) — that is where uiautomation and
+# playwright live; lite's own .venv has the audio stack and nothing else.
+MAIN_VENV_PYTHON = HERE.parent / "venv" / "Scripts" / "python.exe"
+ENABLE_EFFECTORS = True
+
+# Confirmation for gated tools (invoke_control, set_control_text, browser_click…).
+# A stdio server cannot prompt: its stdin IS the protocol stream. So:
+#   False → gated tools are DENIED. Read-only ones still work. This is the default.
+#   True  → this session is unlocked, exactly like the floating icon's "I"
+#           control: no persisted grant, lapses when the process exits.
+# The 10-command acceptance run needs this True, because "click Y" is gated.
+INTERACTION_UNLOCKED = False
+
 SYSTEM_PROMPT = """\
 You are ARADHYA, Saurabh's voice assistant on his Windows PC.
 Every reply you write is spoken aloud by TTS, so: 2-5 short conversational
@@ -74,7 +90,54 @@ Use the basic-memory brain (project 'brain') to remember and recall context
 about Saurabh; write journal observations to the journal/ folder when he
 shares something worth keeping. If a request sounds destructive or
 irreversible, say what you would do and ask him to confirm first.
+
+You can act on this machine through the `aradhya` MCP server. Use it rather
+than describing what you would do:
+- list_windows to see what is open; focus_window to bring one forward.
+- list_window_controls to read a window's controls before touching anything.
+  Controls are marked [invokable] (invoke_control can press it) and [editable]
+  (set_control_text can type into it). Never guess a control name — list first.
+- browser_open then browser_navigate to open a page; browser_read returns the
+  page as an element map with roles, names and ids.
+Say what you found in plain speech: he may be listening with the monitor off,
+so "Notepad has a File menu, an Edit menu and a text area" beats reading a list.
+If a tool is denied, say so plainly and say why — never report a denied action
+as done.
+
+Human-only, always, no exceptions: never type or submit a CAPTCHA, a one-time
+password, a password, or the final submit of a form. Read the screen, tell him
+what it says, and let him do it.
 """
+
+
+# Only these are copied into the MCP server's environment. Passing the whole
+# environment would hand every API key on this machine to a subprocess that
+# does not need one — and this dict ends up in logs and debug output, so a
+# blanket copy is a credential leak waiting for someone to print it.
+_ENV_PASSTHROUGH = (
+    "PATH", "SYSTEMROOT", "WINDIR", "COMSPEC", "TEMP", "TMP",
+    "USERPROFILE", "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA",
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMDATA",
+    "ARADHYA_HOME",
+)
+
+
+def effector_mcp_config() -> dict:
+    """The `aradhya` MCP server config passed to the Claude Agent SDK."""
+    import os
+
+    env = {
+        name: os.environ[name] for name in _ENV_PASSTHROUGH if name in os.environ
+    }
+    env["PYTHONUTF8"] = "1"
+    env["ARADHYA_MCP_GATE"] = "unlocked" if INTERACTION_UNLOCKED else "deny"
+    return {
+        "type": "stdio",
+        "command": str(MAIN_VENV_PYTHON),
+        "args": ["-m", "src.aradhya.mcp_server"],
+        "cwd": str(HERE.parent),
+        "env": env,
+    }
 
 
 # ── Floating status pill ────────────────────────────────────────────────────
@@ -219,14 +282,23 @@ def build_recorder(overlay: Overlay) -> AudioToTextRecorder:
 
 # ── Brain ────────────────────────────────────────────────────────────────────
 def build_options() -> ClaudeAgentOptions:
+    # No "Bash": a mis-heard voice command must not run shell. Loosen consciously.
+    allowed = ["Read", "Glob", "Grep", "Write", "Edit", "WebSearch", "mcp__basic-memory"]
     kwargs = dict(
         cwd=str(HERE.parent),
         system_prompt=SYSTEM_PROMPT,
         permission_mode="acceptEdits",
-        # No "Bash": a mis-heard voice command must not run shell. Loosen consciously.
-        allowed_tools=["Read", "Glob", "Grep", "Write", "Edit", "WebSearch", "mcp__basic-memory"],
+        allowed_tools=allowed,
         setting_sources=["user", "project"],  # load user MCP config -> basic-memory brain
     )
+    if ENABLE_EFFECTORS:
+        if not MAIN_VENV_PYTHON.exists():
+            print(f"[effectors] disabled — no interpreter at {MAIN_VENV_PYTHON}")
+        else:
+            kwargs["mcp_servers"] = {"aradhya": effector_mcp_config()}
+            allowed.append("mcp__aradhya")
+            state = "UNLOCKED" if INTERACTION_UNLOCKED else "read-only (gated tools denied)"
+            print(f"[effectors] aradhya MCP server enabled — {state}")
     try:
         return ClaudeAgentOptions(**kwargs)
     except TypeError:

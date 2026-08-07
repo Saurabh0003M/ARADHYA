@@ -39,6 +39,7 @@ Run it::
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import replace
 from typing import Any
@@ -324,17 +325,67 @@ def default_policy() -> ToolRuntimePolicy:
     return ToolRuntimePolicy(allowed_roots=roots, live_execution_enabled=live)
 
 
+#: Environment variable naming the gate a stdio server runs with.
+GATE_ENV_VAR = "ARADHYA_MCP_GATE"
+
+
+class SessionUnlockGate:
+    """Approves confirmation-gated tools for the lifetime of this process.
+
+    This is the ``interaction_unlocked`` idea the floating icon's "I" control
+    already implements, moved to the server: a human deliberately unlocked
+    *this session*, the grant is never persisted, and it lapses when the
+    process exits.
+
+    It is not a default and never will be — ``ARADHYA_MCP_GATE=unlocked`` has to
+    be set by a person who knows what they are starting. Every approval it makes
+    is logged and audited, so an unlocked session is reconstructable afterwards.
+    """
+
+    def __call__(self, tool_name: str, arguments: dict[str, Any]) -> tuple[bool, bool]:
+        logger.warning(
+            "MCP session-unlock approved '{}' {} — no human was asked",
+            tool_name,
+            arguments,
+        )
+        return (True, False)  # never persist: the unlock dies with the process
+
+
+def gate_from_env() -> ConfirmationGate | None:
+    """Choose the stdio server's gate. Fail closed unless told otherwise.
+
+    Why there is no interactive option here: a stdio MCP server's stdin **is**
+    the protocol stream. A gate that reads stdin to ask "y/n" would eat the
+    client's next request. Confirmation for a stdio server has to come from
+    somewhere other than this process's stdin — the allowlist, or an explicit
+    session unlock.
+    """
+    mode = os.environ.get(GATE_ENV_VAR, "deny").strip().lower()
+    if mode in {"", "deny", "off", "none"}:
+        return None
+    if mode == "unlocked":
+        logger.warning(
+            "{}=unlocked: confirmation-gated tools will run without asking, "
+            "for this process only.",
+            GATE_ENV_VAR,
+        )
+        return SessionUnlockGate()
+    logger.warning("Unknown {}={!r}; failing closed.", GATE_ENV_VAR, mode)
+    return None
+
+
 def main() -> None:
     import anyio
 
-    from src.aradhya.confirmation_gates import CliConfirmationGate
-
+    gate = gate_from_env()
     policy = default_policy()
+    if isinstance(gate, SessionUnlockGate):
+        # An unlocked session means live execution too; otherwise the gate
+        # approves a call the policy then blocks, which reads as a bug.
+        policy = replace(policy, live_execution_enabled=True)
     server = AradhyaMCPServer(
         registry=build_tool_registry(policy),
-        # stdio is the MCP channel; the CLI gate prompts on the terminal, which
-        # is a different stream, so a human can still approve interactively.
-        confirmation_gate=CliConfirmationGate(),
+        confirmation_gate=gate,
     )
     anyio.run(server.run_stdio)
 

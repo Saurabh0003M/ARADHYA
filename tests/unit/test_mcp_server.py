@@ -254,6 +254,44 @@ def test_denials_are_audited_too():
     assert audit.entries[0]["source"] == "mcp"
 
 
+# ── the gate a stdio server picks ──────────────────────────────────────
+#
+# A stdio server's stdin IS the protocol stream, so there is no interactive
+# option: a gate that read stdin to ask y/n would eat the client's next
+# request. What is left is fail-closed, or an explicit session unlock.
+
+
+@pytest.mark.parametrize("value", ["", "deny", "off", "none", "DENY", "nonsense", "yes"])
+def test_gate_from_env_fails_closed_by_default(monkeypatch, value):
+    from src.aradhya.mcp_server import GATE_ENV_VAR, gate_from_env
+
+    monkeypatch.setenv(GATE_ENV_VAR, value)
+    assert gate_from_env() is None
+
+
+def test_gate_from_env_unset_fails_closed(monkeypatch):
+    from src.aradhya.mcp_server import GATE_ENV_VAR, gate_from_env
+
+    monkeypatch.delenv(GATE_ENV_VAR, raising=False)
+    assert gate_from_env() is None
+
+
+def test_session_unlock_must_be_asked_for_by_name(monkeypatch):
+    from src.aradhya.mcp_server import GATE_ENV_VAR, SessionUnlockGate, gate_from_env
+
+    monkeypatch.setenv(GATE_ENV_VAR, "unlocked")
+    assert isinstance(gate_from_env(), SessionUnlockGate)
+
+
+def test_session_unlock_never_persists_an_approval():
+    """The unlock lapses with the process; it must not write the allowlist."""
+    from src.aradhya.mcp_server import SessionUnlockGate
+
+    approved, persist = SessionUnlockGate()("invoke_control", {"a": 1})
+    assert approved is True
+    assert persist is False
+
+
 # ── schema exposure ────────────────────────────────────────────────────
 
 
