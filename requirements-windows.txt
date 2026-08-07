@@ -1,5 +1,8 @@
 # Optional Windows integration helpers.
 pywin32>=306
-# UI Automation backend for desktop control tools (P1-8). Tools degrade
-# gracefully when this is not installed.
+# UI Automation backend for the desktop effector leg (list_windows,
+# list_window_controls, invoke_control, set_control_text, focus_window).
+# REQUIRED on Windows: without it those tools cannot act at all. The code
+# still degrades gracefully, but a install-less environment is a broken one --
+# tests/conftest.py skips-and-reports rather than mocking it away.
 uiautomation>=2.0.18
