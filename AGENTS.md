@@ -103,3 +103,52 @@ User Input (CLI / Hotkey / Telegram / Desktop Floating Icon)
 - **Boil the lake** — if a full implementation is only slightly harder, do the complete thing
 - **User sovereignty** — AI recommends, human decides
 - **Local control** — user's machine, user's data, user's rules
+
+---
+
+## LLM Access via freellmapi
+
+All LLM calls on this machine route through a self-hosted OpenAI-compatible proxy.
+**Proxy must be running** before any LLM call: `cd F:\ARADHYA\freellmapi && npm run dev`
+
+- **API endpoint**: `http://localhost:3001/v1/chat/completions`
+- **Dashboard**: `http://localhost:5173`
+- **Auth**: `OPENAI_API_KEY` env var (already set as Windows user env var — no config needed)
+
+### Provider Matrix
+
+| Provider | Speed | Best For |
+|---|---|---|
+| **Groq** | ⚡ Fastest | Speed-critical tasks, quick answers |
+| **Cerebras** | ⚡ Very fast | Real-time streaming |
+| **SambaNova** | 🚀 Fast | Balanced speed + quality |
+| **Google** | 🔄 Medium | Long documents, multimodal (Gemini) |
+| **Mistral** | 🔄 Medium | **Code generation** (Codestral/Devstral) |
+| **Cohere** | 🔄 Medium | **RAG / retrieval**, Command-A reasoning |
+| **Cloudflare** | ⚡ Fast | Lightweight / classification tasks |
+| **OpenRouter** | 🔄 Variable | Fallback pool, rare models |
+| **NVIDIA NIM** | 🔄 Medium | ⚠️ Some models 410 Gone — use `auto` |
+| **Ollama** | 🐌 Local | Privacy-critical, offline, no rate limits |
+| **LLM7** | ⚡ Fast | Free tier general tasks |
+| **Pollinations** | ⚡ Fast | Always-available free fallback |
+
+### Model Selection by Task
+
+| Task | Model | Provider |
+|---|---|---|
+| Fast answer | `llama-3.1-8b-instant` | Groq |
+| General purpose | `llama-3.3-70b-versatile` | Groq |
+| Code generation | `codestral-latest` | Mistral |
+| Code review | `qwen/qwen3-coder:free` | OpenRouter |
+| Deep reasoning | `deepseek-ai/deepseek-v4-pro` | NVIDIA NIM |
+| Long document | `gemini-2.5-flash` | Google |
+| RAG / retrieval | `command-a-reasoning-08-2025` | Cohere |
+| Private data | local model | Ollama |
+| Auto-route | `auto` | freellmapi picks best |
+
+### Rate Limits & High Traffic
+
+Handled **automatically** by freellmapi — no retry logic needed in agent code:
+- 20-attempt retry loop per request
+- 429/503/timeout → skips that model+key, tries next provider
+- All providers exhausted → HTTP 429 → tell user to wait briefly

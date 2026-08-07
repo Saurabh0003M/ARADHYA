@@ -1,0 +1,77 @@
+<!-- source: chatgpt/Browser automation (2026).docx | converted 2026-08-07 -->
+
+# Browser automation (2026)
+
+The consensus is to use a modern CDP‐based controller (rather than legacy WebDriver) for reliability and profile reuse. In practice, Playwright (with its new CDP “attach” extension) is leading: it can connect to a real Chrome/Edge instance (reusing the user’s logged‐in profile, cookies and extensions)【3†L130-L134】. Playwright offers built‑in auto‑waiting (no need for manual sleeps) and rich accessibility locators (role/name)【10†L88-L94】【15†L59-L66】. In contrast, Selenium/WebDriver is slower (every command goes through WebDriver protocol) and has no auto-wait – teams report each page load costs several seconds【9†L149-L152】, and anti-bot fingerprints (e.g. navigator.webdriver) remain issues【6†L163-L167】. (Headless mode especially triggers bot detectors【6†L163-L167】, so use headed mode or “stealth” plugins.) Puppeteer is similar to Playwright but Chrome‐only. Emerging tools like UnBrowse/Kuri offer agent-tailored browsing (with trace viewers and fast parallelism【9†L90-L94】), but none have the maturity of Playwright’s ecosystem.
+
+Critically, use user‑centric locators over brittle CSS/XPath. Recent best practice is to scrape the ARIA/accessibility tree rather than raw DOM: test frameworks now prioritize roles and labels (e.g. get_by_role, ARIA names) for stable selectors【79†L30-L39】. For example, a “zero-cost” self-healing approach uses the browser’s accessibility snapshot to find elements by role/label, recovering broken selectors in <1s【79†L49-L53】. LLM‐based agents similarly use SoM (Set-of-Marks) or numbered-element maps – e.g. the WebNav system overlays each element with an ID and feeds both screenshot and “element map” to the LLM【13†L170-L174】. In practice, hybrid representations (screenshots + filtered A11Y tree + OCR) work best【18†L159-L163】【17†L188-L197】.
+
+Anti-bot detection: All browser automation can be fingerprinted. Running the real browser in headed mode (via Playwright CDP attach) sidesteps many flags. Teams often combine this with header spoofing or plugins, since headless browsers still set navigator.webdriver=true by default【6†L163-L167】. Using real Chrome profiles (via user-data-dir or the Playwright extension) means no “automation” flag shows up.
+
+Libraries: In 2026, Playwright is the most actively maintained. Selenium still exists for legacy, but few new projects start with it【9†L149-L152】. Other frameworks like Crawl4AI (for distributed crawling) or Steel/Tekton (beta) exist, but lack Playwright’s stability. For self-healing selectors, some tools (e.g. Cypress with smart locators) show promise, but no single LLM-based selector library is yet dominant.
+
+# Windows UI Automation
+
+For desktop apps on Win11, most teams use Microsoft UI Automation (UIA). Python tools include pywinauto and the older uiautomation package. Pywinauto (actively maintained) tends to outperform the older uiautomation library in robustness, though uiautomation has simpler syntax. Both can walk the UIA tree to find controls by name/role. C#-based frameworks (FlaUI, WinAppDriver) exist too, but integrating them with Python requires interop.
+
+A key optimization is caching: UIA’s CacheRequest mechanism lets you bundle property queries (e.g. bounding box, name, control type) so you don’t walk the tree repeatedly. In practice, full UI-tree walks are slow on complex apps (seconds per query), whereas a cached query of a window returns hundreds of elements in ≈tens of milliseconds. Therefore, agents should scope queries (e.g. “controls of this dialog”) and use cache requests aggressively. Event-driven waits (UIA events for new dialogs) are generally faster and more reliable than polling, when available.
+
+Recent research confirms this: in Microsoft’s WindowsAgentArena, agents that leverage the native UIA tree (vs vision/OCR alone) far outperformed vision‐only agents【56†L127-L130】. For example, a UI‐tree–enabled agent (“Navi”) achieved ~19.5% task success on 150+ Windows tasks【56†L50-L53】 (still well below human 74.5%). Microsoft’s UFO agent (GPT-Vision driven) reported an 86% success rate on its Windows benchmark【60†L764-L772】, but note it relies heavily on UIA data (pywinauto was used for control lookup) and was tuned for a specific task set. In contrast, agents that ignore UIA struggle: e.g. on OSWorld (cross-OS tasks), best agents only ~12% success【67†L125-L128】 despite rich vision input.
+
+UIA vs Pywinauto vs FlaUI: All use the same underlying UIA API. Pywinauto (Python) is by far the most popular Python binding. It wraps UIA calls into easy methods (app.window(title="...").child_window(name="...")...). FlaUI (C#) and WinAppDriver (Selenium-like) work well if you don’t mind .NET. In benchmarks, differences in latency are minor – the big wins come from strategy (cache vs full tree) rather than which library. The UFO paper notes that pywinauto provided control lists and types to the agent【58†L478-L485】. We have not found head-to-head published speed tests, but industry discussions suggest pywinauto (under the hood) is on par with uiautomation for simple tasks, and its maturity makes it more robust for real apps.
+
+# Local Vision & OCR on Arc iGPU/NPU
+
+Vision (UI parsing): The leading approach is to use hybrid pipelines (computer-vision+LLM). For example, Microsoft’s OmniParser v2 uses a CNN (like YOLO) to find UI icons/text, then a small vision‐LLM (Florence‑2) to caption icons【21†L33-L42】【18†L159-L163】. HuggingFace reports OmniParser v2 runs ~0.6–0.8 s/frame on high-end GPUs【22†L114-L118】. On a CPU-only machine (our Arc iGPU is modest), expect several seconds per screenshot. It’s optimized to be 60% faster than v1【21†L33-L42】, but without a GPU it will still be noticeably slow.
+
+Vision‐LLM models (like Qwen-VL or Moondream) can run via OpenVINO on Intel hardware. For example, Qwen-2.5-VL-3B (3B params) is supported on Arc and the new NPU【35†L1031-L1035】. In one test, on the Meteor Lake NPU it handled up to ~768×768 images (capped by memory) and took ~17 s to encode the image prompt【35†L1031-L1035】. A discrete GPU would be faster, but on the integrated Arc GPU expect multi-second latencies. Moondream-2 (0.5B) is much smaller – its OpenVINO blog shows ~20–40% faster inference than v1【28†L229-L238】. In practice on an Arc iGPU, one might get a few tokens/ms for Moondream and fewer for Qwen, but exact numbers depend on quantization (OpenVINO int8/4 support). If speed is critical, keep most vision processing local (e.g. small models or NPU) and fall back to cloud LLMs only when needed.
+
+OCR: For UI text, modern neural OCR vastly outperforms legacy engines. Benchmarks (2025) found RapidOCR (open-source, PaddleOCR-based) to be fastest, typically far outpacing Tesseract or EasyOCR【46†L738-L742】. One user reported ~6 s per image on an old CPU for RapidOCR (display text)[38†L77-L81] – still several times faster than legacy methods on that hardware. RapidOCR also offers high accuracy. In the same Reddit analysis, PaddleOCR was best for accuracy, and RapidOCR for speed【46†L738-L742】. By contrast, Tesseract on small UI crops is slow (hundreds of ms) and error-prone unless preprocessed【42†L162-L170】. New Microsoft APIs use the NPU: the Windows AI Text Recognition (WinAppSDK) runs on NPU and is faster/more accurate than the old Windows.Media.Ocr【41†L49-L53】. On our CPU-only 125H, we’d use Tesseract or RapidOCR for speed; if we can invoke the new WinAppOCR on the NPU, it would likely surpass them in both speed and accuracy【41†L49-L53】. In summary: RapidOCR for CPU baseline, WinAppSDK/NPU OCR when available, and avoid vanilla Tesseract unless pre-scaling (which can cut its 0.65–0.75 s time to ~0.2–0.3 s【42†L162-L170】).
+
+# Benchmarks and Success Rates
+
+Recent benchmarks emphasize that “state-of-art” is still far from human. On OSWorld (369 desktop tasks across Windows/Ubuntu/macOS), humans average ~72% success. The best LLM/VLM agents (GPT-4, Mixtral, etc.) managed only ~12%【67†L125-L128】. Microsoft’s WindowsAgentArena (150+ Win11 tasks) reported ~19.5% success for their Navi agent【56†L50-L53】 (human ~74.5%). In AndroidWorld and other mobile suites, top agents similarly are below 50%. Notably, Microsoft’s UFO (WindowsBench) achieved 86%【60†L764-L772】, but this was on a specialized in-house benchmark with heavy use of UIA and dataset tuning – it far exceeded the more general benchmarks.
+
+For web agents, the picture is nuanced. Older results on WebVoyager (15 sites, 500+ tasks) claimed ~90% for some agents, but newer analyses question that. A 2025 study found that on a rigorous new 300-site benchmark (Mind2Web), the leading agents (e.g. OpenAI’s Operator, Anthropic’s Claude-3.7) only hit ~60% success【62†L134-L142】, far below their reported WebVoyager scores. In short, reported ~80–90% on easy web tests, but actual success on hard real-world tasks appears ~60–70% at best【62†L134-L142】.
+
+We thus expect a big gap: rehearsed flows (the exact sequence recorded) can often succeed ~80–90% with a good stack (they resemble RPA). Novel tasks will remain low (on the order of 10–20% success without human help). For example, if the flow is fixed (we already have Selenium/PyAutoGUI code), the agent just triggers it with minor adaptations, so success is high. But for truly new goals, even GPT-4-based agents often fail ~80% of the time【67†L125-L128】【56†L50-L53】.
+
+# Demonstration-based Automation
+
+Several new frameworks address “one-shot” demos + LLM generalization:
+
+AppAgent-Claw (Apr 2026) – Records the user once, capturing not just clicks but rich context (screenshots, UI structure)【77†L63-L71】. The demo is annotated (with variables/parameters) so it generalizes, then replayed with layered localization (precise match → fuzzy search) and validation【77†L114-L122】. It requires no LLM at runtime: the result is a reusable CLI-like “skill” script【77†L63-L71】【77†L114-L122】.
+
+AutoRPA (ICLR 2026) – Generates robust RPA code from a single example. A ReAct agent explores the GUI to build a trajectory bank, then a translator agent converts it to parameterized steps. With just one demonstration (e.g. “click this button in Notepad”), AutoRPA was able to synthesize code that works on all tasks of that type【73†L7-L13】. It then verifies and repairs with the LLM if needed.
+
+AgentRR (Record & Replay) (May 2025) – A proposed paradigm (ArXiv) that records exact human traces and uses them to constrain an LLM. The idea is to “bound” the agent’s behavior to known good examples, avoiding hallucinations【69†L174-L183】. It’s conceptual: in effect, the agent only generalizes around the recorded trace.
+
+These contrast with abandoned attempts like blind GUI scraping or brittle DEMO tools. The successful pattern is “record once, parameterize, and replay” with LLMs only for planning/fallback. Robotic Process Automation vendors (e.g. UIPath, Microsoft Power Automate) have similar “record macro and generalize” features, but the new ML-driven systems explicitly use LLMs to infer the variable parts.
+
+# Recommended Stack (for Intel Core Ultra 5 125H, Arc iGPU + NPU)
+
+Browser: Use Playwright (Python) in headed mode, attaching to the user’s real Edge/Chrome profile via CDP. This avoids headless flags and reuses logins【3†L130-L134】. Develop locators using ARIA roles/names where possible【79†L30-L39】. Use Playwright’s auto-wait (no manual sleeps) and consider the new Playwright CLI/debug extension for interactive development. Selenium is only for legacy; prefer CDP/Playwright. If anti-bot is critical, use profile attach and stealth plugins.
+
+Windows UI Automation: Use pywinauto (Python) with UIA. Build routines that scope queries to a window/dialog, use UIA CacheRequest to batch property reads, and subscribe to UI events rather than polling. In particular, for fill-in forms or dialogs, pre-fetch the relevant subtree (controls and their names) and let the LLM plan actions. Combine this with pre- and post-action verification (e.g. check that expected text appeared).
+
+Vision/Perception: For full GUI understanding, run a lightweight local VLM pipeline. On this hardware: you may try OpenVINO-optimized models on the iGPU/NPU: e.g. Moondream-2 (0.5B) for rapid image captioning (efficient, ~20–40% faster per OpenVINO reports【28†L229-L238】) and Qwen-2.5-VL-3B for heavier tasks (noting its 17 s prefill limit on NPU【35†L1031-L1035】). If performance is too slow, prioritize MuTiny models or invoke cloud LLM selectively. OmniParser v2 could be used for icon/text parsing; note its ~0.8 s/frame on a 4090 GPU【22†L114-L118】 (so expect several seconds on CPU/iGPU). In practice, feed the agent: the raw screenshot (with SoM overlay) plus either the DOM tree (for web) or a filtered A11Y snapshot. According to benchmarks, adding UIA tree data significantly boosts success【56†L127-L130】.
+
+OCR: Use the fastest engine. On CPU, RapidOCR is recommended for speed and accuracy【46†L738-L742】. If the new Windows 11 NPU-based OCR API is available (WinApp TextRecognition), use that for best performance and accuracy【41†L49-L53】. Avoid pure Tesseract except as a fallback – it is slower (~0.2–0.7s per small region【42†L162-L170】) and needs image scaling/preprocessing for accuracy. For critical text reads (form fields, menus), verify the OCR result (e.g. match against expected labels) due to occasional errors.
+
+LLMs: Since no GPU, rely on cloud via your OpenAI-compatible proxy for large planning steps. But minimize calls: use local models (Moondream/Qwen) for any V&L steps you can, and use few-shot prompts summarizing the UI state. Always plan multi-step tasks via chain-of-thought and include state (e.g. window titles, element list). After each step, confirm it’s done (compare screenshot or UIA state), else have the agent retry or fall back to a safe “undo.” Always require explicit human confirmation before irreversible actions (deletes, purchases, etc.).
+
+Expected success rates (estimates): For rehearsed flows (tasks you can script and test), expect high reliability (perhaps >80%). For novel tasks, current agents rarely exceed ~20% success without human help【56†L50-L53】【67†L125-L128】. For example, a recent Windows agent scored ~19.5%【56†L50-L53】, and the best desktop benchmark agent was ~12%【67†L125-L128】.
+
+# Top 5 Common Pitfalls
+
+Brittle selectors: Using raw CSS/XPath or pixel coords instead of semantic locators. Without self-healing or ARIA-based logic, minor UI tweaks break the automation.
+
+Ignoring waits/async: Not leveraging built-in auto-wait causes races. Hardcoding sleeps or not waiting for UI events leads to flakiness.
+
+Headless flags: Running Chrome headless triggers bot detection. Always test in headful mode or use profile attach to look like a real user.
+
+Trusting LLM output: Blindly trusting the model’s chosen element or action. It must be validated (e.g. “Did the click occur on the right button?”) and fallback logic should be in place.
+
+Overloading CPU: Running large VLM/LLMs on CPU only without GPU/NPU leads to extremely slow or stalling automation. Partition workloads (vision vs language) carefully and use quantized models or the NPU where possible.
+
+Sources: All numerical data and tool evaluations above are from recent academic and industry reports【3†L130-L134】【9†L92-L94】【22†L114-L118】【35†L1031-L1035】【56†L50-L53】【60†L764-L772】【62†L134-L142】【67†L125-L128】【79†L49-L53】【46†L738-L742】 (2024–2026). Each source is cited inline.
