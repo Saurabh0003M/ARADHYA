@@ -1,5 +1,11 @@
 # Optional Windows integration helpers.
 pywin32>=306
+
+# Browser effector leg: CDP-attach driver behind the browser_* tools. Attaches
+# to the Edge/Chrome already on the machine over the DevTools Protocol, so
+# `playwright install` is NOT needed and no bundled browser is downloaded.
+# Selenium is deliberately absent (decision memo 2026-08-07 S4 amendment 1).
+playwright>=1.40
 # UI Automation backend for the desktop effector leg (list_windows,
 # list_window_controls, invoke_control, set_control_text, focus_window).
 # REQUIRED on Windows: without it those tools cannot act at all. The code
