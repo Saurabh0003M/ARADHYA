@@ -43,6 +43,10 @@ class UIControl:
     automation_id: str = ""
     enabled: bool = True
     invokable: bool = False
+    editable: bool = False
+    """True when the control exposes the UIA Value pattern — i.e. when
+    ``set_control_text`` can actually type into it. Surfacing this is the
+    difference between a model guessing at a target and knowing one."""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -51,6 +55,7 @@ class UIControl:
             "automation_id": self.automation_id,
             "enabled": self.enabled,
             "invokable": self.invokable,
+            "editable": self.editable,
         }
 
 
@@ -112,6 +117,8 @@ def format_controls(controls: list[UIControl], limit: int = 60) -> str:
         flags = []
         if control.invokable:
             flags.append("invokable")
+        if control.editable:
+            flags.append("editable")
         if not control.enabled:
             flags.append("disabled")
         suffix = f" [{', '.join(flags)}]" if flags else ""
@@ -197,6 +204,28 @@ class UIAutomationBackend:
                 return child
         return None
 
+    @staticmethod
+    def _supports_pattern(control: Any, pattern_getter: str) -> bool:
+        """True if ``control`` exposes the named UIA pattern.
+
+        ``uiautomation`` only defines ``GetInvokePattern`` / ``GetValuePattern``
+        on the control classes that support them, so calling one unguarded
+        raises ``AttributeError`` on an ``EditControl``, ``TextControl``,
+        ``PaneControl``, ``GroupControl`` or ``ImageControl``. That mattered:
+        the exception was swallowed by the per-control ``except`` below and
+        took the whole control out of the map with it — measured at **188 of
+        299 controls silently dropped** from one File Explorer window, every
+        text field among them. A model cannot type into a box it was never
+        shown.
+        """
+        getter = getattr(control, pattern_getter, None)
+        if getter is None:
+            return False
+        try:
+            return getter() is not None
+        except Exception:
+            return False
+
     def list_controls(self, window_title: str, max_controls: int = 200) -> list[UIControl]:
         auto = self._mod()
         if auto is None:
@@ -208,7 +237,10 @@ class UIAutomationBackend:
                 return []
             for control, _depth in auto.WalkControl(window, includeTop=False):
                 try:
-                    name = control.Name
+                    # Flatten to one line: format_controls prints one control
+                    # per line, and names really do contain newlines in the
+                    # wild (Notepad's status bar is "Line 1,\nColumn 1").
+                    name = " ".join((control.Name or "").split())
                     if not name:
                         continue
                     controls.append(
@@ -217,7 +249,8 @@ class UIAutomationBackend:
                             control_type=control.ControlTypeName,
                             automation_id=getattr(control, "AutomationId", "") or "",
                             enabled=bool(getattr(control, "IsEnabled", True)),
-                            invokable=control.GetInvokePattern() is not None,
+                            invokable=self._supports_pattern(control, "GetInvokePattern"),
+                            editable=self._supports_pattern(control, "GetValuePattern"),
                         )
                     )
                 except Exception:
@@ -258,7 +291,8 @@ class UIAutomationBackend:
             control = self._live_control(auto, window, control_name)
             if control is None:
                 return False, f"No control matching '{control_name}' in '{window_title}'."
-            pattern = control.GetInvokePattern()
+            getter = getattr(control, "GetInvokePattern", None)
+            pattern = getter() if getter is not None else None
             if pattern is not None:
                 pattern.Invoke()
             else:
@@ -278,9 +312,14 @@ class UIAutomationBackend:
             control = self._live_control(auto, window, control_name)
             if control is None:
                 return False, f"No control matching '{control_name}' in '{window_title}'."
-            pattern = control.GetValuePattern()
+            getter = getattr(control, "GetValuePattern", None)
+            pattern = getter() if getter is not None else None
             if pattern is None:
-                return False, f"'{control.Name}' does not accept a text value."
+                return False, (
+                    f"'{control.Name}' does not accept a text value "
+                    f"(no UIA Value pattern). Use list_window_controls to find "
+                    f"one marked [editable]."
+                )
             pattern.SetValue(text)
             return True, f"Set '{control.Name}' to the provided text."
         except Exception as error:
