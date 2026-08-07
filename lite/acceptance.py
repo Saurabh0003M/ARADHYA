@@ -19,9 +19,9 @@ Run (from `lite/`, in lite's own venv, with the effectors unlocked)::
     $env:ARADHYA_ACCEPT_UNLOCK = "1"
     .venv\\Scripts\\python.exe acceptance.py
 
-Every gated tool is denied unless that variable is set — four of the ten
-commands are gated (typing, pressing, opening a browser, navigating), so a
-locked run is expected to score 6/10 and say so.
+Every gated tool is denied unless that variable is set — six of the ten
+commands are gated (focusing a window, twice; typing; pressing; opening a
+browser; navigating), so a locked run is expected to score 4/10 and say so.
 """
 
 from __future__ import annotations
