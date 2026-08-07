@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-from unittest.mock import MagicMock
-
-# Mock loguru before imports
-sys.modules["loguru"] = MagicMock()
-
+# Dependency handling lives in tests/conftest.py — see the note there on why
+# module-level sys.modules mocks are gone.
 from src.aradhya.context_compressor import (
     CompactionResult,
     TruncationPolicy,

@@ -1,17 +1,7 @@
-import sys
-from unittest.mock import MagicMock
-
-# Mock dependencies before any other imports
-sys.modules["loguru"] = MagicMock()
-sys.modules["requests"] = MagicMock()
-sys.modules["vlc"] = MagicMock()
-sys.modules["pvporcupine"] = MagicMock()
-sys.modules["pyaudio"] = MagicMock()
-sys.modules["pveagle"] = MagicMock()
-sys.modules["yaml"] = MagicMock()
-sys.modules["dotenv"] = MagicMock()
-sys.modules["openai"] = MagicMock()
-
+# Dependency handling lives in tests/conftest.py. Module-level
+# sys.modules[...] = MagicMock() here used to leak into every test that ran
+# after this file — it is what turned `rich` into a mock for the whole session
+# and what let missing effectors pass as installed.
 import json
 import os
 from pathlib import Path
