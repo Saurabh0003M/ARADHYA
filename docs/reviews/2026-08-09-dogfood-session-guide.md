@@ -40,6 +40,30 @@ skills count, log path.
 
 ---
 
+## What actually works today — read this before you judge anything
+
+Five browser tools are **stubs** and will answer "not yet ported to the CDP
+backend": `browser_click`, `browser_type`, `browser_screenshot`,
+`browser_execute_js`, `browser_submit` (`tools/browser_tools.py:198,238,286,321,349`).
+Opening, navigating, reading and tab-switching work. So *clicking inside a web
+page* is not a fair test yet — clicking inside a **desktop app** is.
+
+| Area | State | Try it in |
+|---|---|---|
+| Slash commands (~19) | working | Part 1 |
+| Desktop read — windows, controls | working, real UIA | Part 2 |
+| Desktop act — focus, invoke, type | working, gated | Part 3 |
+| Browser open / navigate / read | working, real Edge over CDP | Part 2 |
+| Browser click / type / submit / JS / screenshot | **stub** | skip |
+| File / shell / system / power / scheduler tools | working, mostly gated | Part 3 extras |
+| Vision — screenshot, OCR, describe screen | working; `describe_screen` needs a vision model | Part 5 |
+| Voice loop (`lite/`) | working, separate venv | Part 4 |
+| Floating icon | working; its camera + screen buttons are honest stubs | Part 5 |
+| Daemon, tray, HTTP API, MCP server | working, not needed for this pass | — |
+| `/parasite`, `/federation`, `/telegram` | on the cut list — **ignore, they're being deleted** | — |
+
+---
+
 ## Part 1 — the map (safe, read-only, instant)
 
 Type these one at a time. None of them change anything.
@@ -115,6 +139,55 @@ This is the `lite/` loop — the real speak→act path. From `F:\ARADHYA\lite`:
 
 If voice misbehaves but the text CLI worked, the fault is the microphone/STT, not
 the brain — say so in your notes and we isolate it there.
+
+---
+
+## Part 5 — the odd corners (optional, 5 minutes)
+
+Only if Parts 1–4 went well. These are the features nobody has ever exercised.
+
+1. `take a screenshot and tell me what text is on my screen`
+   — `screen_capture` + `screen_read_text` (Windows OCR). `# ` Was the text right?
+2. `describe what is on my screen` — `describe_screen` needs a vision-capable
+   model; on `llama3.2:3b` it should fail *gracefully*. `# ` Did it fail with a
+   sentence, or a traceback? A graceful failure is a pass.
+3. `/icon on` — the floating icon appears. Click the mic, then "A", then "I".
+   `# ` Did you understand what each button did? The camera and screen buttons
+   are known stubs — do they *say* so, or just do nothing?
+4. `what files are in my Downloads folder?` then
+   `search my documents for the word invoice`. `# ` Right answers? How slow?
+5. `remember that I prefer replies in short bullet points` — then ask something.
+   `# ` Did it remember within the session?
+
+---
+
+## About the tablet — what it would and wouldn't change
+
+Short version: **do not connect it for this pass.** It cannot help today, and
+the setup would eat the session. Here is the honest split.
+
+**It will never add compute.** The Tab S10+ can't lend the laptop CPU or RAM;
+running a model on the tablet is a separate, slower model, not a faster ARADHYA.
+
+**It is, however, the best answer to the one unsolved design problem** — the
+confirmation channel. Right now a stdio MCP server can only deny everything or
+unlock everything, because its stdin is the protocol stream, and Codex is right
+that a global unlock is not per-action consent. A tablet fixes that shape
+exactly: ARADHYA asks *"about to click Submit on the passport form — approve?"*,
+the tablet shows the action, you tap yes, and the laptop screen never needs to be
+on. That is action-bound consent, on a second device, which is strictly better
+than a spoken y/n because you can *see* what you're approving.
+
+The plumbing is half-built already: `daemon.py` runs a bearer-token HTTP API on
+port 19842, but bound to localhost. Making it a phone/tablet surface means
+binding to the LAN, which is a real security decision, not a config flip —
+that is Stage 1 work with a threat model, not a weekend wire-up.
+
+**Its third use is Stage 5**, as a far-field voice endpoint (P6-gemini rates an
+Android device the ₹0 option). Also later.
+
+So: park it. When we build the confirmation broker, the tablet is the surface it
+targets, and I'd rather design for it deliberately than bolt it on now.
 
 ---
 
