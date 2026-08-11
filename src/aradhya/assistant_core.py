@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
@@ -11,6 +12,7 @@ from loguru import logger
 
 from src.aradhya.paths import get_project_root
 from src.aradhya.agent_loop import AgentLoop
+from src.aradhya.analytics import TurnMetrics, record_turn
 from src.aradhya.assistant_indexer import DirectoryIndexManager
 from src.aradhya.assistant_models import (
     AssistantPreferences,
@@ -598,12 +600,14 @@ class AradhyaAssistant:
         set_active_vision_provider(self.model_provider)
         # P1-4: expose the structured profile to get_user_profile for this turn
         set_active_user_profile(self.user_profile)
+        turn_started = time.monotonic()
         try:
             turn = loop.run(request, system_prompt, history=history, stream_handler=stream_handler)
         finally:
             set_active_network_policy(None)  # always clear after turn
             set_active_vision_provider(None)
             set_active_user_profile(None)
+        turn_elapsed_seconds = time.monotonic() - turn_started
         final_text = turn.final_response.strip() or "The agent stopped without a final answer."
 
         # Log turn end
@@ -617,6 +621,39 @@ class AradhyaAssistant:
             success=success,
             final_response_preview=final_text,
         )
+
+        # Per-turn performance analytics — best-effort; must never break a turn.
+        try:
+            model_profile = getattr(self.model_provider, "profile", None)
+            metrics = TurnMetrics(
+                turn_id=turn_ctx.turn_id,
+                model=getattr(model_profile, "model_name", "") or "",
+                provider=getattr(model_profile, "provider", "") or "",
+                total_seconds=turn_elapsed_seconds,
+                model_seconds=turn.model_seconds,
+                tool_seconds=turn.tool_seconds,
+                iterations=turn.iterations,
+                tool_calls=len(turn.tool_calls_made),
+                prompt_tokens=turn.prompt_tokens,
+                gen_tokens=turn.gen_tokens,
+                load_seconds=turn.load_seconds,
+                success=success,
+            )
+            record_turn(metrics)
+            logger.info(
+                "turn perf: total={:.1f}s model={:.1f}s tool={:.1f}s overhead={:.1f}s "
+                "iters={} tools={} prompt={} tok gen={} tok",
+                metrics.total_seconds,
+                metrics.model_seconds,
+                metrics.tool_seconds,
+                metrics.overhead_seconds,
+                metrics.iterations,
+                metrics.tool_calls,
+                metrics.prompt_tokens,
+                metrics.gen_tokens,
+            )
+        except Exception as exc:  # noqa: BLE001 — analytics must never break a turn
+            logger.debug("Turn metrics recording failed (non-fatal): {}", exc)
 
         self.session_manager.append_message(
             "user",

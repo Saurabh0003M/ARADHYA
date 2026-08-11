@@ -920,6 +920,25 @@ def _handle_parasite(*, command) -> None:
     )
 
 
+def _handle_perf(**kwargs) -> None:
+    """Show recent per-turn performance analytics (/perf).
+
+    Reads ``~/.aradhya/metrics/turns.jsonl`` and prints where recent turns
+    spent their wall-clock: model vs tools vs Aradhya's own overhead, plus
+    iterations and the Ollama token counters.
+    """
+    from src.aradhya.analytics import format_summary, load_recent
+
+    records = load_recent(20)
+    if not records:
+        render_info(
+            "No turn metrics yet. Ask Aradhya something, then run /perf to see "
+            "where the time went (model vs tools vs overhead)."
+        )
+        return
+    render_info(format_summary(records))
+
+
 # ── Command dispatch ──────────────────────────────────────────────────
 
 # Maps slash commands and their legacy equivalents to handlers.
@@ -987,6 +1006,9 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
 
     # Audit
     (["/audit"], _handle_audit),
+
+    # Performance analytics
+    (["/perf", "/analytics"], _handle_perf),
 
     # Daemon
     (["/daemon start", "/daemon on"], _handle_daemon_start),

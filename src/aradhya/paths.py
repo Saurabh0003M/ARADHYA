@@ -161,6 +161,11 @@ def audit_dir() -> Path:
     return ensure_aradhya_dir("audit")
 
 
+def metrics_dir() -> Path:
+    """~/.aradhya/metrics — per-turn performance analytics"""
+    return ensure_aradhya_dir("metrics")
+
+
 def hooks_dir() -> Path:
     """~/.aradhya/hooks"""
     return ensure_aradhya_dir("hooks")
