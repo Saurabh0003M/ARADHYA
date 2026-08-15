@@ -920,6 +920,25 @@ def _handle_parasite(*, command) -> None:
     )
 
 
+def _handle_perf(**kwargs) -> None:
+    """Show recent per-turn performance analytics (/perf).
+
+    Reads ``~/.aradhya/metrics/turns.jsonl`` and prints where recent turns
+    spent their wall-clock: model vs tools vs Aradhya's own overhead, plus
+    iterations and the Ollama token counters.
+    """
+    from src.aradhya.analytics import format_summary, load_recent
+
+    records = load_recent(20)
+    if not records:
+        render_info(
+            "No turn metrics yet. Ask Aradhya something, then run /perf to see "
+            "where the time went (model vs tools vs overhead)."
+        )
+        return
+    render_info(format_summary(records))
+
+
 # ── Command dispatch ──────────────────────────────────────────────────
 
 # Maps slash commands and their legacy equivalents to handlers.
@@ -987,6 +1006,9 @@ COMMAND_TABLE: list[tuple[list[str], callable]] = [
 
     # Audit
     (["/audit"], _handle_audit),
+
+    # Performance analytics
+    (["/perf", "/analytics"], _handle_perf),
 
     # Daemon
     (["/daemon start", "/daemon on"], _handle_daemon_start),
@@ -1065,6 +1087,22 @@ def _start_ipc_watcher(assistant, voice_manager, runtime_profile, ctx):
                 transcript_echo=resp.transcript_echo,
                 awaiting=resp.awaiting_confirmation,
             )
+        elif cmd == "interaction_toggle":
+            console.print()
+            assistant.state.interaction_unlocked = (
+                not assistant.state.interaction_unlocked
+            )
+            if assistant.state.interaction_unlocked:
+                render_info(
+                    "Interaction UNLOCKED for this session — Aradhya may now act "
+                    "on this machine. Dangerous actions will still ask you to "
+                    "confirm first. This resets when Aradhya exits."
+                )
+            else:
+                render_info(
+                    "Interaction LOCKED — Aradhya can read and answer, but will "
+                    "not change anything on this machine."
+                )
         elif cmd in {"screen_watch_toggle", "browser_toggle"}:
             console.print()
             render_warning(

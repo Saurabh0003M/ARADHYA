@@ -1,121 +1,91 @@
 """Browser automation tools for the agent loop.
 
-These tools give Aradhya the ability to control a web browser — navigating
-to URLs, clicking elements, typing text, and reading page content.  This
-enables scenarios like "ring Kautilya's phone via Find My Device" or
-"reply on WhatsApp Web".
+These tools give Aradhya the ability to control a web browser — navigating to
+URLs, reading page structure, clicking elements, typing text — so it can do
+things like "ring Kautilya's phone via Find My Device" or "reply on WhatsApp
+Web".
 
-Uses Selenium with Chrome/Edge WebDriver to connect to the user's actual
-browser profile (important: logged-in sessions like Google accounts are
-available).  Falls back to a clean session if no profile is specified.
+**Backend: CDP attach, not Selenium.** Decision memo 2026-08-07 §4 amendment 1
+rules WebDriver out of the plan ("obsolete for agents" in both P3 reports); the
+driver lives in ``src/aradhya/browser_cdp.py`` and attaches over the Chrome
+DevTools Protocol to a real Edge/Chrome. Tool **names and
+``requires_confirmation`` flags are unchanged on purpose** — the approved-rules
+allowlist persists per (tool, args), ``audit.jsonl`` records by name, and
+``AgentLoop.DANGEROUS_TOOLS`` lists ``browser_click``/``browser_type``/
+``browser_execute_js``. Only the backend moved.
+
+Stage 0 ported ``browser_open``, ``browser_navigate``, ``browser_read``,
+``browser_close`` and the three tab tools. ``browser_click``, ``browser_type``,
+``browser_submit``, ``browser_execute_js`` and ``browser_screenshot`` still
+exist, stay registered, stay confirmation-gated, and report that they are not
+yet ported rather than silently doing nothing.
 
 Dependencies:
-- ``selenium`` — ``pip install selenium``
-- Chrome or Edge browser installed
-- ChromeDriver or EdgeDriver (auto-managed by selenium-manager)
+- ``playwright`` — ``pip install playwright`` (no browser download; it attaches
+  to the browser you already have)
+- Edge or Chrome, started with ``--remote-debugging-port`` (``browser_open``
+  starts one for you)
 """
 
 from __future__ import annotations
 
-import os
-import time
+import tempfile
 from pathlib import Path
-from typing import Any
 
-
+from src.aradhya.browser_cdp import (
+    DEFAULT_DEBUG_PORT,
+    NOT_PORTED_MESSAGE,
+    AUTOMATION_PROFILE_DIR,
+    PageSnapshot,
+    format_snapshot,
+    get_browser_backend,
+)
 from src.aradhya.tools.tool_registry import tool_definition
 
-# Global browser session — shared across tool calls within an agent turn
-_active_driver: Any = None
 
+def xpath_literal(value: str) -> str:
+    """Return ``value`` as a safely quoted XPath 1.0 string literal.
 
-def _get_chrome_profile_path() -> str | None:
-    """Find the default Chrome user data directory on Windows."""
-    if os.name != "nt":
-        return None
-    local_app_data = os.environ.get("LOCALAPPDATA", "")
-    if not local_app_data:
-        return None
-    chrome_dir = Path(local_app_data) / "Google" / "Chrome" / "User Data"
-    if chrome_dir.is_dir():
-        return str(chrome_dir)
-    return None
+    XPath 1.0 has no escape character, so a string containing both quote
+    kinds cannot be expressed as a single literal.  The standard workaround
+    is ``concat()``.  Without this, model- or page-supplied text is
+    interpolated straight into an expression and can break out of the
+    predicate — e.g. ``text = "' or '1'='1"`` turns a targeted lookup into
+    a match-anything selector, so a click lands on an arbitrary element.
 
+    Still needed on the CDP backend: the ``xpath`` parameter survives on
+    ``browser_click``, and Playwright locators take XPath just as WebDriver did.
+    ``tests/unit/test_xpath_escaping.py`` guards the 2026-06-15 injection.
 
-def _get_edge_profile_path() -> str | None:
-    """Find the default Edge user data directory on Windows."""
-    if os.name != "nt":
-        return None
-    local_app_data = os.environ.get("LOCALAPPDATA", "")
-    if not local_app_data:
-        return None
-    edge_dir = Path(local_app_data) / "Microsoft" / "Edge" / "User Data"
-    if edge_dir.is_dir():
-        return str(edge_dir)
-    return None
-
-
-def _create_driver(
-    profile_dir: str = "",
-    profile_name: str = "Default",
-    headless: bool = False,
-) -> Any:
-    """Create a Selenium WebDriver instance."""
-    try:
-        from selenium import webdriver
-        from selenium.webdriver.chrome.options import Options as ChromeOptions
-    except ImportError:
-        raise RuntimeError(
-            "Selenium is not installed. Install it with: pip install selenium"
-        )
-
-    options = ChromeOptions()
-
-    if profile_dir:
-        options.add_argument(f"--user-data-dir={profile_dir}")
-        if profile_name:
-            options.add_argument(f"--profile-directory={profile_name}")
-
-    if headless:
-        options.add_argument("--headless=new")
-
-    options.add_argument("--no-first-run")
-    options.add_argument("--no-default-browser-check")
-    options.add_argument("--disable-extensions")
-    # Prevent "Chrome is being controlled by automated test software" bar
-    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-    options.add_experimental_option("useAutomationExtension", False)
-
-    try:
-        driver = webdriver.Chrome(options=options)
-    except Exception:
-        # Fallback: try Edge
-        try:
-            from selenium.webdriver.edge.options import Options as EdgeOptions
-
-            edge_options = EdgeOptions()
-            if profile_dir:
-                edge_profile = _get_edge_profile_path()
-                if edge_profile:
-                    edge_options.add_argument(f"--user-data-dir={edge_profile}")
-            if headless:
-                edge_options.add_argument("--headless=new")
-            driver = webdriver.Edge(options=edge_options)
-        except Exception as edge_error:
-            raise RuntimeError(
-                f"Could not start Chrome or Edge WebDriver: {edge_error}"
-            )
-
-    driver.implicitly_wait(10)
-    return driver
+    >>> xpath_literal("Sign in")
+    "'Sign in'"
+    >>> xpath_literal("it's")
+    '"it\\'s"'
+    >>> xpath_literal("' or '1'='1")
+    '"\\' or \\'1\\'=\\'1"'
+    """
+    if "'" not in value:
+        return f"'{value}'"
+    if '"' not in value:
+        return f'"{value}"'
+    # Both quote kinds present — split on single quotes and rejoin via concat().
+    parts = value.split("'")
+    pieces: list[str] = []
+    for index, part in enumerate(parts):
+        if part:
+            pieces.append(f"'{part}'")
+        if index < len(parts) - 1:
+            pieces.append('"\'"')
+    return "concat(" + ", ".join(pieces) + ")"
 
 
 @tool_definition(
     name="browser_open",
     description=(
-        "Open a browser session. Optionally uses the user's Chrome profile "
-        "so all logged-in accounts (Google, WhatsApp, etc.) are available. "
-        "Must be called before other browser_* tools."
+        "Open a browser session by attaching to a real Edge/Chrome over the "
+        "DevTools Protocol, starting one if none is listening. Uses Aradhya's "
+        "own persistent browser profile, so accounts you sign into stay signed "
+        "in across sessions. Must be called before other browser_* tools."
     ),
     parameters={
         "type": "object",
@@ -123,20 +93,28 @@ def _create_driver(
             "use_profile": {
                 "type": "boolean",
                 "description": (
-                    "If true, uses the user's Chrome profile with logged-in "
-                    "sessions. If false, opens a clean browser. Default: true."
+                    "If true (default), use Aradhya's persistent browser profile "
+                    "so logged-in sessions carry over. If false, use a clean "
+                    "throwaway profile."
                 ),
             },
             "profile_name": {
                 "type": "string",
                 "description": (
-                    "Chrome profile name to use (e.g., 'Default', 'Profile 1'). "
-                    "Only relevant when use_profile is true."
+                    "Profile directory name under ~/.aradhya/ to use. "
+                    "Default: 'browser-profile'."
                 ),
             },
             "headless": {
                 "type": "boolean",
                 "description": "Run browser without a visible window. Default: false.",
+            },
+            "debug_port": {
+                "type": "integer",
+                "description": (
+                    "DevTools Protocol port to attach to. Default: 9222. An "
+                    "already-running browser on this port is reused."
+                ),
             },
         },
     },
@@ -144,29 +122,26 @@ def _create_driver(
 )
 def browser_open(
     use_profile: bool = True,
-    profile_name: str = "Default",
+    profile_name: str = "browser-profile",
     headless: bool = False,
+    debug_port: int = DEFAULT_DEBUG_PORT,
 ) -> str:
-    """Open a browser session."""
-    global _active_driver
+    """Attach to (or start) a browser with remote debugging enabled."""
+    backend = get_browser_backend()
 
-    if _active_driver is not None:
-        return "Browser is already open. Call browser_close() first to start a new session."
+    profile_dir = None
+    if not use_profile:
+        profile_dir = Path(tempfile.mkdtemp(prefix="aradhya-browser-"))
+    elif profile_name and profile_name != AUTOMATION_PROFILE_DIR.name:
+        profile_dir = AUTOMATION_PROFILE_DIR.parent / profile_name
 
-    profile_dir = ""
-    if use_profile:
-        profile_dir = _get_chrome_profile_path() or ""
-
-    try:
-        _active_driver = _create_driver(
-            profile_dir=profile_dir,
-            profile_name=profile_name,
-            headless=headless,
-        )
-        profile_msg = f" with profile '{profile_name}'" if profile_dir else " (clean session)"
-        return f"Browser opened{profile_msg}."
-    except Exception as error:
-        return f"Failed to open browser: {error}"
+    _success, message = backend.attach(
+        port=debug_port,
+        launch_if_needed=True,
+        headless=headless,
+        profile_dir=profile_dir,
+    )
+    return message
 
 
 @tool_definition(
@@ -186,14 +161,8 @@ def browser_open(
 )
 def browser_navigate(url: str) -> str:
     """Navigate to a URL."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-    try:
-        _active_driver.get(url)
-        time.sleep(2)  # Wait for page load
-        return f"Navigated to {url}. Page title: {_active_driver.title}"
-    except Exception as error:
-        return f"Navigation failed: {error}"
+    _success, message = get_browser_backend().navigate(url)
+    return message
 
 
 @tool_definition(
@@ -226,53 +195,8 @@ def browser_click(
     selector: str = "",
     xpath: str = "",
 ) -> str:
-    """Click an element on the page."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    from selenium.webdriver.common.by import By
-
-    element = None
-
-    # Try by visible text
-    if text and element is None:
-        try:
-            element = _active_driver.find_element(
-                By.XPATH, f"//*[contains(text(), '{text}')]"
-            )
-        except Exception:
-            # Try link text
-            try:
-                element = _active_driver.find_element(By.LINK_TEXT, text)
-            except Exception:
-                pass
-
-    # Try CSS selector
-    if selector and element is None:
-        try:
-            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
-        except Exception:
-            pass
-
-    # Try XPath
-    if xpath and element is None:
-        try:
-            element = _active_driver.find_element(By.XPATH, xpath)
-        except Exception:
-            pass
-
-    if element is None:
-        return (
-            f"Could not find element to click. "
-            f"Tried: text='{text}', selector='{selector}', xpath='{xpath}'"
-        )
-
-    try:
-        element.click()
-        time.sleep(1)
-        return f"Clicked element. Page title: {_active_driver.title}"
-    except Exception as error:
-        return f"Click failed: {error}"
+    """Click an element on the page (not yet ported to the CDP backend)."""
+    return NOT_PORTED_MESSAGE.format(tool="browser_click")
 
 
 @tool_definition(
@@ -311,48 +235,17 @@ def browser_type(
     name: str = "",
     press_enter: bool = False,
 ) -> str:
-    """Type text into a form field."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.common.keys import Keys
-
-    element = None
-
-    if selector:
-        try:
-            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
-        except Exception:
-            pass
-
-    if name and element is None:
-        try:
-            element = _active_driver.find_element(By.NAME, name)
-        except Exception:
-            pass
-
-    # Fallback: active element
-    if element is None:
-        element = _active_driver.switch_to.active_element
-
-    try:
-        element.clear()
-        element.send_keys(text)
-        if press_enter:
-            element.send_keys(Keys.RETURN)
-            time.sleep(1)
-        return f"Typed '{text[:50]}...' into element."
-    except Exception as error:
-        return f"Typing failed: {error}"
+    """Type text into a form field (not yet ported to the CDP backend)."""
+    return NOT_PORTED_MESSAGE.format(tool="browser_type")
 
 
 @tool_definition(
     name="browser_read",
     description=(
-        "Read the visible text content of the current page. "
-        "Returns the page title and body text (truncated to 4000 chars). "
-        "Use this to understand what's on screen before deciding what to click."
+        "Read the current page as a structured element map: every interactive "
+        "element with its role, accessible name, id and value, each with a "
+        "stable ref. Use this to understand what is on screen before deciding "
+        "what to click — it is the browser equivalent of list_window_controls."
     ),
     parameters={
         "type": "object",
@@ -360,35 +253,20 @@ def browser_type(
             "selector": {
                 "type": "string",
                 "description": (
-                    "Optional CSS selector to read only a specific element. "
-                    "Omit to read the entire page body."
+                    "Optional filter — keep only elements whose name or id "
+                    "contains this text, or whose role equals it. Omit to read "
+                    "the whole page."
                 ),
             },
         },
     },
 )
 def browser_read(selector: str = "") -> str:
-    """Read text content from the current page."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    from selenium.webdriver.common.by import By
-
-    try:
-        title = _active_driver.title
-        url = _active_driver.current_url
-
-        if selector:
-            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
-            text = element.text
-        else:
-            body = _active_driver.find_element(By.TAG_NAME, "body")
-            text = body.text
-
-        text = text[:4000]
-        return f"Page: {title}\nURL: {url}\n\nContent:\n{text}"
-    except Exception as error:
-        return f"Failed to read page: {error}"
+    """Read the current page as an element map, not as truncated body text."""
+    result = get_browser_backend().snapshot(selector)
+    if isinstance(result, PageSnapshot):
+        return format_snapshot(result)
+    return str(result)
 
 
 @tool_definition(
@@ -405,22 +283,8 @@ def browser_read(selector: str = "") -> str:
     },
 )
 def browser_screenshot(filename: str = "") -> str:
-    """Take a screenshot of the browser window."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    if not filename:
-        import tempfile
-        stamp = time.strftime("%Y%m%d_%H%M%S")
-        filename = str(
-            Path(tempfile.gettempdir()) / f"aradhya_browser_{stamp}.png"
-        )
-
-    try:
-        _active_driver.save_screenshot(filename)
-        return f"Browser screenshot saved to {filename}"
-    except Exception as error:
-        return f"Screenshot failed: {error}"
+    """Screenshot the browser window (not yet ported to the CDP backend)."""
+    return NOT_PORTED_MESSAGE.format(tool="browser_screenshot")
 
 
 @tool_definition(
@@ -429,18 +293,9 @@ def browser_screenshot(filename: str = "") -> str:
     parameters={"type": "object", "properties": {}},
 )
 def browser_close() -> str:
-    """Close the browser session."""
-    global _active_driver
-
-    if _active_driver is None:
-        return "No browser session is active."
-
-    try:
-        _active_driver.quit()
-    except Exception:
-        pass
-    _active_driver = None
-    return "Browser session closed."
+    """Detach from the browser."""
+    _success, message = get_browser_backend().close()
+    return message
 
 
 @tool_definition(
@@ -463,17 +318,8 @@ def browser_close() -> str:
     requires_confirmation=True,
 )
 def browser_execute_js(script: str) -> str:
-    """Execute JavaScript in the browser."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    try:
-        result = _active_driver.execute_script(script)
-        if result is None:
-            return "JavaScript executed (no return value)."
-        return f"JavaScript result: {str(result)[:2000]}"
-    except Exception as error:
-        return f"JavaScript execution failed: {error}"
+    """Execute JavaScript in the browser (not yet ported to the CDP backend)."""
+    return NOT_PORTED_MESSAGE.format(tool="browser_execute_js")
 
 
 @tool_definition(
@@ -500,37 +346,8 @@ def browser_execute_js(script: str) -> str:
     requires_confirmation=True,
 )
 def browser_submit(selector: str = "", name: str = "") -> str:
-    """Submit a form via Selenium's ``element.submit()``."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-
-    from selenium.webdriver.common.by import By
-
-    element = None
-
-    if selector:
-        try:
-            element = _active_driver.find_element(By.CSS_SELECTOR, selector)
-        except Exception:
-            pass
-
-    if name and element is None:
-        try:
-            element = _active_driver.find_element(By.NAME, name)
-        except Exception:
-            pass
-
-    # Fallback: submit the form containing the focused element.
-    if element is None:
-        element = _active_driver.switch_to.active_element
-
-    try:
-        # submit() walks up from any field to its enclosing <form>.
-        element.submit()
-        time.sleep(1)
-        return f"Submitted form. Now on: {_active_driver.current_url}"
-    except Exception as error:
-        return f"Submit failed: {error}"
+    """Submit a form (not yet ported to the CDP backend)."""
+    return NOT_PORTED_MESSAGE.format(tool="browser_submit")
 
 
 @tool_definition(
@@ -553,19 +370,8 @@ def browser_submit(selector: str = "", name: str = "") -> str:
 )
 def browser_new_tab(url: str = "") -> str:
     """Open (and switch to) a new tab, optionally navigating to a URL."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-    try:
-        _active_driver.switch_to.new_window("tab")
-        if url:
-            _active_driver.get(url)
-            time.sleep(2)  # wait for page load
-        handles = _active_driver.window_handles
-        index = handles.index(_active_driver.current_window_handle) + 1
-        suffix = f" at {url} (title: {_active_driver.title})" if url else ""
-        return f"Opened tab {index} of {len(handles)}{suffix}."
-    except Exception as error:
-        return f"Failed to open tab: {error}"
+    _success, message = get_browser_backend().new_page(url)
+    return message
 
 
 @tool_definition(
@@ -577,23 +383,15 @@ def browser_new_tab(url: str = "") -> str:
     parameters={"type": "object", "properties": {}},
 )
 def browser_list_tabs() -> str:
-    """List open tabs with index, title, and URL (restores focus afterward)."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-    try:
-        handles = list(_active_driver.window_handles)
-        current = _active_driver.current_window_handle
-        lines = [f"{len(handles)} open tab(s):"]
-        for i, handle in enumerate(handles, start=1):
-            _active_driver.switch_to.window(handle)
-            marker = " (current)" if handle == current else ""
-            lines.append(
-                f"  {i}. {_active_driver.title} — {_active_driver.current_url}{marker}"
-            )
-        _active_driver.switch_to.window(current)  # restore original focus
-        return "\n".join(lines)
-    except Exception as error:
-        return f"Failed to list tabs: {error}"
+    """List open tabs with index, title, and URL."""
+    rows = get_browser_backend().list_pages()
+    if isinstance(rows, str):
+        return rows
+    lines = [f"{len(rows)} open tab(s):"]
+    for index, (title, url, is_current) in enumerate(rows, start=1):
+        marker = " (current)" if is_current else ""
+        lines.append(f"  {index}. {title} — {url}{marker}")
+    return "\n".join(lines)
 
 
 @tool_definition(
@@ -615,16 +413,8 @@ def browser_list_tabs() -> str:
 )
 def browser_switch_tab(index: int) -> str:
     """Switch focus to the tab at the given 1-based index."""
-    if _active_driver is None:
-        return "No browser session. Call browser_open() first."
-    try:
-        handles = list(_active_driver.window_handles)
-        if index < 1 or index > len(handles):
-            return f"Tab {index} does not exist. There are {len(handles)} tab(s)."
-        _active_driver.switch_to.window(handles[index - 1])
-        return f"Switched to tab {index}: {_active_driver.title} — {_active_driver.current_url}"
-    except Exception as error:
-        return f"Failed to switch tab: {error}"
+    _success, message = get_browser_backend().switch_page(index)
+    return message
 
 
 ALL_BROWSER_TOOLS = [

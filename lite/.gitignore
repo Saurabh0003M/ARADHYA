@@ -1,0 +1,8 @@
+.venv/
+wakeword_env/
+assets/
+models/
+data/
+output/
+setup.log
+__pycache__/

@@ -204,6 +204,45 @@ class OllamaTextModelProvider:
 
         return True, f"Configured model {self.profile.model_name} is available and runnable."
 
+    @staticmethod
+    def _log_timings(raw: dict[str, Any], *, endpoint: str) -> None:
+        """Log the timing block Ollama already returns on every response.
+
+        Ollama reports where a slow turn actually went, in nanoseconds, and we
+        were discarding it into ``ModelResult.raw`` and never looking. Reading it
+        settles by measurement what was previously argued from theory:
+
+        - ``load_duration`` large  -> the model was (re)loaded from disk for this
+          call. That is the only proof of an eviction; Ollama keeps a model
+          resident for 5 minutes by default, so a reload is a claim, not a given.
+        - ``prompt_eval_count`` large -> the prompt is the tax. 62 tool schemas
+          plus history land here, and on CPU prompt evaluation is not free.
+        - ``eval_count`` / ``eval_duration`` -> raw generation speed, the part no
+          amount of orchestration tuning will improve.
+
+        Emitted at INFO so it shows up in a normal session log without a debug
+        flag, because the only people who need it are looking at a slow turn.
+        """
+        total = raw.get("total_duration")
+        if not isinstance(total, (int, float)):
+            return  # not an Ollama-shaped response; nothing to report
+
+        def seconds(key: str) -> float:
+            value = raw.get(key)
+            return float(value) / 1e9 if isinstance(value, (int, float)) else 0.0
+
+        logger.info(
+            "ollama {} timings: total={:.1f}s load={:.1f}s "
+            "prompt={} tok in {:.1f}s gen={} tok in {:.1f}s",
+            endpoint,
+            seconds("total_duration"),
+            seconds("load_duration"),
+            raw.get("prompt_eval_count", "?"),
+            seconds("prompt_eval_duration"),
+            raw.get("eval_count", "?"),
+            seconds("eval_duration"),
+        )
+
     def generate(
         self,
         prompt: str,
@@ -237,6 +276,7 @@ class OllamaTextModelProvider:
                 return self._generate_via_chat(prompt, system_prompt=system_prompt)
             raise
         raw = response.json()
+        self._log_timings(raw, endpoint="generate")
 
         return ModelResult(
             text=raw.get("response", "").strip(),
@@ -333,6 +373,7 @@ class OllamaTextModelProvider:
         )
         self._raise_for_status_with_details(response)
         raw = response.json()
+        self._log_timings(raw, endpoint="chat")
         message = raw.get("message", {}) or {}
 
         tool_calls = tuple(

@@ -64,6 +64,9 @@ class FloatingIcon:
         self._camera_active = False
         self._screenshare_active = False
         self._debate_active = False
+        # Interaction unlock always starts OFF — a fresh session must never
+        # inherit permission to act on the machine.
+        self._interaction_active = False
         self._is_awake = True
 
         # ── Build UI ──────────────────────────────────────────────────
@@ -155,6 +158,15 @@ class FloatingIcon:
         )
         self.btn_debate.configure(font=("Segoe UI", 14, "bold"))
 
+        # "I" — session-level interaction unlock. Off by default; grants live
+        # execution for this session only. Dangerous actions still prompt for
+        # confirmation, so this is a "may act at all" switch, not a bypass.
+        self.btn_interact = self._make_button(
+            self.root, "I", FG_DIM, self._toggle_interaction,
+            tooltip="Allow Aradhya to act on this machine (this session only)",
+        )
+        self.btn_interact.configure(font=("Segoe UI", 14, "bold"))
+
         # Separator
         sep3 = tk.Frame(self.root, bg=BG_HOVER, height=1)
         sep3.pack(fill="x", padx=8, pady=2)
@@ -223,6 +235,16 @@ class FloatingIcon:
             self.btn_screen.configure(fg=FG_DIM, bg=BG_BUTTON)
             self.btn_screen._active = False
         self.send_command("browser_toggle")
+
+    def _toggle_interaction(self):
+        self._interaction_active = not self._interaction_active
+        if self._interaction_active:
+            self.btn_interact.configure(fg=FG_RED, bg=BG_HOVER)
+            self.btn_interact._active = True
+        else:
+            self.btn_interact.configure(fg=FG_DIM, bg=BG_BUTTON)
+            self.btn_interact._active = False
+        self.send_command("interaction_toggle")
 
     def _toggle_debate(self):
         self._debate_active = not self._debate_active

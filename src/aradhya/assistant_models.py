@@ -153,6 +153,18 @@ class AssistantState:
     # /"advanced"); empty means unspecified.
     mentor_mode: str = "do"
     skill_level: str = ""
+    # Session-level interaction unlock (the floating icon's "I" control).
+    #
+    # Without this, live execution can only be enabled by editing
+    # `allow_live_execution` in preferences, which is why first-time users find
+    # every action refused with no obvious way forward. Flipping this grants
+    # execution for THIS SESSION ONLY — it is never persisted to preferences.
+    #
+    # It does NOT bypass approval: ToolRuntimePolicy.check() still requires a
+    # confirmed task grant (`mutation_granted`), and the HookEngine →
+    # PermissionEngine → ConfirmationGate chain still runs for every dangerous
+    # tool. This only flips the master "may act at all" switch.
+    interaction_unlocked: bool = False
 
 
 @dataclass(frozen=True)

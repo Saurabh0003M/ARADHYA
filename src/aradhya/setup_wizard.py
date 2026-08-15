@@ -15,14 +15,16 @@ import sys
 from pathlib import Path
 
 from src.aradhya.paths import get_project_root
-from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich import box
 
+# Use the shared themed console (AGENTS.md: never build a bare one). This
+# module prints [heading], [success], [warning] and [accent] markup, and those
+# styles exist only in ARADHYA_THEME — a plain Console() raises
+# rich.errors.MissingStyle on the wizard's very first line.
+from src.aradhya.ui.cli import console
 from src.aradhya.utils.helpers import load_json_file
-
-console = Console()
 
 PROJECT_ROOT = get_project_root()
 _CONFIG_DIR = PROJECT_ROOT / "core" / "config"

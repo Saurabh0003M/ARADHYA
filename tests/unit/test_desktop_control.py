@@ -175,14 +175,70 @@ def test_all_desktop_tools_registered():
     }
 
 
-# ── real backend degrades without uiautomation ─────────────────────────
+# ── pattern probing ────────────────────────────────────────────────────
+#
+# uiautomation defines GetInvokePattern / GetValuePattern only on the control
+# classes that support them. Calling one unguarded raises AttributeError on an
+# EditControl, TextControl, PaneControl, GroupControl or ImageControl -- and
+# the per-control `except` in list_controls swallowed it, taking the whole
+# control out of the map. Measured on one File Explorer window: 188 of 299
+# controls silently dropped, every text field among them.
 
-def test_real_backend_unavailable_without_dependency():
-    # uiautomation is not installed in CI/dev here; the backend must say so
-    # and never raise.
+class _NoPattern:
+    """A control class that does not define the getter at all."""
+
+
+class _NullPattern:
+    def GetInvokePattern(self):
+        return None
+
+
+class _RaisingPattern:
+    def GetInvokePattern(self):
+        raise OSError("COM call failed")
+
+
+class _RealPattern:
+    def GetInvokePattern(self):
+        return object()
+
+
+def test_supports_pattern_false_when_getter_missing():
+    assert UIAutomationBackend._supports_pattern(_NoPattern(), "GetInvokePattern") is False
+
+
+def test_supports_pattern_false_when_getter_returns_none():
+    assert UIAutomationBackend._supports_pattern(_NullPattern(), "GetInvokePattern") is False
+
+
+def test_supports_pattern_false_when_getter_raises():
+    assert UIAutomationBackend._supports_pattern(_RaisingPattern(), "GetInvokePattern") is False
+
+
+def test_supports_pattern_true_for_a_real_pattern():
+    assert UIAutomationBackend._supports_pattern(_RealPattern(), "GetInvokePattern") is True
+
+
+def test_editable_controls_are_flagged_for_the_model():
+    """set_control_text needs a target; the map has to say which ones work."""
+    editable = UIControl(name="Search", control_type="EditControl", editable=True)
+    out = format_controls([editable])
+    assert "[editable]" in out
+    assert editable.to_dict()["editable"] is True
+
+
+# ── real backend ───────────────────────────────────────────────────────
+
+def test_real_backend_degrades_without_uiautomation():
+    """With the package absent the backend must say so and never raise."""
     backend = UIAutomationBackend()
     if not backend.available():
         assert backend.list_windows() == []
         ok, msg = backend.invoke("any", "thing")
         assert ok is False
         assert "uiautomation" in msg
+
+
+@pytest.mark.effector("uiautomation")
+def test_real_backend_is_available_when_installed():
+    assert UIAutomationBackend().available() is True

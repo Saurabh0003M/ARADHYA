@@ -133,6 +133,18 @@ class ToolRegistry:
         ]
 
 
+    def with_policy(self, policy: ToolRuntimePolicy | None) -> "ToolRegistry":
+        """Return a view of this registry bound to a different policy.
+
+        The tool table is shared, not copied: this is for re-running the *same*
+        tools under a policy that reflects something that just happened — the
+        user confirming a call, say — without mutating the long-lived registry
+        or letting one caller's grant leak into another's.
+        """
+        view = ToolRegistry(policy=policy)
+        view._tools = self._tools
+        return view
+
     def get(self, name: str) -> ToolDefinition | None:
         return self._tools.get(name)
 

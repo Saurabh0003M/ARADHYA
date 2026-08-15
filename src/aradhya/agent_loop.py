@@ -71,6 +71,12 @@ class AgentTurn:
     final_response: str = ""
     iterations: int = 0
     thinking_level: ThinkingLevel = ThinkingLevel.MEDIUM
+    # ── Performance accounting (populated by AgentLoop) ──────────────────
+    model_seconds: float = 0.0
+    tool_seconds: float = 0.0
+    prompt_tokens: int = 0
+    gen_tokens: int = 0
+    load_seconds: float = 0.0
 
 
 class ToolExecutor(Protocol):
@@ -123,6 +129,12 @@ class AgentLoop:
         self.permission_engine = permission_engine
         self.max_consecutive_timeouts = max_consecutive_timeouts
         self._consecutive_timeouts = 0  # reset per run()
+        # ── Per-turn performance accumulators (reset at the top of run()) ──
+        self._model_seconds = 0.0
+        self._tool_seconds = 0.0
+        self._prompt_tokens = 0
+        self._gen_tokens = 0
+        self._load_seconds = 0.0
 
     def run(
         self,
@@ -146,6 +158,8 @@ class AgentLoop:
 
         messages = self._build_initial_messages(system_prompt, history, user_message)
         turn.messages = messages
+
+        self._reset_perf_accumulators()
 
         # Per-turn token accumulator — prevents single-turn context overflow
         # from accumulating huge tool outputs across many iterations.
@@ -175,12 +189,14 @@ class AgentLoop:
                     tool_call, turn, messages, accumulated_result_tokens
                 )
                 if stop:
+                    self._finalize_metrics(turn)
                     return turn
         else:
             turn.final_response = (
                 "[Agent loop reached maximum iterations without completing]"
             )
 
+        self._finalize_metrics(turn)
         return turn
 
     def _process_tool_call(
@@ -212,7 +228,9 @@ class AgentLoop:
                 success=False,
             )
         else:
+            tool_started = time.monotonic()
             result = self._execute_with_gate(tool_call)
+            self._tool_seconds += time.monotonic() - tool_started
 
         turn.tool_results.append(result)
 
@@ -342,6 +360,42 @@ class AgentLoop:
             "content": result.output,
         })
 
+    # ── Performance accounting ────────────────────────────────────────
+    def _reset_perf_accumulators(self) -> None:
+        """Zero the per-turn timing/token counters at the start of a run."""
+        self._model_seconds = 0.0
+        self._tool_seconds = 0.0
+        self._prompt_tokens = 0
+        self._gen_tokens = 0
+        self._load_seconds = 0.0
+
+    def _accumulate_ollama_counters(self, raw: Any) -> None:
+        """Fold Ollama's per-call counters into the turn totals (best-effort).
+
+        ``prompt_eval_count`` / ``eval_count`` are token counts; ``load_duration``
+        is nanoseconds and only non-zero when the model was (re)loaded from disk.
+        Providers that don't report these leave the totals at zero.
+        """
+        if not isinstance(raw, dict):
+            return
+        prompt = raw.get("prompt_eval_count")
+        if isinstance(prompt, int):
+            self._prompt_tokens += prompt
+        gen = raw.get("eval_count")
+        if isinstance(gen, int):
+            self._gen_tokens += gen
+        load = raw.get("load_duration")
+        if isinstance(load, (int, float)):
+            self._load_seconds += float(load) / 1e9
+
+    def _finalize_metrics(self, turn: AgentTurn) -> None:
+        """Copy the accumulated timing/token totals onto the turn."""
+        turn.model_seconds = self._model_seconds
+        turn.tool_seconds = self._tool_seconds
+        turn.prompt_tokens = self._prompt_tokens
+        turn.gen_tokens = self._gen_tokens
+        turn.load_seconds = self._load_seconds
+
     def _call_model(
         self,
         messages: list[dict[str, Any]],
@@ -352,6 +406,17 @@ class AgentLoop:
         If a history_pipeline is configured, messages are compressed
         through it before being sent to the model.
         """
+        call_started = time.monotonic()
+        try:
+            return self._call_model_inner(messages, stream_handler=stream_handler)
+        finally:
+            self._model_seconds += time.monotonic() - call_started
+
+    def _call_model_inner(
+        self,
+        messages: list[dict[str, Any]],
+        stream_handler: Callable[..., str] | None = None,
+    ) -> dict[str, Any]:
         # Apply history processing pipeline to compress context
         if self.history_pipeline is not None:
             messages = self.history_pipeline(messages)
@@ -373,6 +438,7 @@ class AgentLoop:
         if hasattr(self.model_provider, "chat"):
             result = self.model_provider.chat(messages, tools=tools)
             if isinstance(result, ModelChatResult):
+                self._accumulate_ollama_counters(result.raw)
                 return {
                     "text": result.text,
                     "tool_calls": [
@@ -391,6 +457,7 @@ class AgentLoop:
             result = str(self.model_provider)
 
         if isinstance(result, ModelResult):
+            self._accumulate_ollama_counters(result.raw)
             response_text = result.text
         else:
             response_text = str(result)

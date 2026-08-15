@@ -5,12 +5,9 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
 
-# Mock dependencies before any other imports
-sys.modules["loguru"] = MagicMock()
-sys.modules["requests"] = MagicMock()
-
+# Dependency handling lives in tests/conftest.py — see the note there on why
+# module-level sys.modules mocks are gone.
 from src.aradhya.state_store import StateStore
 from src.aradhya.session_manager import Message, Session, SessionManager
 

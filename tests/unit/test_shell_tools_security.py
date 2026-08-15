@@ -1,24 +1,7 @@
-import sys
-from unittest.mock import MagicMock
-
-# Mock dependencies
-sys.modules['loguru'] = MagicMock()
-sys.modules['rich'] = MagicMock()
-sys.modules['rich.console'] = MagicMock()
-sys.modules['requests'] = MagicMock()
-sys.modules['mcp'] = MagicMock()
-sys.modules['mcp.client'] = MagicMock()
-sys.modules['mcp.client.stdio'] = MagicMock()
-sys.modules['mcp.client.session'] = MagicMock()
-sys.modules['mcp.types'] = MagicMock()
-sys.modules['vlc'] = MagicMock()
-sys.modules['numpy'] = MagicMock()
-sys.modules['sounddevice'] = MagicMock()
-sys.modules['yaml'] = MagicMock()
-sys.modules['selenium'] = MagicMock()
-sys.modules['openai'] = MagicMock()
-sys.modules['playwright'] = MagicMock()
-
+# Dependency handling lives in tests/conftest.py. This file used to mock
+# selenium, sounddevice and playwright into sys.modules at import time, which
+# leaked into the whole session: every later test saw those effectors as
+# "installed" whether or not the machine could actually act through them.
 import os
 import pytest
 from src.aradhya.tools.shell_tools import run_command
